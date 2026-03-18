@@ -829,6 +829,101 @@ window.initClub = initClub;
     reader.readAsText(file);
   };
 })();
+
+// ── Auto-fetch latest data from GitHub ──
+(function() {
+  var GITHUB_JSON_URL = 'https://raw.githubusercontent.com/lamfalus/norcal-hockey/main/norcal_hockey_players_s27-s31.json';
+
+  var CLUB_CANONICAL = {
+    'Tri-Valley Blue Devils': 'Tri Valley Blue Devils',
+    'San Mateo Blackstars':   'San Mateo Black Stars'
+  };
+  var CLUB_PREFIXES = [
+    'San Jose Jr Sharks Girls','San Jose Jr Sharks',
+    'Tri Valley Lady Blue Devils','Tri Valley Blue Devils',
+    'Santa Clara Blackhawks','Santa Rosa Flyers','San Francisco Sabercats',
+    'San Mateo Black Stars','Cupertino Cougars','Oakland Bears',
+    'Vacaville Jets','Capital Thunder','Stockton Colts Girls','Stockton Colts',
+    'Lake Tahoe Grizzlies','Reno Ice','Fresno Jr Monsters','Golden State Elite'
+  ].sort(function(a,b){return b.length-a.length;});
+  function normalizeTeam(t) { return (t||'').replace(/\s+/g,' ').trim(); }
+  function extractClub(teamName) {
+    var norm = normalizeTeam(teamName);
+    for (var variant in CLUB_CANONICAL) {
+      if (norm.toLowerCase().indexOf(variant.toLowerCase()) === 0) {
+        norm = CLUB_CANONICAL[variant] + norm.slice(variant.length); break;
+      }
+    }
+    for (var i = 0; i < CLUB_PREFIXES.length; i++) {
+      if (norm.toLowerCase().indexOf(CLUB_PREFIXES[i].toLowerCase()) === 0) return CLUB_PREFIXES[i];
+    }
+    var parts = norm.split(' ');
+    return parts.length > 1 ? parts.slice(0,-1).join(' ') : norm;
+  }
+
+  function applyData(playersObj) {
+    var newEntries = [];
+    for (var name in playersObj) {
+      var entries = playersObj[name];
+      for (var i = 0; i < entries.length; i++) {
+        newEntries.push(Object.assign({playerName: name}, entries[i]));
+      }
+    }
+    window.ALL_ENTRIES = newEntries;
+    var newMap = {};
+    for (var i = 0; i < newEntries.length; i++) {
+      var e = newEntries[i];
+      var club = extractClub(e.team);
+      var normTeam = normalizeTeam(e.team);
+      if (!newMap[club]) newMap[club] = new Set();
+      newMap[club].add(normTeam);
+    }
+    window.CLUB_TEAM_MAP = newMap;
+    window.ALL_CLUBS = Object.keys(newMap).sort();
+
+    var SEASON_LABELS = {27:"'21-'22",28:"'22-'23",29:"'23-'24",30:"'24-'25",31:"'25-'26"};
+    var SEASONS = [27,28,29,30,31];
+    var selSeason = document.getElementById('sel-season');
+    selSeason.innerHTML = '<option value="">— select —</option>';
+    SEASONS.forEach(function(s) {
+      var o = document.createElement('option');
+      o.value = s; o.textContent = SEASON_LABELS[s];
+      selSeason.appendChild(o);
+    });
+    selSeason.value = SEASONS[SEASONS.length - 1];
+
+    var selClub = document.getElementById('sel-club');
+    selClub.innerHTML = '<option value="">— select a club —</option>';
+    window.ALL_CLUBS.forEach(function(c) {
+      var o = document.createElement('option');
+      o.value = c; o.textContent = c;
+      selClub.appendChild(o);
+    });
+    var selClubSeason = document.getElementById('sel-club-season');
+    selClubSeason.innerHTML = '<option value="">— all seasons —</option>';
+    SEASONS.forEach(function(s) {
+      var o = document.createElement('option');
+      o.value = s; o.textContent = SEASON_LABELS[s];
+      selClubSeason.appendChild(o);
+    });
+
+    selSeason.dispatchEvent(new Event('change'));
+  }
+
+  fetch(GITHUB_JSON_URL)
+    .then(function(res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function(parsed) {
+      var playersObj = parsed.players || parsed;
+      if (typeof playersObj !== 'object' || Array.isArray(playersObj)) return;
+      applyData(playersObj);
+    })
+    .catch(function() {
+      // Silent fallback — embedded data already loaded
+    });
+})();
 </script>
 </body>
 </html>
