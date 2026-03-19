@@ -92,11 +92,37 @@
   .load-btn:hover{color:var(--text);border-color:var(--accent);}
   .load-status{font-size:.75rem;margin-left:4px;display:none;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   @media(max-width:600px){
-    header{flex-wrap:wrap;}
+    /* Header */
+    header{flex-wrap:wrap;padding:10px 14px;gap:10px;}
+    header h1{font-size:1rem;}
     .tab-bar{margin-left:0;width:100%;}
-    .tab-btn{flex:1;text-align:center;padding:7px 8px;font-size:.78rem;}
+    .tab-btn{flex:1;text-align:center;padding:9px 4px;font-size:.78rem;}
+    /* Layout */
+    main{padding:14px 12px;}
+    .panel{padding:14px;}
+    /* Controls — stack dropdowns full-width */
+    .controls{flex-direction:column;gap:8px;}
+    .controls label{width:100%;}
+    select,input[type=text]{min-width:unset;width:100%;font-size:1rem;}
+    .search-wrap{width:100%;}
+    /* Tables — tighter cells, smooth touch scroll */
+    .table-wrap{-webkit-overflow-scrolling:touch;}
+    thead th{padding:8px 10px;font-size:.68rem;}
+    tbody td{padding:8px 10px;font-size:.82rem;}
+    /* Player lookup */
+    .player-history-header h2{font-size:1.2rem;}
+    .stat-summary{grid-template-columns:repeat(3,1fr);}
+    .stat-card{padding:10px 6px;}
+    .stat-card .stat-val{font-size:1.25rem;}
+    .stat-card .stat-lbl{font-size:.65rem;}
+    /* Club view */
     .club-totals-bar{flex-wrap:wrap;}
     .ctb-item{min-width:50%;}
+    .ctb-val{font-size:1.4rem;}
+    .club-team-grid{grid-template-columns:1fr;}
+    /* Misc */
+    .empty{padding:40px 16px;}
+    .section-heading h2{font-size:1.1rem;}
   }
 </style>
 </head>
