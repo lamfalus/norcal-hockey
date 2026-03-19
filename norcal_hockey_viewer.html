@@ -655,22 +655,22 @@ function renderPlayerHistory(name){
     const goalie=sEntries.filter(e=>e.type==='goalie');
     let skaterHtml='';
     if(skater.length){
-      const e=skater[0];
-      skaterHtml='<div class="table-wrap" style="margin-bottom:10px"><table><thead><tr><th>Team</th><th>Division</th><th>#</th><th style="text-align:right">GP</th><th style="text-align:right">G</th><th style="text-align:right">A</th><th style="text-align:right">Pts</th><th style="text-align:right">Hat</th><th style="text-align:right">PIM</th><th style="text-align:right">Pts/GP</th></tr></thead><tbody><tr>'
-        +'<td>'+escHtml(e.team||'')+'</td><td><span class="div-badge">'+escHtml(e.division||'')+'</span></td><td class="jersey">'+( e.jersey||'')+'</td>'
+      const rows=skater.map(e=>'<tr>'
+        +'<td>'+escHtml(e.team||'')+'</td><td><span class="div-badge">'+escHtml(e.division||'')+'</span></td><td class="jersey">'+(e.jersey||'')+'</td>'
         +'<td class="num">'+(e.GP||0)+'</td><td class="num">'+(e.G||0)+'</td><td class="num">'+(e.A||0)+'</td>'
         +'<td class="num pts">'+(e.Pts||0)+'</td><td class="num">'+(e.Hat||0)+'</td><td class="num">'+(e.PIM||0)+'</td>'
         +'<td class="num">'+(e.PtsPerGame||'0.00')+'</td>'
-        +'</tr></tbody></table></div>';
+        +'</tr>').join('');
+      skaterHtml='<div class="table-wrap" style="margin-bottom:10px"><table><thead><tr><th>Team</th><th>Division</th><th>#</th><th style="text-align:right">GP</th><th style="text-align:right">G</th><th style="text-align:right">A</th><th style="text-align:right">Pts</th><th style="text-align:right">Hat</th><th style="text-align:right">PIM</th><th style="text-align:right">Pts/GP</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
     }
     let goalieHtml='';
     if(goalie.length){
-      const e=goalie[0];
-      goalieHtml='<div class="table-wrap"><table><thead><tr><th>Team</th><th>Division</th><th style="text-align:right">GP</th><th style="text-align:right">Shots</th><th style="text-align:right">GA</th><th style="text-align:right">GAA</th><th style="text-align:right">Save%</th><th style="text-align:right">SO</th></tr></thead><tbody><tr class="goalie-row">'
+      const rows=goalie.map(e=>'<tr class="goalie-row">'
         +'<td>'+escHtml(e.team||'')+'</td><td><span class="div-badge">'+escHtml(e.division||'')+'</span></td>'
         +'<td class="num">'+(e.GP||0)+'</td><td class="num">'+(e.Shots||0)+'</td><td class="num">'+(e.GA||0)+'</td>'
         +'<td class="num">'+(e.GAA||'0.00')+'</td><td class="num" style="color:var(--green)">'+(e['Save%']||'.000')+'</td><td class="num">'+(e.SO||0)+'</td>'
-        +'</tr></tbody></table></div>';
+        +'</tr>').join('');
+      goalieHtml='<div class="table-wrap"><table><thead><tr><th>Team</th><th>Division</th><th style="text-align:right">GP</th><th style="text-align:right">Shots</th><th style="text-align:right">GA</th><th style="text-align:right">GAA</th><th style="text-align:right">Save%</th><th style="text-align:right">SO</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
     }
     return '<div class="season-section"><div class="season-section-header"><span class="season-badge">'+SEASON_LABELS[season]+'</span></div>'+skaterHtml+goalieHtml+'</div>';
   }).join('');
