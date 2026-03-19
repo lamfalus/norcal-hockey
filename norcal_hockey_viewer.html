@@ -168,6 +168,19 @@
         <option value="all">All</option>
       </select>
     </label>
+    <label>Min GP
+      <select id="sel-min-gp" onchange="onSubChange()">
+        <option value="1">1+</option>
+        <option value="2">2+</option>
+        <option value="3">3+</option>
+        <option value="4">4+</option>
+        <option value="5">5+</option>
+        <option value="6">6+</option>
+        <option value="7">7+</option>
+        <option value="8">8+</option>
+        <option value="9">9+</option>
+      </select>
+    </label>
   </div>
   <div id="browse-content">
     <div class="empty"><div class="icon">🏒</div>Select a season above to begin.</div>
@@ -315,12 +328,13 @@ function onSubChange(){
   const mode=document.getElementById('sel-mode').value;
   const sub=document.getElementById('sel-sub').value;
   const type=document.getElementById('sel-type').value;
+  const minGP=parseInt(document.getElementById('sel-min-gp').value)||1;
   if(!season)return;
   const subLabel=sub?'· '+sub:'· All '+(mode==='division'?'Divisions':'Teams');
   const content=document.getElementById('browse-content');
   let html='';
   if(type==='skater'||type==='all'){
-    let sk=ALL_ENTRIES.filter(e=>e.season===season&&e.type==='skater');
+    let sk=ALL_ENTRIES.filter(e=>e.season===season&&e.type==='skater'&&(parseInt(e.GP)||0)>=minGP);
     if(sub)sk=sk.filter(e=>mode==='division'?e.division===sub:e.team===sub);
     browseSort={col:'Pts',dir:-1};
     sk.sort((a,b)=>(parseInt(b.Pts)||0)-(parseInt(a.Pts)||0));
@@ -331,7 +345,7 @@ function onSubChange(){
     }
   }
   if(type==='goalie'||type==='all'){
-    let gl=ALL_ENTRIES.filter(e=>e.season===season&&e.type==='goalie');
+    let gl=ALL_ENTRIES.filter(e=>e.season===season&&e.type==='goalie'&&(parseInt(e.GP)||0)>=minGP);
     if(sub)gl=gl.filter(e=>mode==='division'?e.division===sub:e.team===sub);
     browseGoalieSort={col:'GAA',dir:1};
     gl.sort((a,b)=>(parseFloat(a.GAA)||0)-(parseFloat(b.GAA)||0));
@@ -346,11 +360,11 @@ function onSubChange(){
   if(!html)html='<div class="empty"><div class="icon">📭</div>No data found.</div>';
   content.innerHTML=html;
   if(type==='skater'||type==='all'){
-    const sk=ALL_ENTRIES.filter(e=>e.season===season&&e.type==='skater'&&(sub?(mode==='division'?e.division===sub:e.team===sub):true));
+    const sk=ALL_ENTRIES.filter(e=>e.season===season&&e.type==='skater'&&(parseInt(e.GP)||0)>=minGP&&(sub?(mode==='division'?e.division===sub:e.team===sub):true));
     attachSortHandlers('browse-table',sk,true);
   }
   if(type==='goalie'||type==='all'){
-    const gl=ALL_ENTRIES.filter(e=>e.season===season&&e.type==='goalie'&&(sub?(mode==='division'?e.division===sub:e.team===sub):true));
+    const gl=ALL_ENTRIES.filter(e=>e.season===season&&e.type==='goalie'&&(parseInt(e.GP)||0)>=minGP&&(sub?(mode==='division'?e.division===sub:e.team===sub):true));
     attachGoalieSortHandlers('browse-goalie-table',gl,true);
   }
 }
