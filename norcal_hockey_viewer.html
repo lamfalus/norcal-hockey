@@ -87,6 +87,7 @@
   .ctc-stat small{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
   .team-pill{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:.75rem;margin:2px;cursor:pointer;color:var(--accent);transition:background .12s;}
   .team-pill:hover{background:#1a2240;border-color:var(--accent);}
+  .birth-yr{display:inline-block;font-size:.68rem;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:0 4px;margin-left:5px;vertical-align:middle;white-space:nowrap;}
 
   .load-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:500;transition:all .15s;white-space:nowrap;}
   .load-btn:hover{color:var(--text);border-color:var(--accent);}
@@ -136,6 +137,7 @@
     <button class="tab-btn active" onclick="showView('browse',this)">Browse by Season</button>
     <button class="tab-btn" onclick="showView('club',this)">Club View</button>
     <button class="tab-btn" onclick="showView('player',this)">Player Lookup</button>
+    <button class="tab-btn" onclick="showView('migration',this);renderMigration()">Player Flow</button>
   </div>
 </header>
 <main>
@@ -157,6 +159,13 @@
     <label id="lbl-sub" style="display:none">Filter
       <select id="sel-sub" onchange="onSubChange()">
         <option value="">— all —</option>
+      </select>
+    </label>
+    <label>Type
+      <select id="sel-type" onchange="onSubChange()">
+        <option value="skater">Skaters</option>
+        <option value="goalie">Goalies</option>
+        <option value="all">All</option>
       </select>
     </label>
   </div>
@@ -197,6 +206,61 @@
   <div id="player-content">
     <div class="empty"><div class="icon">👤</div>Search for a player to see their full history.</div>
   </div>
+</div>
+
+<!-- VIEW 4: Player Flow / Migration -->
+<div class="view" id="view-migration">
+  <div class="panel">
+    <div class="panel-title">Player Flow Between Clubs — Season to Season</div>
+    <div class="controls">
+      <label>From Season
+        <select id="mig-season-start" onchange="renderMigration()">
+          <option value="27">'21-'22</option>
+          <option value="28">'22-'23</option>
+          <option value="29">'23-'24</option>
+          <option value="30" selected>'24-'25</option>
+          <option value="31">'25-'26</option>
+        </select>
+      </label>
+      <label>To Season
+        <select id="mig-season-end" onchange="renderMigration()">
+          <option value="27">'21-'22</option>
+          <option value="28">'22-'23</option>
+          <option value="29">'23-'24</option>
+          <option value="30">'24-'25</option>
+          <option value="31" selected>'25-'26</option>
+        </select>
+      </label>
+      <label>Age Division
+        <select id="mig-div-filter" onchange="renderMigration()">
+          <option value="">All divisions</option>
+          <option value="10U A">10U A</option>
+          <option value="10U B">10U B</option>
+          <option value="12U A">12U A</option>
+          <option value="12U AA">12U AA</option>
+          <option value="12U B">12U B</option>
+          <option value="12U BB">12U BB</option>
+          <option value="14U A">14U A</option>
+          <option value="14U AA">14U AA</option>
+          <option value="14U B">14U B</option>
+          <option value="14U BB">14U BB</option>
+          <option value="16U A">16U A</option>
+          <option value="18U A">18U A</option>
+        </select>
+      </label>
+      <label>Min players per flow
+        <select id="mig-min-flow" onchange="renderMigration()">
+          <option value="1">1+</option>
+          <option value="2" selected>2+</option>
+          <option value="3">3+</option>
+          <option value="5">5+</option>
+          <option value="10">10+</option>
+        </select>
+      </label>
+    </div>
+  </div>
+  <div id="migration-content" style="overflow-x:auto;padding:0 4px;"></div>
+  <div style="margin-top:12px;padding:0 4px;" id="migration-legend"></div>
 </div>
 
 </main>
@@ -250,22 +314,51 @@ function onSubChange(){
   const season=parseInt(document.getElementById('sel-season').value);
   const mode=document.getElementById('sel-mode').value;
   const sub=document.getElementById('sel-sub').value;
+  const type=document.getElementById('sel-type').value;
   if(!season)return;
-  let entries=ALL_ENTRIES.filter(e=>e.season===season&&e.type==='skater');
-  if(sub)entries=entries.filter(e=>mode==='division'?e.division===sub:e.team===sub);
-  browseSort={col:'Pts',dir:-1};
-  entries.sort((a,b)=>(parseInt(b.Pts)||0)-(parseInt(a.Pts)||0));
-  const content=document.getElementById('browse-content');
-  if(!entries.length){content.innerHTML='<div class="empty"><div class="icon">📭</div>No skater data found.</div>';return;}
   const subLabel=sub?'· '+sub:'· All '+(mode==='division'?'Divisions':'Teams');
-  content.innerHTML='<div class="section-heading"><h2>'+escHtml(SEASON_LABELS[season]+' '+subLabel)+'</h2><span class="badge">'+entries.length+' players</span></div>'+renderSkaterTable(entries,true,'browse-table');
-  attachSortHandlers('browse-table',entries,true);
+  const content=document.getElementById('browse-content');
+  let html='';
+  if(type==='skater'||type==='all'){
+    let sk=ALL_ENTRIES.filter(e=>e.season===season&&e.type==='skater');
+    if(sub)sk=sk.filter(e=>mode==='division'?e.division===sub:e.team===sub);
+    browseSort={col:'Pts',dir:-1};
+    sk.sort((a,b)=>(parseInt(b.Pts)||0)-(parseInt(a.Pts)||0));
+    if(sk.length){
+      html+='<div class="section-heading"><h2>'+escHtml(SEASON_LABELS[season]+' '+subLabel)+'</h2><span class="badge">'+sk.length+' skaters</span></div>'+renderSkaterTable(sk,true,'browse-table');
+    } else {
+      html+='<div class="empty" style="padding:12px 0"><div class="icon">📭</div>No skater data found.</div>';
+    }
+  }
+  if(type==='goalie'||type==='all'){
+    let gl=ALL_ENTRIES.filter(e=>e.season===season&&e.type==='goalie');
+    if(sub)gl=gl.filter(e=>mode==='division'?e.division===sub:e.team===sub);
+    browseGoalieSort={col:'GAA',dir:1};
+    gl.sort((a,b)=>(parseFloat(a.GAA)||0)-(parseFloat(b.GAA)||0));
+    if(gl.length){
+      if(type==='all')html+='<div style="margin-top:24px"></div>';
+      const heading=type==='goalie'?'<div class="section-heading"><h2>'+escHtml(SEASON_LABELS[season]+' '+subLabel)+'</h2><span class="badge">'+gl.length+' goalies</span></div>':'<div class="section-heading"><h2>Goalies</h2><span class="badge">'+gl.length+'</span></div>';
+      html+=heading+renderGoalieTable(gl,true,'browse-goalie-table');
+    } else {
+      html+='<div class="empty" style="padding:12px 0"><div class="icon">📭</div>No goalie data found.</div>';
+    }
+  }
+  if(!html)html='<div class="empty"><div class="icon">📭</div>No data found.</div>';
+  content.innerHTML=html;
+  if(type==='skater'||type==='all'){
+    const sk=ALL_ENTRIES.filter(e=>e.season===season&&e.type==='skater'&&(sub?(mode==='division'?e.division===sub:e.team===sub):true));
+    attachSortHandlers('browse-table',sk,true);
+  }
+  if(type==='goalie'||type==='all'){
+    const gl=ALL_ENTRIES.filter(e=>e.season===season&&e.type==='goalie'&&(sub?(mode==='division'?e.division===sub:e.team===sub):true));
+    attachGoalieSortHandlers('browse-goalie-table',gl,true);
+  }
 }
 function renderSkaterTable(entries,showTeamDiv,tableId){
   const cols=showTeamDiv?['Rank','Player','#','Team','Division','GP','G','A','Pts','Hat','PIM','Pts/GP']:['Rank','Player','#','GP','G','A','Pts','Hat','PIM','Pts/GP'];
   const makeRow=(e,i)=>{
     const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
-    const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer(\''+escAttr(e.playerName)+'\')">'+escHtml(e.playerName)+'</span>'),td(e.jersey||'','jersey')];
+    const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer(\''+escAttr(e.playerName)+'\')">'+escHtml(e.playerName)+byLabel(e.playerName)+'</span>'),td(e.jersey||'','jersey')];
     if(showTeamDiv)base.push(td(escHtml(e.team||'')),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
     base.push(td(e.GP||0,'num'),td(e.G||0,'num'),td(e.A||0,'num'),td(e.Pts||0,'num pts'),td(e.Hat||0,'num'),td(e.PIM||0,'num'),td(e.PtsPerGame||'0.00','num'));
     return '<tr>'+base.join('')+'</tr>';
@@ -294,7 +387,7 @@ function attachSortHandlers(tableId,entries,showTeamDiv){
       const tbody=table.querySelector('tbody');
       tbody.innerHTML=entries.map((e,i)=>{
         const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
-        const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer(\''+escAttr(e.playerName)+'\')">'+escHtml(e.playerName)+'</span>'),td(e.jersey||'','jersey')];
+        const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer(\''+escAttr(e.playerName)+'\')">'+escHtml(e.playerName)+byLabel(e.playerName)+'</span>'),td(e.jersey||'','jersey')];
         if(showTeamDiv)base.push(td(escHtml(e.team||'')),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
         base.push(td(e.GP||0,'num'),td(e.G||0,'num'),td(e.A||0,'num'),td(e.Pts||0,'num pts'),td(e.Hat||0,'num'),td(e.PIM||0,'num'),td(e.PtsPerGame||'0.00','num'));
         return '<tr>'+base.join('')+'</tr>';
@@ -305,6 +398,57 @@ function attachSortHandlers(tableId,entries,showTeamDiv){
   });
   const def=table.querySelector('th[data-col="Pts"]');
   if(def)def.classList.add('sort-desc');
+}
+let browseGoalieSort={col:'GAA',dir:1};
+function renderGoalieTable(entries,showTeamDiv,tableId){
+  const cols=showTeamDiv?['Rank','Goalie','#','Team','Division','GP','Shots','GA','GAA','Save%','SO']:['Rank','Goalie','#','GP','Shots','GA','GAA','Save%','SO'];
+  const makeRow=(e,i)=>{
+    const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
+    const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer(\''+escAttr(e.playerName)+'\')">'+escHtml(e.playerName)+byLabel(e.playerName)+'</span>'),td(e.jersey||'','jersey')];
+    if(showTeamDiv)base.push(td(escHtml(e.team||'')),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
+    const gaa=parseFloat(e.GAA)||0;
+    const sv=parseFloat(e['Save%'])||0;
+    base.push(td(e.GP||0,'num'),td(e.Shots||0,'num'),td(e.GA||0,'num'),td(gaa.toFixed(2),'num'),td(sv.toFixed(3),'num'),td(e.SO||0,'num'));
+    return '<tr>'+base.join('')+'</tr>';
+  };
+  const rightStart=showTeamDiv?5:3;
+  const hdrs=cols.map((c,i)=>{const r=i>=rightStart?' style="text-align:right"':'';return '<th data-col="'+c+'"'+r+'>'+c+'</th>';}).join('');
+  return '<div class="table-wrap"><table id="'+(tableId||'gt')+'"><thead><tr>'+hdrs+'</tr></thead><tbody>'+entries.map(makeRow).join('')+'</tbody></table></div>';
+}
+function attachGoalieSortHandlers(tableId,entries,showTeamDiv){
+  const table=document.getElementById(tableId);
+  if(!table)return;
+  table.querySelectorAll('th[data-col]').forEach(th=>{
+    th.addEventListener('click',()=>{
+      const col=th.dataset.col;
+      if(browseGoalieSort.col===col)browseGoalieSort.dir*=-1; else{browseGoalieSort.col=col;browseGoalieSort.dir=(col==='GAA'?1:-1);}
+      entries.sort((a,b)=>{
+        let va,vb;
+        if(col==='Goalie'){va=a.playerName;vb=b.playerName;}
+        else if(col==='Team'){va=a.team||'';vb=b.team||'';}
+        else if(col==='Division'){va=a.division||'';vb=b.division||'';}
+        else if(col==='GAA'){va=parseFloat(a.GAA)||0;vb=parseFloat(b.GAA)||0;}
+        else if(col==='Save%'){va=parseFloat(a['Save%'])||0;vb=parseFloat(b['Save%'])||0;}
+        else{va=parseInt(a[col])||0;vb=parseInt(b[col])||0;}
+        if(typeof va==='string')return browseGoalieSort.dir*va.localeCompare(vb);
+        return browseGoalieSort.dir*(va-vb);
+      });
+      const tbody=table.querySelector('tbody');
+      tbody.innerHTML=entries.map((e,i)=>{
+        const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
+        const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer(\''+escAttr(e.playerName)+'\')">'+escHtml(e.playerName)+byLabel(e.playerName)+'</span>'),td(e.jersey||'','jersey')];
+        if(showTeamDiv)base.push(td(escHtml(e.team||'')),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
+        const gaa=parseFloat(e.GAA)||0;
+        const sv=parseFloat(e['Save%'])||0;
+        base.push(td(e.GP||0,'num'),td(e.Shots||0,'num'),td(e.GA||0,'num'),td(gaa.toFixed(2),'num'),td(sv.toFixed(3),'num'),td(e.SO||0,'num'));
+        return '<tr>'+base.join('')+'</tr>';
+      }).join('');
+      table.querySelectorAll('th').forEach(t=>t.classList.remove('sort-asc','sort-desc'));
+      th.classList.add(browseGoalieSort.dir===1?'sort-asc':'sort-desc');
+    });
+  });
+  const def=table.querySelector('th[data-col="GAA"]');
+  if(def)def.classList.add('sort-asc');
 }
 
 
@@ -528,7 +672,7 @@ function showTeamRoster(team, season, club) {
 
   const skaterRows = entries.map((e,i) => `<tr>
     <td class="num">${i+1}</td>
-    <td class="player-link" onclick="goToPlayer('${escAttr(e.playerName)}')">${escHtml(e.playerName)}</td>
+    <td class="player-link" onclick="goToPlayer('${escAttr(e.playerName)}')">${escHtml(e.playerName)}${byLabel(e.playerName)}</td>
     <td class="jersey">${e.jersey||''}</td>
     <td class="num">${e.GP||0}</td>
     <td class="num">${e.G||0}</td>
@@ -540,7 +684,7 @@ function showTeamRoster(team, season, club) {
   </tr>`).join('');
 
   const goalieRows = gEntries.map(e => `<tr class="goalie-row">
-    <td class="player-link" colspan="2" onclick="goToPlayer('${escAttr(e.playerName)}')">${escHtml(e.playerName)}</td>
+    <td class="player-link" colspan="2" onclick="goToPlayer('${escAttr(e.playerName)}')">${escHtml(e.playerName)}${byLabel(e.playerName)}</td>
     <td class="num">${e.GP||0}</td>
     <td class="num">${e.Shots||0}</td>
     <td class="num">${e.GA||0}</td>
@@ -621,7 +765,7 @@ function onPlayerSearch(){
     if(!entries||!entries.length) return '';
     const seasons=[...new Set(entries.map(e=>e.season))].sort();
     const lastTeam=[...entries].sort((a,b)=>b.season-a.season)[0].team;
-    return '<div class="autocomplete-item" onclick="selectPlayer(\''+escAttr(name)+'\')"><span>'+escHtml(name)+'</span><span class="ac-sub">S'+seasons.join(', S')+' · '+escHtml(lastTeam)+'</span></div>';
+    return '<div class="autocomplete-item" onclick="selectPlayer(\''+escAttr(name)+'\')"><span>'+escHtml(name)+byLabel(name)+'</span><span class="ac-sub">S'+seasons.join(', S')+' · '+escHtml(lastTeam)+'</span></div>';
   }).join('');
   list.style.display='block';
 }
@@ -656,6 +800,7 @@ function renderPlayerHistory(name){
   const skaterEntries=entries.filter(e=>e.type==='skater');
   const goalieEntries=entries.filter(e=>e.type==='goalie');
   const seasons=[...new Set(entries.map(e=>e.season))].sort();
+  const isTwoWay=skaterEntries.length>0&&goalieEntries.length>0;
   const isGoalie=goalieEntries.length>0;
   const totalGP=skaterEntries.reduce((s,e)=>s+(parseInt(e.GP)||0),0);
   const totalG=skaterEntries.reduce((s,e)=>s+(parseInt(e.G)||0),0);
@@ -663,16 +808,29 @@ function renderPlayerHistory(name){
   const totalPts=skaterEntries.reduce((s,e)=>s+(parseInt(e.Pts)||0),0);
   const totalHat=skaterEntries.reduce((s,e)=>s+(parseInt(e.Hat)||0),0);
   const totalPIM=skaterEntries.reduce((s,e)=>s+(parseInt(e.PIM)||0),0);
+  const goalieGP=goalieEntries.reduce((s,e)=>s+(parseInt(e.GP)||0),0);
+  const goalieGA=goalieEntries.reduce((s,e)=>s+(parseInt(e.GA)||0),0);
+  const goalieSO=goalieEntries.reduce((s,e)=>s+(parseInt(e.SO)||0),0);
   let summaryCards='';
   if(skaterEntries.length>0){
     summaryCards='<div class="stat-summary">'
       +'<div class="stat-card"><div class="stat-val">'+seasons.length+'</div><div class="stat-lbl">Seasons</div></div>'
-      +'<div class="stat-card"><div class="stat-val">'+totalGP+'</div><div class="stat-lbl">Career GP</div></div>'
+      +'<div class="stat-card"><div class="stat-val">'+totalGP+'</div><div class="stat-lbl">Skater GP</div></div>'
       +'<div class="stat-card"><div class="stat-val">'+totalG+'</div><div class="stat-lbl">Goals</div></div>'
       +'<div class="stat-card"><div class="stat-val">'+totalA+'</div><div class="stat-lbl">Assists</div></div>'
       +'<div class="stat-card"><div class="stat-val" style="color:var(--accent2)">'+totalPts+'</div><div class="stat-lbl">Points</div></div>'
       +'<div class="stat-card"><div class="stat-val">'+totalHat+'</div><div class="stat-lbl">Hat Tricks</div></div>'
       +'<div class="stat-card"><div class="stat-val">'+totalPIM+'</div><div class="stat-lbl">PIM</div></div>'
+      +(isTwoWay?'<div class="stat-card"><div class="stat-val">'+goalieGP+'</div><div class="stat-lbl">Goalie GP</div></div>'
+               +'<div class="stat-card"><div class="stat-val">'+goalieGA+'</div><div class="stat-lbl">Goals Allowed</div></div>'
+               +'<div class="stat-card"><div class="stat-val">'+goalieSO+'</div><div class="stat-lbl">Shutouts</div></div>':'')
+      +'</div>';
+  } else if(goalieEntries.length>0){
+    summaryCards='<div class="stat-summary">'
+      +'<div class="stat-card"><div class="stat-val">'+seasons.length+'</div><div class="stat-lbl">Seasons</div></div>'
+      +'<div class="stat-card"><div class="stat-val">'+goalieGP+'</div><div class="stat-lbl">Career GP</div></div>'
+      +'<div class="stat-card"><div class="stat-val">'+goalieGA+'</div><div class="stat-lbl">Goals Allowed</div></div>'
+      +'<div class="stat-card"><div class="stat-val">'+goalieSO+'</div><div class="stat-lbl">Shutouts</div></div>'
       +'</div>';
   }
   let seasonSections=seasons.map(season=>{
@@ -700,7 +858,7 @@ function renderPlayerHistory(name){
     }
     return '<div class="season-section"><div class="season-section-header"><span class="season-badge">'+SEASON_LABELS[season]+'</span></div>'+skaterHtml+goalieHtml+'</div>';
   }).join('');
-  content.innerHTML='<div class="player-history-header"><h2>'+escHtml(name)+'</h2>'+(isGoalie?'<span class="div-badge">🥅 Goalie</span>':'')+'</div>'+summaryCards+seasonSections;
+  content.innerHTML='<div class="player-history-header"><h2>'+escHtml(name)+byLabel(name)+'</h2>'+(isTwoWay?'<span class="div-badge">⛸ + 🥅 Two-Way</span>':isGoalie?'<span class="div-badge">🥅 Goalie</span>':'')+'</div>'+summaryCards+seasonSections;
 }
 
 // ── Utils ──
@@ -709,12 +867,300 @@ function escAttr(s){return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'
 
 
 
+// ── Name normalization (collapse double-spaces, merge duplicate keys) ──
+function normalizeName(name) {
+  return name.replace(/\s+/g, ' ').trim()        // collapse whitespace
+             .replace(/\s[A-Z]\.?\s/g, ' ')      // strip middle initial (with or without period): "John A. Smith" / "John A Smith" → "John Smith"
+             .replace(/\s[A-Z]\.?$/, '');         // strip trailing middle initial: "John A." / "John A" → "John"
+}
+function normalizeRaw(rawObj) {
+  var result = {};
+  Object.keys(rawObj).forEach(function(name) {
+    var norm = normalizeName(name);
+    if (!result[norm]) result[norm] = [];
+    result[norm] = result[norm].concat(rawObj[name]);
+  });
+  return result;
+}
+
+// ── Birth year inference ──
+var BIRTH_YEARS = {};
+
+function inferBirthYear(entries) {
+  // For each (season, division) compute possible birth years, then intersect
+  var possible = null;
+  entries.forEach(function(e) {
+    if (e.type !== 'skater' || !e.division) return;
+    var m = e.division.match(/^(\d+)U/);
+    if (!m) return;
+    var ageLimit   = parseInt(m[1]);
+    var startYear  = 1994 + e.season; // S27→2021, S28→2022 …
+    // A player in XU is age (ageLimit-1) or ageLimit → born in [startYear-ageLimit, startYear-(ageLimit-1)]
+    var yMin = startYear - ageLimit;
+    var yMax = startYear - (ageLimit - 1);
+    var set = {};
+    for (var y = yMin; y <= yMax; y++) set[y] = true;
+    if (!possible) {
+      possible = set;
+    } else {
+      var next = {};
+      Object.keys(possible).forEach(function(y) { if (set[y]) next[y] = true; });
+      possible = next;
+    }
+  });
+  if (!possible) return null;
+  var keys = Object.keys(possible);
+  return keys.length === 1 ? parseInt(keys[0]) : null;
+}
+
+function refreshBirthYears() {
+  BIRTH_YEARS = {};
+  Object.keys(RAW).forEach(function(name) {
+    var by = inferBirthYear(RAW[name]);
+    if (by) BIRTH_YEARS[name] = by;
+  });
+}
+
+function byLabel(name) {
+  var by = BIRTH_YEARS[name];
+  return by ? '<span class="birth-yr">\''+String(by).slice(2)+'</span>' : '';
+}
+
 // ── Init ──
+window.RAW = normalizeRaw(RAW);
+window.ALL_PLAYER_NAMES = Object.keys(RAW).sort();
+refreshBirthYears();
 initBrowse();
 initClub();
 // Expose init functions for cross-script access
 window.initBrowse = initBrowse;
 window.initClub = initClub;
+
+// ════════════════════════════════════════
+// VIEW 4: Player Flow / Migration
+// ════════════════════════════════════════
+function renderMigration() {
+  var content = document.getElementById('migration-content');
+  var legend  = document.getElementById('migration-legend');
+  content.innerHTML = '<div class="empty"><div class="icon">⏳</div>Computing migrations…</div>';
+  legend.innerHTML  = '';
+  setTimeout(function() { _drawMigrationSVG(content, legend); }, 20);
+}
+
+function _drawMigrationSVG(container, legendEl) {
+  var ALL_SEASONS    = [27,28,29,30,31];
+  var SEASON_LABELS  = {27:"'21-'22",28:"'22-'23",29:"'23-'24",30:"'24-'25",31:"'25-'26"};
+  var seasonStart    = parseInt(document.getElementById('mig-season-start').value) || 27;
+  var seasonEnd      = parseInt(document.getElementById('mig-season-end').value)   || 31;
+  if (seasonEnd <= seasonStart) seasonEnd = Math.min(seasonStart + 1, 31);
+  var SEASONS        = ALL_SEASONS.filter(function(s){ return s >= seasonStart && s <= seasonEnd; });
+  var divFilter      = document.getElementById('mig-div-filter').value;
+  var minFlow        = parseInt(document.getElementById('mig-min-flow').value) || 2;
+
+  // ── 1. Build player→season→club map ──────────────────────────────
+  var playerClubs = {}; // name -> {season -> primaryClub}
+  ALL_ENTRIES.forEach(function(e) {
+    if (e.type !== 'skater') return;
+    if (divFilter && e.division !== divFilter) return;
+    var club = extractClub(e.team);
+    if (!playerClubs[e.playerName]) playerClubs[e.playerName] = {};
+    if (!playerClubs[e.playerName][e.season]) playerClubs[e.playerName][e.season] = club;
+  });
+
+  // ── 2. Count players per (season,club) and flows ─────────────────
+  var seasonClubCounts = {}; // {season: {club: n}}
+  var flowMap = {};           // composite key -> {fromClub,fromSeason,toClub,toSeason,count}
+
+  Object.keys(playerClubs).forEach(function(name) {
+    var seasons = playerClubs[name];
+    SEASONS.forEach(function(s) {
+      if (!seasons[s]) return;
+      if (!seasonClubCounts[s]) seasonClubCounts[s] = {};
+      var c = seasons[s];
+      seasonClubCounts[s][c] = (seasonClubCounts[s][c] || 0) + 1;
+    });
+    for (var i = 0; i < SEASONS.length - 1; i++) {
+      var s1 = SEASONS[i], s2 = SEASONS[i+1];
+      if (!seasons[s1] || !seasons[s2]) continue;
+      var key = seasons[s1]+'|||'+s1+'|||'+seasons[s2]+'|||'+s2;
+      if (!flowMap[key]) flowMap[key] = {fromClub:seasons[s1],fromSeason:s1,toClub:seasons[s2],toSeason:s2,count:0};
+      flowMap[key].count++;
+    }
+  });
+
+  // ── 3. Assign colors to clubs ─────────────────────────────────────
+  var allClubs = [];
+  Object.keys(seasonClubCounts).forEach(function(s) {
+    Object.keys(seasonClubCounts[s]).forEach(function(c) {
+      if (allClubs.indexOf(c) < 0) allClubs.push(c);
+    });
+  });
+  allClubs.sort();
+  var PALETTE = ['#4f8ef7','#f7934f','#4caf7d','#f76f6f','#b08ef7','#f7d94f','#4fd6f7','#f74fa8','#a0e060','#f77f4f','#4ff0c0','#e060a0','#60c0f0','#c0a040','#80e080'];
+  var clubColor = {};
+  allClubs.forEach(function(c,i){ clubColor[c] = PALETTE[i % PALETTE.length]; });
+
+  function abbr(name) {
+    return name
+      .replace('San Jose Jr Sharks Girls','SJ Jr Sharks Girls')
+      .replace('San Jose Jr Sharks','SJ Jr Sharks')
+      .replace('Tri Valley Lady Blue Devils','TV Lady Blue Devils')
+      .replace('Tri Valley Blue Devils','TV Blue Devils')
+      .replace('Santa Clara Blackhawks','SC Blackhawks')
+      .replace('San Francisco Sabercats','SF Sabercats')
+      .replace('San Mateo Black Stars','SM Black Stars')
+      .replace('Stockton Colts Girls','Stockton Girls')
+      .replace('Cupertino ','')
+      .replace('Golden State Elite','GS Elite')
+      .replace('Fresno Jr Monsters','Fresno Jr');
+  }
+
+  // ── 4. Layout ─────────────────────────────────────────────────────
+  var W      = Math.max((container.clientWidth || 700) - 8, 500);
+  var BAR_W  = Math.max(90, Math.min(130, Math.floor(W / 7.5)));
+  var H      = 560;
+  var PT = 42, PB = 16, PL = 4, PR = 4;
+  var chartH = H - PT - PB;
+  var BAR_GAP = 5;
+  var colSpacing = (W - PL - PR - BAR_W) / (SEASONS.length - 1);
+
+  var seasonX = {};
+  SEASONS.forEach(function(s, i){ seasonX[s] = PL + i * colSpacing; });
+
+  // Compute block positions per (season, club)
+  var blockPos = {}; // {season: {club: {y0,h,count}}}
+  SEASONS.forEach(function(season) {
+    var cc = seasonClubCounts[season];
+    if (!cc) return;
+    var clubs = Object.keys(cc).sort(function(a,b){ return cc[b]-cc[a]; });
+    var total = clubs.reduce(function(s,c){ return s+cc[c]; }, 0);
+    var gaps  = (clubs.length - 1) * BAR_GAP;
+    var avail = chartH - gaps;
+    var y = PT;
+    blockPos[season] = {};
+    clubs.forEach(function(club) {
+      var h = Math.max(4, (cc[club]/total)*avail);
+      blockPos[season][club] = {y0: y, h: h, count: cc[club]};
+      y += h + BAR_GAP;
+    });
+  });
+
+  // ── 5. Render SVG ─────────────────────────────────────────────────
+  var flowSVG  = '';
+  var blockSVG = '';
+
+  // Draw flows first (behind blocks)
+  for (var i = 0; i < SEASONS.length - 1; i++) {
+    var s1 = SEASONS[i], s2 = SEASONS[i+1];
+    var x1   = seasonX[s1] + BAR_W;
+    var x2   = seasonX[s2];
+    var midX = (x1 + x2) / 2;
+
+    if (!blockPos[s1] || !blockPos[s2]) continue;
+
+    // Initialise running y-offsets for source (right side) and target (left side)
+    var srcOff = {}, tgtOff = {};
+    Object.keys(blockPos[s1]).forEach(function(c){ srcOff[c] = blockPos[s1][c].y0; });
+    Object.keys(blockPos[s2]).forEach(function(c){ tgtOff[c] = blockPos[s2][c].y0; });
+
+    // Collect flows for this transition, sort same-club first then by source club
+    var fflows = Object.keys(flowMap)
+      .map(function(k){ return flowMap[k]; })
+      .filter(function(f){ return f.fromSeason===s1 && f.toSeason===s2 && f.count>=minFlow; })
+      .sort(function(a,b){
+        var sameA = a.fromClub===a.toClub ? 0 : 1;
+        var sameB = b.fromClub===b.toClub ? 0 : 1;
+        return sameA - sameB || a.fromClub.localeCompare(b.fromClub) || a.toClub.localeCompare(b.toClub);
+      });
+
+    fflows.forEach(function(f) {
+      var sb = blockPos[s1][f.fromClub];
+      var tb = blockPos[s2][f.toClub];
+      if (!sb || !tb) return;
+
+      var srcFrac = f.count / sb.count;
+      var tgtFrac = f.count / tb.count;
+      var srcH = sb.h * srcFrac;
+      var tgtH = tb.h * tgtFrac;
+
+      var sy0 = srcOff[f.fromClub];
+      var sy1 = sy0 + srcH;
+      var ty0 = tgtOff[f.toClub];
+      var ty1 = ty0 + tgtH;
+
+      srcOff[f.fromClub] += srcH;
+      tgtOff[f.toClub]   += tgtH;
+
+      var col   = clubColor[f.fromClub] || '#888';
+      var isSame = f.fromClub === f.toClub;
+      var opac  = isSame ? 0.22 : 0.42;
+
+      flowSVG += '<path d="M'+x1+','+sy0+' C'+midX+','+sy0+' '+midX+','+ty0+' '+x2+','+ty0
+               +' L'+x2+','+ty1+' C'+midX+','+ty1+' '+midX+','+sy1+' '+x1+','+sy1+' Z"'
+               +' fill="'+col+'" opacity="'+opac+'">'
+               +'<title>'+escHtml(f.fromClub)+' → '+escHtml(f.toClub)+': '+f.count+' player'+(f.count!==1?'s':'')+'</title>'
+               +'</path>';
+    });
+  }
+
+  // Draw club blocks
+  SEASONS.forEach(function(season) {
+    var x = seasonX[season];
+    blockSVG += '<text x="'+(x+BAR_W/2)+'" y="'+(PT-14)+'" text-anchor="middle"'
+              +' fill="#8890b0" font-size="12" font-weight="600"'
+              +' font-family="\'Segoe UI\',system-ui,sans-serif">'
+              +escHtml(SEASON_LABELS[season])+'</text>';
+
+    if (!blockPos[season]) return;
+    Object.keys(blockPos[season]).forEach(function(club) {
+      var bp  = blockPos[season][club];
+      var col = clubColor[club] || '#888';
+      blockSVG += '<rect x="'+x+'" y="'+bp.y0+'" width="'+BAR_W+'" height="'+Math.max(bp.h,2)+'"'
+                +' rx="3" fill="'+col+'" opacity="0.88">'
+                +'<title>'+escHtml(club)+' ('+SEASON_LABELS[season]+'): '+bp.count+' players</title>'
+                +'</rect>';
+      if (bp.h >= 14) {
+        var label = abbr(club);
+        var fs    = bp.h >= 22 ? 10 : 8;
+        var lineH = fs + 2;
+        // Word-wrap into two lines if needed
+        var words = label.split(' ');
+        var lines = [], cur = '';
+        words.forEach(function(w) {
+          var test = cur ? cur+' '+w : w;
+          if (test.length > 13 && cur) { lines.push(cur); cur = w; }
+          else cur = test;
+        });
+        if (cur) lines.push(cur);
+        lines = lines.slice(0,2);
+        var totalTH = lines.length * lineH;
+        var startY  = bp.y0 + bp.h/2 - totalTH/2 + fs;
+        lines.forEach(function(line, li) {
+          blockSVG += '<text x="'+(x+BAR_W/2)+'" y="'+(startY+li*lineH)+'"'
+                    +' text-anchor="middle" fill="#fff" font-size="'+fs+'" font-weight="700"'
+                    +' font-family="\'Segoe UI\',system-ui,sans-serif" style="pointer-events:none">'
+                    +escHtml(line)+'</text>';
+        });
+      }
+    });
+  });
+
+  container.innerHTML = '<svg width="'+W+'" height="'+H+'" style="display:block;max-width:100%;">'+flowSVG+blockSVG+'</svg>';
+
+  // ── 6. Legend ─────────────────────────────────────────────────────
+  var activeSeason = Object.keys(seasonClubCounts);
+  var legendClubs  = allClubs.filter(function(c) {
+    return activeSeason.some(function(s){ return seasonClubCounts[s] && seasonClubCounts[s][c]; });
+  });
+  var legendHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px;padding:10px 0;">';
+  legendClubs.forEach(function(c) {
+    legendHTML += '<span style="display:flex;align-items:center;gap:5px;font-size:.78rem;color:var(--text);">'
+                + '<span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:'+clubColor[c]+';flex-shrink:0;"></span>'
+                + escHtml(c)+'</span>';
+  });
+  legendHTML += '</div>';
+  legendEl.innerHTML = legendHTML;
+}
 
 </script>
 
@@ -751,6 +1197,14 @@ window.initClub = initClub;
   }
 
   function applyData(playersObj) {
+    // Normalize names: collapse double-spaces, strip middle initials, merge duplicates
+    var normObj = {};
+    for (var name in playersObj) {
+      var norm = normalizeName(name);
+      if (!normObj[norm]) normObj[norm] = [];
+      normObj[norm] = normObj[norm].concat(playersObj[name]);
+    }
+    playersObj = normObj;
     var newEntries = [];
     for (var name in playersObj) {
       var entries = playersObj[name];
@@ -799,6 +1253,7 @@ window.initClub = initClub;
     });
 
     selSeason.dispatchEvent(new Event('change'));
+    if (typeof refreshBirthYears === 'function') refreshBirthYears();
   }
 
   fetch(GITHUB_JSON_URL)
