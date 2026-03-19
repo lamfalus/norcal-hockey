@@ -104,11 +104,6 @@
 <header>
   <h1>⛸ NorCal Hockey <span>Stats DB</span></h1>
   <div style="display:flex;align-items:center;gap:6px;margin-left:auto;margin-right:16px;">
-    <div style="position:relative;display:inline-block;">
-      <span class="load-btn">📂 Load DB…</span>
-      <input type="file" id="json-file-input" accept=".json"
-        style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
-    </div>
     <span class="load-status" id="load-status">✓ Loaded</span>
   </div>
   <div class="tab-bar">
@@ -586,7 +581,7 @@ function setClubSeasonTeam(season, team) {
 // ════════════════════════════════════════
 // VIEW 3: Player Lookup
 // ════════════════════════════════════════
-const ALL_PLAYER_NAMES=Object.keys(RAW).sort();
+var ALL_PLAYER_NAMES=Object.keys(RAW).sort();
 let acFocusIdx=-1;
 function onPlayerSearch(){
   const q=document.getElementById('player-search').value.trim().toLowerCase();
@@ -597,6 +592,7 @@ function onPlayerSearch(){
   if(!matches.length){list.style.display='none';return;}
   list.innerHTML=matches.map((name,i)=>{
     const entries=RAW[name];
+    if(!entries||!entries.length) return '';
     const seasons=[...new Set(entries.map(e=>e.season))].sort();
     const lastTeam=[...entries].sort((a,b)=>b.season-a.season)[0].team;
     return '<div class="autocomplete-item" onclick="selectPlayer(\''+escAttr(name)+'\')"><span>'+escHtml(name)+'</span><span class="ac-sub">S'+seasons.join(', S')+' · '+escHtml(lastTeam)+'</span></div>';
