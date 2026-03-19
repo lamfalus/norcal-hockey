@@ -1047,7 +1047,9 @@ function _drawMigrationSVG(container, legendEl) {
 
   // ── 5. Render SVG ─────────────────────────────────────────────────
   var flowSVG  = '';
+  var labelSVG = '';   // count labels, hidden until hover
   var blockSVG = '';
+  var lastSeason = SEASONS[SEASONS.length - 1];
 
   // Draw flows first (behind blocks)
   for (var i = 0; i < SEASONS.length - 1; i++) {
@@ -1091,15 +1093,34 @@ function _drawMigrationSVG(container, legendEl) {
       srcOff[f.fromClub] += srcH;
       tgtOff[f.toClub]   += tgtH;
 
-      var col   = clubColor[f.fromClub] || '#888';
+      var col    = clubColor[f.fromClub] || '#888';
       var isSame = f.fromClub === f.toClub;
-      var opac  = isSame ? 0.22 : 0.42;
+      var opac   = isSame ? 0.22 : 0.42;
 
-      flowSVG += '<path d="M'+x1+','+sy0+' C'+midX+','+sy0+' '+midX+','+ty0+' '+x2+','+ty0
+      // Midpoint of the ribbon (t=0.5 on the cubic bezier)
+      var labelX = Math.round(midX);
+      var labelY = Math.round((sy0 + sy1 + ty0 + ty1) / 4);
+
+      flowSVG += '<path class="flow-path"'
+               +' data-from="'+escAttr(f.fromClub)+'" data-froms="'+s1+'"'
+               +' data-to="'+escAttr(f.toClub)+'" data-tos="'+s2+'"'
+               +' data-opac="'+opac+'"'
+               +' d="M'+x1+','+sy0+' C'+midX+','+sy0+' '+midX+','+ty0+' '+x2+','+ty0
                +' L'+x2+','+ty1+' C'+midX+','+ty1+' '+midX+','+sy1+' '+x1+','+sy1+' Z"'
                +' fill="'+col+'" opacity="'+opac+'">'
                +'<title>'+escHtml(f.fromClub)+' → '+escHtml(f.toClub)+': '+f.count+' player'+(f.count!==1?'s':'')+'</title>'
                +'</path>';
+
+      labelSVG += '<text class="flow-label"'
+                +' data-from="'+escAttr(f.fromClub)+'" data-froms="'+s1+'"'
+                +' data-to="'+escAttr(f.toClub)+'" data-tos="'+s2+'"'
+                +' x="'+labelX+'" y="'+labelY+'"'
+                +' text-anchor="middle" dominant-baseline="middle"'
+                +' fill="#fff" font-size="11" font-weight="800"'
+                +' font-family="\'Segoe UI\',system-ui,sans-serif"'
+                +' style="pointer-events:none;display:none;'
+                +   'filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))">'
+                +f.count+'</text>';
     });
   }
 
@@ -1115,8 +1136,9 @@ function _drawMigrationSVG(container, legendEl) {
     Object.keys(blockPos[season]).forEach(function(club) {
       var bp  = blockPos[season][club];
       var col = clubColor[club] || '#888';
-      blockSVG += '<rect x="'+x+'" y="'+bp.y0+'" width="'+BAR_W+'" height="'+Math.max(bp.h,2)+'"'
-                +' rx="3" fill="'+col+'" opacity="0.88">'
+      blockSVG += '<rect class="club-block" data-club="'+escAttr(club)+'" data-season="'+season+'"'
+                +' x="'+x+'" y="'+bp.y0+'" width="'+BAR_W+'" height="'+Math.max(bp.h,2)+'"'
+                +' rx="3" fill="'+col+'" opacity="0.88" style="cursor:pointer">'
                 +'<title>'+escHtml(club)+' ('+SEASON_LABELS[season]+'): '+bp.count+' players</title>'
                 +'</rect>';
       if (bp.h >= 14) {
@@ -1145,7 +1167,46 @@ function _drawMigrationSVG(container, legendEl) {
     });
   });
 
-  container.innerHTML = '<svg width="'+W+'" height="'+H+'" style="display:block;max-width:100%;">'+flowSVG+blockSVG+'</svg>';
+  container.innerHTML = '<svg data-last-season="'+lastSeason+'" width="'+W+'" height="'+H+'" style="display:block;max-width:100%;">'
+                      + flowSVG + labelSVG + blockSVG + '</svg>';
+
+  // ── 5b. Hover interactivity ────────────────────────────────────────
+  var svg = container.querySelector('svg');
+  svg.querySelectorAll('.club-block').forEach(function(rect) {
+    rect.addEventListener('mouseover', function(e) {
+      e.stopPropagation();
+      var club   = rect.dataset.club;
+      var season = parseInt(rect.dataset.season);
+      var isLast = season === lastSeason;
+
+      // Dim all ribbons
+      svg.querySelectorAll('.flow-path').forEach(function(p) {
+        p.setAttribute('opacity', '0.06');
+      });
+
+      // Highlight matching ribbons and show their count labels
+      var seasonAttr = isLast ? 'data-tos'   : 'data-froms';
+      var clubAttr   = isLast ? 'data-to'    : 'data-from';
+
+      svg.querySelectorAll('.flow-path['+clubAttr+'="'+club+'"]['+seasonAttr+'="'+season+'"]').forEach(function(p) {
+        p.setAttribute('opacity', '0.82');
+      });
+      svg.querySelectorAll('.flow-label['+clubAttr+'="'+club+'"]['+seasonAttr+'="'+season+'"]').forEach(function(t) {
+        t.style.display = '';
+      });
+    });
+
+    rect.addEventListener('mouseout', function() {
+      // Restore all ribbons to original opacity
+      svg.querySelectorAll('.flow-path').forEach(function(p) {
+        p.setAttribute('opacity', p.dataset.opac);
+      });
+      // Hide all count labels
+      svg.querySelectorAll('.flow-label').forEach(function(t) {
+        t.style.display = 'none';
+      });
+    });
+  });
 
   // ── 6. Legend ─────────────────────────────────────────────────────
   var activeSeason = Object.keys(seasonClubCounts);
