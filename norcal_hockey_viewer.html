@@ -774,6 +774,8 @@ window.initClub = initClub;
           }
         }
         window.ALL_ENTRIES = newEntries;
+        window.RAW = playersObj;
+        window.ALL_PLAYER_NAMES = Object.keys(playersObj).sort();
         var newMap = {};
         for (var i = 0; i < newEntries.length; i++) {
           var e = newEntries[i];
@@ -870,6 +872,8 @@ window.initClub = initClub;
       }
     }
     window.ALL_ENTRIES = newEntries;
+    window.RAW = playersObj;
+    window.ALL_PLAYER_NAMES = Object.keys(playersObj).sort();
     var newMap = {};
     for (var i = 0; i < newEntries.length; i++) {
       var e = newEntries[i];
