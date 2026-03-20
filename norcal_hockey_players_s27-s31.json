@@ -293,6 +293,19 @@
         "PIM": "",
         "PtsPerGame": "0.55",
         "Pts": "6"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Tri Valley Blue Devils 10A-1",
+        "type": "goalie",
+        "jersey": "87",
+        "GP": "1",
+        "Shots": "16",
+        "GA": "2",
+        "GAA": "2.00",
+        "Save%": "0.875",
+        "SO": "0"
       }
     ],
     "Jordan Madlansacay": [
@@ -544,6 +557,45 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Tri Valley Blue Devils 12A",
+        "type": "goalie",
+        "jersey": "32",
+        "GP": "13",
+        "Shots": "447",
+        "GA": "78",
+        "GAA": "6.00",
+        "Save%": "0.826",
+        "SO": "0"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "Santa Clara Blackhawks 14",
+        "type": "goalie",
+        "jersey": "*",
+        "GP": "2",
+        "Shots": "79",
+        "GA": "7",
+        "GAA": "3.50",
+        "Save%": "0.911",
+        "SO": "0"
+      },
+      {
+        "season": 31,
+        "division": "",
+        "team": "Tri Valley Blue Devils 14A",
+        "type": "goalie",
+        "jersey": "32",
+        "GP": "8",
+        "Shots": "242",
+        "GA": "17",
+        "GAA": "2.13",
+        "Save%": "0.930",
+        "SO": "1"
       }
     ],
     "Nino Balestrieri": [
@@ -1089,6 +1141,19 @@
         "GAA": "1.08",
         "Save%": "0.865",
         "SO": "2"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Cupertino Cougars 12A",
+        "type": "goalie",
+        "jersey": "62",
+        "GP": "15",
+        "Shots": "356",
+        "GA": "48",
+        "GAA": "3.20",
+        "Save%": "0.865",
+        "SO": "1"
       }
     ],
     "Samuel Park": [
@@ -1819,6 +1884,19 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Capital Thunder 12A",
+        "type": "goalie",
+        "jersey": "70",
+        "GP": "6",
+        "Shots": "186",
+        "GA": "18",
+        "GAA": "3.00",
+        "Save%": "0.903",
+        "SO": "0"
       }
     ],
     "Cabot Brown": [
@@ -3982,6 +4060,19 @@
         "PIM": "",
         "PtsPerGame": "0.86",
         "Pts": "12"
+      },
+      {
+        "season": 27,
+        "division": "",
+        "team": "Santa Clara Blackhawks 10BB",
+        "type": "goalie",
+        "jersey": "36",
+        "GP": "1",
+        "Shots": "24",
+        "GA": "10",
+        "GAA": "10.00",
+        "Save%": "0.583",
+        "SO": "0"
       }
     ],
     "Alexander Liu": [
@@ -4294,21 +4385,6 @@
         "PIM": "",
         "PtsPerGame": "0.29",
         "Pts": "5"
-      }
-    ],
-    "Anthony J Ivester": [
-      {
-        "season": 27,
-        "division": "",
-        "team": "Santa Clara Blackhawks 10BB",
-        "type": "goalie",
-        "jersey": "36",
-        "GP": "1",
-        "Shots": "24",
-        "GA": "10",
-        "GAA": "10.00",
-        "Save%": "0.583",
-        "SO": "0"
       }
     ],
     "Tyler Bruckbauer": [
@@ -6773,6 +6849,32 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Tri Valley Blue Devils 12AA-2",
+        "type": "goalie",
+        "jersey": "35",
+        "GP": "16",
+        "Shots": "372",
+        "GA": "47",
+        "GAA": "2.94",
+        "Save%": "0.874",
+        "SO": "0"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "Tri Valley Blue Devils 14A",
+        "type": "goalie",
+        "jersey": "35",
+        "GP": "7",
+        "Shots": "161",
+        "GA": "14",
+        "GAA": "2.00",
+        "Save%": "0.913",
+        "SO": "1"
       }
     ],
     "Eli Nelson": [
@@ -8734,6 +8836,58 @@
         "GAA": "6.00",
         "Save%": "0.769",
         "SO": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Santa Clara Blackhawks 12B",
+        "type": "goalie",
+        "jersey": "24",
+        "GP": "15",
+        "Shots": "195",
+        "GA": "24",
+        "GAA": "1.60",
+        "Save%": "0.877",
+        "SO": "0"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "Santa Clara Blackhawks 12BB",
+        "type": "goalie",
+        "jersey": "24",
+        "GP": "6",
+        "Shots": "142",
+        "GA": "20",
+        "GAA": "3.33",
+        "Save%": "0.859",
+        "SO": "0"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "Tri Valley Lady Blue Devils 12AAA",
+        "type": "goalie",
+        "jersey": "24",
+        "GP": "18",
+        "Shots": "264",
+        "GA": "28",
+        "GAA": "1.56",
+        "Save%": "0.894",
+        "SO": "6"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "San Mateo Black Stars 14B",
+        "type": "goalie",
+        "jersey": "92",
+        "GP": "13",
+        "Shots": "225",
+        "GA": "34",
+        "GAA": "2.62",
+        "Save%": "0.849",
+        "SO": "0"
       }
     ],
     "Vsevolod Mikheev": [
@@ -9570,6 +9724,71 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "San Francisco Sabercats 10BB",
+        "type": "goalie",
+        "jersey": "34",
+        "GP": "4",
+        "Shots": "60",
+        "GA": "13",
+        "GAA": "3.25",
+        "Save%": "0.783",
+        "SO": "0"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "San Francisco Sabercats 12B",
+        "type": "goalie",
+        "jersey": "34",
+        "GP": "18",
+        "Shots": "523",
+        "GA": "68",
+        "GAA": "3.78",
+        "Save%": "0.870",
+        "SO": "0"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "San Francisco Sabercats 12BB",
+        "type": "goalie",
+        "jersey": "34",
+        "GP": "15",
+        "Shots": "549",
+        "GA": "89",
+        "GAA": "5.93",
+        "Save%": "0.838",
+        "SO": "0"
+      },
+      {
+        "season": 31,
+        "division": "",
+        "team": "San Jose Jr Sharks 12AA-1",
+        "type": "goalie",
+        "jersey": "34",
+        "GP": "11",
+        "Shots": "170",
+        "GA": "28",
+        "GAA": "2.55",
+        "Save%": "0.835",
+        "SO": "0"
+      },
+      {
+        "season": 31,
+        "division": "",
+        "team": "San Jose Jr Sharks Girls 12AAA",
+        "type": "goalie",
+        "jersey": "34",
+        "GP": "8",
+        "Shots": "113",
+        "GA": "5",
+        "GAA": "0.63",
+        "Save%": "0.956",
+        "SO": "5"
       }
     ],
     "Jordan Morris": [
@@ -12002,6 +12221,19 @@
         "PIM": "",
         "PtsPerGame": "1.39",
         "Pts": "25"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Fresno Jr Monsters 12BB",
+        "type": "goalie",
+        "jersey": "6",
+        "GP": "16",
+        "Shots": "556",
+        "GA": "108",
+        "GAA": "6.75",
+        "Save%": "0.806",
+        "SO": "0"
       }
     ],
     "Garik Moore": [
@@ -12692,6 +12924,19 @@
         "PIM": "",
         "PtsPerGame": "0.91",
         "Pts": "10"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "San Francisco Sabercats 12BB",
+        "type": "goalie",
+        "jersey": "6",
+        "GP": "1",
+        "Shots": "9",
+        "GA": "0",
+        "GAA": "0.00",
+        "Save%": "1.000",
+        "SO": "0"
       }
     ],
     "Xavier Marshall": [
@@ -14515,6 +14760,32 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "San Jose Jr Sharks 10A-1",
+        "type": "goalie",
+        "jersey": "31",
+        "GP": "14",
+        "Shots": "167",
+        "GA": "27",
+        "GAA": "1.93",
+        "Save%": "0.838",
+        "SO": "0"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "San Jose Jr Sharks 12AA-2",
+        "type": "goalie",
+        "jersey": "31",
+        "GP": "8",
+        "Shots": "214",
+        "GA": "25",
+        "GAA": "3.13",
+        "Save%": "0.883",
+        "SO": "0"
       }
     ],
     "Paxson Kasper": [
@@ -15408,6 +15679,45 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "San Mateo Black Stars 12B",
+        "type": "goalie",
+        "jersey": "41",
+        "GP": "11",
+        "Shots": "237",
+        "GA": "28",
+        "GAA": "2.55",
+        "Save%": "0.882",
+        "SO": "0"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "Cupertino Cougars 12A",
+        "type": "goalie",
+        "jersey": "55",
+        "GP": "11",
+        "Shots": "214",
+        "GA": "26",
+        "GAA": "2.36",
+        "Save%": "0.879",
+        "SO": "0"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "Cupertino Cougars 14BB",
+        "type": "goalie",
+        "jersey": "41",
+        "GP": "9",
+        "Shots": "250",
+        "GA": "27",
+        "GAA": "3.00",
+        "Save%": "0.892",
+        "SO": "0"
       }
     ],
     "Nathan W Li": [
@@ -16179,9 +16489,7 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Emma R Stauffer": [
+      },
       {
         "season": 27,
         "division": "",
@@ -17096,6 +17404,19 @@
         "PIM": "",
         "PtsPerGame": "0.69",
         "Pts": "9"
+      },
+      {
+        "season": 27,
+        "division": "",
+        "team": "Tri Valley Blue Devils 12AA-2",
+        "type": "goalie",
+        "jersey": "68",
+        "GP": "1",
+        "Shots": "27",
+        "GA": "1",
+        "GAA": "1.00",
+        "Save%": "0.963",
+        "SO": "0"
       }
     ],
     "Andrei Duxbury": [
@@ -17158,7 +17479,7 @@
         "Pts": "0"
       }
     ],
-    "Jackson J Brennan": [
+    "Jackson Brennan": [
       {
         "season": 27,
         "division": "",
@@ -17171,21 +17492,6 @@
         "GAA": "2.69",
         "Save%": "0.830",
         "SO": "3"
-      }
-    ],
-    "Tyler J Lieu": [
-      {
-        "season": 27,
-        "division": "",
-        "team": "Tri Valley Blue Devils 12AA-2",
-        "type": "goalie",
-        "jersey": "68",
-        "GP": "1",
-        "Shots": "27",
-        "GA": "1",
-        "GAA": "1.00",
-        "Save%": "0.963",
-        "SO": "0"
       }
     ],
     "Marc Borzoni": [
@@ -18734,6 +19040,19 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Cupertino Cougars 14BB",
+        "type": "goalie",
+        "jersey": "31",
+        "GP": "9",
+        "Shots": "185",
+        "GA": "19",
+        "GAA": "2.11",
+        "Save%": "0.897",
+        "SO": "1"
       }
     ],
     "Albin Engstroem": [
@@ -18791,9 +19110,35 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Cupertino Cougars 14B",
+        "type": "goalie",
+        "jersey": "83",
+        "GP": "10",
+        "Shots": "375",
+        "GA": "53",
+        "GAA": "5.30",
+        "Save%": "0.859",
+        "SO": "1"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "Cupertino Cougars 14BB",
+        "type": "goalie",
+        "jersey": "83",
+        "GP": "9",
+        "Shots": "188",
+        "GA": "13",
+        "GAA": "1.44",
+        "Save%": "0.931",
+        "SO": "2"
       }
     ],
-    "Nolan Johnston- Lee": [
+    "Nolan Johnston Lee": [
       {
         "season": 27,
         "division": "",
@@ -18807,6 +19152,48 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "San Jose Jr Sharks 12AA-2",
+        "type": "skater",
+        "jersey": "24",
+        "GP": "11",
+        "G": "2",
+        "A": "1",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.27",
+        "Pts": "3"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "San Jose Jr Sharks 14A",
+        "type": "skater",
+        "jersey": "24",
+        "GP": "18",
+        "G": "4",
+        "A": "4",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.44",
+        "Pts": "8"
+      },
+      {
+        "season": 31,
+        "division": "",
+        "team": "San Jose Jr Sharks 16A-1",
+        "type": "skater",
+        "jersey": "24",
+        "GP": "13",
+        "G": "9",
+        "A": "13",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "1.69",
+        "Pts": "22"
       }
     ],
     "Yan Drobysh": [
@@ -19349,7 +19736,7 @@
         "Pts": "3"
       }
     ],
-    "Oliver P Welborn": [
+    "Oliver Welborn": [
       {
         "season": 27,
         "division": "",
@@ -19414,6 +19801,34 @@
         "GAA": "1.50",
         "Save%": "0.885",
         "SO": "0"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "Oakland Bears 14B",
+        "type": "skater",
+        "jersey": "24",
+        "GP": "3",
+        "G": "0",
+        "A": "0",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.00",
+        "Pts": "0"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "Oakland Bears 14B",
+        "type": "skater",
+        "jersey": "24",
+        "GP": "2",
+        "G": "0",
+        "A": "0",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.00",
+        "Pts": "0"
       }
     ],
     "Anthony Balestrieri": [
@@ -19446,6 +19861,20 @@
         "PIM": "",
         "PtsPerGame": "1.21",
         "Pts": "17"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Cupertino Cougars 14BB",
+        "type": "skater",
+        "jersey": "12",
+        "GP": "10",
+        "G": "5",
+        "A": "2",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.70",
+        "Pts": "7"
       }
     ],
     "Devin Davis": [
@@ -19936,7 +20365,7 @@
         "Pts": "8"
       }
     ],
-    "Kazuhiro J Mitra-Kozuka": [
+    "Kazuhiro Mitra-Kozuka": [
       {
         "season": 27,
         "division": "",
@@ -19949,6 +20378,33 @@
         "GAA": "4.43",
         "Save%": "0.864",
         "SO": "0"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "Cupertino Cougars 14BB",
+        "type": "skater",
+        "jersey": "31",
+        "GP": "8",
+        "G": "0",
+        "A": "0",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.00",
+        "Pts": "0"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "Cupertino Cougars 14BB",
+        "type": "goalie",
+        "jersey": "31",
+        "GP": "9",
+        "Shots": "216",
+        "GA": "17",
+        "GAA": "1.89",
+        "Save%": "0.921",
+        "SO": "1"
       }
     ],
     "Zachary Hughes": [
@@ -21871,6 +22327,45 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Santa Clara Blackhawks 14",
+        "type": "goalie",
+        "jersey": "24",
+        "GP": "13",
+        "Shots": "315",
+        "GA": "42",
+        "GAA": "3.23",
+        "Save%": "0.867",
+        "SO": "0"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "San Jose Jr Sharks 14A",
+        "type": "goalie",
+        "jersey": "4",
+        "GP": "15",
+        "Shots": "296",
+        "GA": "25",
+        "GAA": "1.67",
+        "Save%": "0.916",
+        "SO": "0"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "Cupertino Cougars 16A",
+        "type": "goalie",
+        "jersey": "74",
+        "GP": "8",
+        "Shots": "168",
+        "GA": "19",
+        "GAA": "2.38",
+        "Save%": "0.887",
+        "SO": "1"
       }
     ],
     "Brady Pollard": [
@@ -22356,6 +22851,32 @@
         "PIM": "",
         "PtsPerGame": "0.86",
         "Pts": "12"
+      },
+      {
+        "season": 27,
+        "division": "",
+        "team": "Santa Clara Blackhawks 12BB",
+        "type": "goalie",
+        "jersey": "21",
+        "GP": "2",
+        "Shots": "10",
+        "GA": "2",
+        "GAA": "1.00",
+        "Save%": "0.800",
+        "SO": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Santa Clara Blackhawks 12BB",
+        "type": "goalie",
+        "jersey": "21",
+        "GP": "1",
+        "Shots": "39",
+        "GA": "8",
+        "GAA": "8.00",
+        "Save%": "0.795",
+        "SO": "0"
       }
     ],
     "Kellen Kinkor-Wright": [
@@ -22532,53 +23053,7 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Bronwyn Zhao": [
-      {
-        "season": 27,
-        "division": "",
-        "team": "Santa Clara Blackhawks 12BB",
-        "type": "skater",
-        "jersey": "40",
-        "GP": "10",
-        "G": "0",
-        "A": "2",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.20",
-        "Pts": "2"
       },
-      {
-        "season": 28,
-        "division": "",
-        "team": "Santa Clara Blackhawks 14",
-        "type": "skater",
-        "jersey": "40",
-        "GP": "16",
-        "G": "0",
-        "A": "1",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.06",
-        "Pts": "1"
-      },
-      {
-        "season": 29,
-        "division": "",
-        "team": "Santa Clara Blackhawks 14B-2",
-        "type": "skater",
-        "jersey": "40",
-        "GP": "9",
-        "G": "1",
-        "A": "0",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.11",
-        "Pts": "1"
-      }
-    ],
-    "Jackson T Castaldi": [
       {
         "season": 27,
         "division": "",
@@ -22632,32 +23107,48 @@
         "SO": "3"
       }
     ],
-    "Taylor T Nguyen": [
+    "Bronwyn Zhao": [
       {
         "season": 27,
         "division": "",
         "team": "Santa Clara Blackhawks 12BB",
-        "type": "goalie",
-        "jersey": "21",
-        "GP": "2",
-        "Shots": "10",
-        "GA": "2",
-        "GAA": "1.00",
-        "Save%": "0.800",
-        "SO": "0"
+        "type": "skater",
+        "jersey": "40",
+        "GP": "10",
+        "G": "0",
+        "A": "2",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.20",
+        "Pts": "2"
       },
       {
         "season": 28,
         "division": "",
-        "team": "Santa Clara Blackhawks 12BB",
-        "type": "goalie",
-        "jersey": "21",
-        "GP": "1",
-        "Shots": "39",
-        "GA": "8",
-        "GAA": "8.00",
-        "Save%": "0.795",
-        "SO": "0"
+        "team": "Santa Clara Blackhawks 14",
+        "type": "skater",
+        "jersey": "40",
+        "GP": "16",
+        "G": "0",
+        "A": "1",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.06",
+        "Pts": "1"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "Santa Clara Blackhawks 14B-2",
+        "type": "skater",
+        "jersey": "40",
+        "GP": "9",
+        "G": "1",
+        "A": "0",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.11",
+        "Pts": "1"
       }
     ],
     "Luke Sloane": [
@@ -23308,7 +23799,7 @@
         "Pts": "0"
       }
     ],
-    "Benjamin G Michaels": [
+    "Benjamin Michaels": [
       {
         "season": 27,
         "division": "",
@@ -23347,6 +23838,34 @@
         "GAA": "2.83",
         "Save%": "0.829",
         "SO": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Reno Ice 12A",
+        "type": "skater",
+        "jersey": "29",
+        "GP": "1",
+        "G": "0",
+        "A": "0",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.00",
+        "Pts": "0"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "Reno Ice 14A",
+        "type": "skater",
+        "jersey": "29",
+        "GP": "4",
+        "G": "0",
+        "A": "0",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.00",
+        "Pts": "0"
       }
     ],
     "Tristan M Robles": [
@@ -24218,6 +24737,32 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "Tri Valley Blue Devils 14A",
+        "type": "goalie",
+        "jersey": "84",
+        "GP": "11",
+        "Shots": "250",
+        "GA": "22",
+        "GAA": "2.00",
+        "Save%": "0.912",
+        "SO": "3"
+      },
+      {
+        "season": 31,
+        "division": "",
+        "team": "Santa Clara Blackhawks 16A",
+        "type": "goalie",
+        "jersey": "84",
+        "GP": "7",
+        "Shots": "207",
+        "GA": "30",
+        "GAA": "4.29",
+        "Save%": "0.855",
+        "SO": "1"
       }
     ],
     "Hayden Terry": [
@@ -24276,9 +24821,7 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Hayden S Terry": [
+      },
       {
         "season": 27,
         "division": "",
@@ -25006,7 +25549,7 @@
         "Pts": "0"
       }
     ],
-    "Miles P Joing": [
+    "Miles Joing": [
       {
         "season": 27,
         "division": "",
@@ -25856,9 +26399,7 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "David A Sass": [
+      },
       {
         "season": 27,
         "division": "",
@@ -26946,7 +27487,7 @@
         "SO": "0"
       }
     ],
-    "Madaline P Stevens": [
+    "Madaline Stevens": [
       {
         "season": 27,
         "division": "",
@@ -26985,6 +27526,34 @@
         "GAA": "1.25",
         "Save%": "0.940",
         "SO": "2"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Tri Valley Blue Devils 14A",
+        "type": "skater",
+        "jersey": "81",
+        "GP": "6",
+        "G": "0",
+        "A": "0",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.00",
+        "Pts": "0"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "Tri-Valley Blue Devils 14A",
+        "type": "skater",
+        "jersey": "90",
+        "GP": "2",
+        "G": "0",
+        "A": "0",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.00",
+        "Pts": "0"
       }
     ],
     "Rory Walter": [
@@ -27627,6 +28196,32 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "Oakland Bears 14B",
+        "type": "goalie",
+        "jersey": "1",
+        "GP": "7",
+        "Shots": "67",
+        "GA": "13",
+        "GAA": "1.86",
+        "Save%": "0.806",
+        "SO": "0"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "San Francisco Sabercats 14BB",
+        "type": "goalie",
+        "jersey": "42",
+        "GP": "11",
+        "Shots": "145",
+        "GA": "14",
+        "GAA": "1.27",
+        "Save%": "0.903",
+        "SO": "0"
       }
     ],
     "Izack Parsons": [
@@ -28834,6 +29429,20 @@
         "PIM": "",
         "PtsPerGame": "0.60",
         "Pts": "9"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Vacaville Jets 14B",
+        "type": "skater",
+        "jersey": "35",
+        "GP": "18",
+        "G": "8",
+        "A": "4",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.67",
+        "Pts": "12"
       }
     ],
     "Jack Meador": [
@@ -29054,6 +29663,58 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 27,
+        "division": "",
+        "team": "Vacaville Jets 12A",
+        "type": "goalie",
+        "jersey": "6",
+        "GP": "13",
+        "Shots": "173",
+        "GA": "21",
+        "GAA": "1.62",
+        "Save%": "0.879",
+        "SO": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Vacaville Jets 14B",
+        "type": "goalie",
+        "jersey": "6",
+        "GP": "18",
+        "Shots": "375",
+        "GA": "34",
+        "GAA": "1.89",
+        "Save%": "0.909",
+        "SO": "3"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "Vacaville Jets 14B",
+        "type": "goalie",
+        "jersey": "6",
+        "GP": "16",
+        "Shots": "482",
+        "GA": "46",
+        "GAA": "2.88",
+        "Save%": "0.905",
+        "SO": "0"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "San Francisco Sabercats 16A",
+        "type": "goalie",
+        "jersey": "6",
+        "GP": "9",
+        "Shots": "253",
+        "GA": "24",
+        "GAA": "2.67",
+        "Save%": "0.905",
+        "SO": "1"
       }
     ],
     "Owen Mansell": [
@@ -29156,60 +29817,6 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Caesar A Massari": [
-      {
-        "season": 27,
-        "division": "",
-        "team": "Vacaville Jets 12A",
-        "type": "goalie",
-        "jersey": "6",
-        "GP": "13",
-        "Shots": "173",
-        "GA": "21",
-        "GAA": "1.62",
-        "Save%": "0.879",
-        "SO": "0"
-      },
-      {
-        "season": 28,
-        "division": "",
-        "team": "Vacaville Jets 14B",
-        "type": "goalie",
-        "jersey": "6",
-        "GP": "18",
-        "Shots": "375",
-        "GA": "34",
-        "GAA": "1.89",
-        "Save%": "0.909",
-        "SO": "3"
-      },
-      {
-        "season": 29,
-        "division": "",
-        "team": "Vacaville Jets 14B",
-        "type": "goalie",
-        "jersey": "6",
-        "GP": "16",
-        "Shots": "482",
-        "GA": "46",
-        "GAA": "2.88",
-        "Save%": "0.905",
-        "SO": "0"
-      },
-      {
-        "season": 30,
-        "division": "",
-        "team": "San Francisco Sabercats 16A",
-        "type": "goalie",
-        "jersey": "6",
-        "GP": "9",
-        "Shots": "253",
-        "GA": "24",
-        "GAA": "2.67",
-        "Save%": "0.905",
-        "SO": "1"
       }
     ],
     "Alleo L Reyes": [
@@ -31043,39 +31650,7 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Li-An Ye": [
-      {
-        "season": 27,
-        "division": "",
-        "team": "San Jose Jr Sharks Girls 12AAA",
-        "type": "skater",
-        "jersey": "2",
-        "GP": "14",
-        "G": "0",
-        "A": "0",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.00",
-        "Pts": "0"
       },
-      {
-        "season": 28,
-        "division": "",
-        "team": "Cupertino Cougars 12BB",
-        "type": "skater",
-        "jersey": "77",
-        "GP": "8",
-        "G": "1",
-        "A": "4",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.63",
-        "Pts": "5"
-      }
-    ],
-    "Bailey I Watson": [
       {
         "season": 27,
         "division": "",
@@ -31114,6 +31689,36 @@
         "GAA": "1.57",
         "Save%": "0.851",
         "SO": "0"
+      }
+    ],
+    "Li-An Ye": [
+      {
+        "season": 27,
+        "division": "",
+        "team": "San Jose Jr Sharks Girls 12AAA",
+        "type": "skater",
+        "jersey": "2",
+        "GP": "14",
+        "G": "0",
+        "A": "0",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.00",
+        "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Cupertino Cougars 12BB",
+        "type": "skater",
+        "jersey": "77",
+        "GP": "8",
+        "G": "1",
+        "A": "4",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.63",
+        "Pts": "5"
       }
     ],
     "Barrett Smith": [
@@ -31202,6 +31807,19 @@
         "PIM": "",
         "PtsPerGame": "5.06",
         "Pts": "86"
+      },
+      {
+        "season": 27,
+        "division": "",
+        "team": "Fresno Jr Monsters 12BB",
+        "type": "goalie",
+        "jersey": "14",
+        "GP": "1",
+        "Shots": "23",
+        "GA": "4",
+        "GAA": "4.00",
+        "Save%": "0.826",
+        "SO": "0"
       }
     ],
     "Braxton Mecartea": [
@@ -31544,21 +32162,6 @@
         "Pts": "2"
       }
     ],
-    "Peter D Kalina": [
-      {
-        "season": 27,
-        "division": "",
-        "team": "Fresno Jr Monsters 12BB",
-        "type": "goalie",
-        "jersey": "14",
-        "GP": "1",
-        "Shots": "23",
-        "GA": "4",
-        "GAA": "4.00",
-        "Save%": "0.826",
-        "SO": "0"
-      }
-    ],
     "Cole Nerland": [
       {
         "season": 27,
@@ -31586,6 +32189,19 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Fresno Jr Monsters 14BB",
+        "type": "goalie",
+        "jersey": "37",
+        "GP": "12",
+        "Shots": "163",
+        "GA": "40",
+        "GAA": "3.33",
+        "Save%": "0.755",
+        "SO": "0"
       }
     ],
     "Joseph Ligas": [
@@ -32140,7 +32756,7 @@
         "Pts": "5"
       }
     ],
-    "Logan E Ashley": [
+    "Logan Ashley": [
       {
         "season": 27,
         "division": "",
@@ -32166,6 +32782,20 @@
         "GAA": "3.71",
         "Save%": "0.816",
         "SO": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Capital Thunder 16A-1",
+        "type": "skater",
+        "jersey": "31",
+        "GP": "3",
+        "G": "0",
+        "A": "0",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.00",
+        "Pts": "0"
       }
     ],
     "Dominic Powell": [
@@ -32618,6 +33248,19 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 27,
+        "division": "",
+        "team": "San Jose Jr Sharks 14A",
+        "type": "goalie",
+        "jersey": "36",
+        "GP": "9",
+        "Shots": "143",
+        "GA": "13",
+        "GAA": "1.44",
+        "Save%": "0.909",
+        "SO": "2"
       }
     ],
     "Alexander Lebedev": [
@@ -32634,6 +33277,19 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 27,
+        "division": "",
+        "team": "San Jose Jr Sharks 14A",
+        "type": "goalie",
+        "jersey": "30",
+        "GP": "5",
+        "Shots": "76",
+        "GA": "9",
+        "GAA": "1.80",
+        "Save%": "0.882",
+        "SO": "1"
       }
     ],
     "Alexander Tasic": [
@@ -32678,36 +33334,6 @@
         "PIM": "",
         "PtsPerGame": "1.00",
         "Pts": "10"
-      }
-    ],
-    "Dylan J Bechtel": [
-      {
-        "season": 27,
-        "division": "",
-        "team": "San Jose Jr Sharks 14A",
-        "type": "goalie",
-        "jersey": "36",
-        "GP": "9",
-        "Shots": "143",
-        "GA": "13",
-        "GAA": "1.44",
-        "Save%": "0.909",
-        "SO": "2"
-      }
-    ],
-    "Alexander V Lebedev": [
-      {
-        "season": 27,
-        "division": "",
-        "team": "San Jose Jr Sharks 14A",
-        "type": "goalie",
-        "jersey": "30",
-        "GP": "5",
-        "Shots": "76",
-        "GA": "9",
-        "GAA": "1.80",
-        "Save%": "0.882",
-        "SO": "1"
       }
     ],
     "Jilian Klein": [
@@ -32970,6 +33596,19 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 27,
+        "division": "",
+        "team": "Vacaville Jets 14B",
+        "type": "goalie",
+        "jersey": "19",
+        "GP": "7",
+        "Shots": "128",
+        "GA": "14",
+        "GAA": "2.00",
+        "Save%": "0.891",
+        "SO": "1"
       }
     ],
     "Evan Ratner": [
@@ -32986,24 +33625,7 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Madeline A Pope": [
-      {
-        "season": 27,
-        "division": "",
-        "team": "Vacaville Jets 14B",
-        "type": "goalie",
-        "jersey": "19",
-        "GP": "7",
-        "Shots": "128",
-        "GA": "14",
-        "GAA": "2.00",
-        "Save%": "0.891",
-        "SO": "1"
-      }
-    ],
-    "Evan M Ratner": [
+      },
       {
         "season": 27,
         "division": "",
@@ -33924,6 +34546,32 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "San Francisco Sabercats 16A",
+        "type": "goalie",
+        "jersey": "32",
+        "GP": "8",
+        "Shots": "159",
+        "GA": "24",
+        "GAA": "3.00",
+        "Save%": "0.849",
+        "SO": "0"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "San Francisco Sabercats 16A",
+        "type": "goalie",
+        "jersey": "32",
+        "GP": "12",
+        "Shots": "334",
+        "GA": "39",
+        "GAA": "3.25",
+        "Save%": "0.883",
+        "SO": "0"
       }
     ],
     "Cody Moulton": [
@@ -33942,7 +34590,7 @@
         "Pts": "0"
       }
     ],
-    "Catherine C Lee": [
+    "Catherine Lee": [
       {
         "season": 27,
         "division": "",
@@ -33994,6 +34642,20 @@
         "GAA": "0.50",
         "Save%": "0.937",
         "SO": "0"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "San Francisco Sabercats 16A",
+        "type": "skater",
+        "jersey": "1",
+        "GP": "5",
+        "G": "0",
+        "A": "0",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.00",
+        "Pts": "0"
       }
     ],
     "Jamie Natali": [
@@ -34548,7 +35210,7 @@
         "Pts": "2"
       }
     ],
-    "Clementine Dickson-Child": [
+    "Clementine Dickson Child": [
       {
         "season": 27,
         "division": "",
@@ -34574,6 +35236,33 @@
         "GA": "56",
         "GAA": "5.60",
         "Save%": "0.800",
+        "SO": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Cupertino Cougars 14BB",
+        "type": "skater",
+        "jersey": "41",
+        "GP": "6",
+        "G": "0",
+        "A": "0",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.00",
+        "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Cupertino Cougars 14BB",
+        "type": "goalie",
+        "jersey": "41",
+        "GP": "6",
+        "Shots": "137",
+        "GA": "22",
+        "GAA": "3.67",
+        "Save%": "0.839",
         "SO": "0"
       }
     ],
@@ -36679,6 +37368,19 @@
         "PIM": "",
         "PtsPerGame": "0.09",
         "Pts": "1"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "San Francisco Sabercats 16A",
+        "type": "goalie",
+        "jersey": "7",
+        "GP": "1",
+        "Shots": "2",
+        "GA": "2",
+        "GAA": "2.00",
+        "Save%": "0.000",
+        "SO": "0"
       }
     ],
     "Julian Matthews": [
@@ -36997,9 +37699,7 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Charlie P Pickart": [
+      },
       {
         "season": 27,
         "division": "",
@@ -38111,37 +38811,7 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Christopher M Severin": [
-      {
-        "season": 27,
-        "division": "",
-        "team": "Vacaville Jets 14B",
-        "type": "goalie",
-        "jersey": "*",
-        "GP": "1",
-        "Shots": "20",
-        "GA": "1",
-        "GAA": "1.00",
-        "Save%": "0.950",
-        "SO": "0"
       },
-      {
-        "season": 28,
-        "division": "",
-        "team": "Vacaville Jets 14B",
-        "type": "goalie",
-        "jersey": "51",
-        "GP": "14",
-        "Shots": "339",
-        "GA": "43",
-        "GAA": "3.07",
-        "Save%": "0.873",
-        "SO": "1"
-      }
-    ],
-    "Caleb I Tarter": [
       {
         "season": 27,
         "division": "",
@@ -38166,6 +38836,34 @@
         "GA": "36",
         "GAA": "2.57",
         "Save%": "0.890",
+        "SO": "1"
+      }
+    ],
+    "Christopher Severin": [
+      {
+        "season": 27,
+        "division": "",
+        "team": "Vacaville Jets 14B",
+        "type": "goalie",
+        "jersey": "*",
+        "GP": "1",
+        "Shots": "20",
+        "GA": "1",
+        "GAA": "1.00",
+        "Save%": "0.950",
+        "SO": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Vacaville Jets 14B",
+        "type": "goalie",
+        "jersey": "51",
+        "GP": "14",
+        "Shots": "339",
+        "GA": "43",
+        "GAA": "3.07",
+        "Save%": "0.873",
         "SO": "1"
       }
     ],
@@ -38629,6 +39327,19 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 27,
+        "division": "",
+        "team": "San Mateo Black Stars 14B",
+        "type": "goalie",
+        "jersey": "31",
+        "GP": "12",
+        "Shots": "291",
+        "GA": "32",
+        "GAA": "2.67",
+        "Save%": "0.890",
+        "SO": "0"
       }
     ],
     "Alexander Grady": [
@@ -38735,52 +39446,7 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Francisco L Chan": [
-      {
-        "season": 27,
-        "division": "",
-        "team": "San Mateo Black Stars 14B",
-        "type": "goalie",
-        "jersey": "31",
-        "GP": "12",
-        "Shots": "291",
-        "GA": "32",
-        "GAA": "2.67",
-        "Save%": "0.890",
-        "SO": "0"
-      }
-    ],
-    "Lucas A Bonnet": [
-      {
-        "season": 27,
-        "division": "",
-        "team": "San Mateo Black Stars 14B",
-        "type": "goalie",
-        "jersey": "70",
-        "GP": "8",
-        "Shots": "56",
-        "GA": "4",
-        "GAA": "0.50",
-        "Save%": "0.929",
-        "SO": "0"
       },
-      {
-        "season": 28,
-        "division": "",
-        "team": "San Jose Jr Sharks 16A-1",
-        "type": "goalie",
-        "jersey": "70",
-        "GP": "9",
-        "Shots": "137",
-        "GA": "20",
-        "GAA": "2.22",
-        "Save%": "0.854",
-        "SO": "2"
-      }
-    ],
-    "Walter J Standifer": [
       {
         "season": 27,
         "division": "",
@@ -38832,6 +39498,34 @@
         "GAA": "1.38",
         "Save%": "0.936",
         "SO": "0"
+      }
+    ],
+    "Lucas A Bonnet": [
+      {
+        "season": 27,
+        "division": "",
+        "team": "San Mateo Black Stars 14B",
+        "type": "goalie",
+        "jersey": "70",
+        "GP": "8",
+        "Shots": "56",
+        "GA": "4",
+        "GAA": "0.50",
+        "Save%": "0.929",
+        "SO": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "San Jose Jr Sharks 16A-1",
+        "type": "goalie",
+        "jersey": "70",
+        "GP": "9",
+        "Shots": "137",
+        "GA": "20",
+        "GAA": "2.22",
+        "Save%": "0.854",
+        "SO": "2"
       }
     ],
     "Esteban Perron Riveros": [
@@ -38996,7 +39690,7 @@
         "Pts": "2"
       }
     ],
-    "Adam MacIas": [
+    "Adam Macias": [
       {
         "season": 27,
         "division": "",
@@ -39802,6 +40496,19 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Reno Ice 14A",
+        "type": "goalie",
+        "jersey": "30",
+        "GP": "10",
+        "Shots": "201",
+        "GA": "44",
+        "GAA": "4.40",
+        "Save%": "0.781",
+        "SO": "0"
       }
     ],
     "Isabelle Kirby": [
@@ -40687,9 +41394,22 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 27,
+        "division": "",
+        "team": "Vacaville Jets 16A",
+        "type": "goalie",
+        "jersey": "35",
+        "GP": "6",
+        "Shots": "162",
+        "GA": "7",
+        "GAA": "1.17",
+        "Save%": "0.957",
+        "SO": "2"
       }
     ],
-    "Kristian Olsen-Makdessian": [
+    "Kristian Olsen Makdessian": [
       {
         "season": 27,
         "division": "",
@@ -40703,21 +41423,6 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Aidan W Anderson": [
-      {
-        "season": 27,
-        "division": "",
-        "team": "Vacaville Jets 16A",
-        "type": "goalie",
-        "jersey": "35",
-        "GP": "6",
-        "Shots": "162",
-        "GA": "7",
-        "GAA": "1.17",
-        "Save%": "0.957",
-        "SO": "2"
       }
     ],
     "Kristian M Olsen-Makdessian": [
@@ -41021,6 +41726,19 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 27,
+        "division": "",
+        "team": "Cupertino Cougars 16A",
+        "type": "goalie",
+        "jersey": "33",
+        "GP": "5",
+        "Shots": "141",
+        "GA": "8",
+        "GAA": "1.60",
+        "Save%": "0.943",
+        "SO": "2"
       }
     ],
     "Aidan Fehl": [
@@ -41067,21 +41785,6 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Henry T Eide": [
-      {
-        "season": 27,
-        "division": "",
-        "team": "Cupertino Cougars 16A",
-        "type": "goalie",
-        "jersey": "33",
-        "GP": "5",
-        "Shots": "141",
-        "GA": "8",
-        "GAA": "1.60",
-        "Save%": "0.943",
-        "SO": "2"
       }
     ],
     "Krisjan M Harnish": [
@@ -42580,6 +43283,32 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 27,
+        "division": "",
+        "team": "Tri Valley Blue Devils 16A",
+        "type": "goalie",
+        "jersey": "81",
+        "GP": "8",
+        "Shots": "203",
+        "GA": "17",
+        "GAA": "2.13",
+        "Save%": "0.916",
+        "SO": "2"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Tri Valley Blue Devils 16A",
+        "type": "goalie",
+        "jersey": "81",
+        "GP": "7",
+        "Shots": "197",
+        "GA": "24",
+        "GAA": "3.43",
+        "Save%": "0.878",
+        "SO": "0"
       }
     ],
     "Alexander Vaughn": [
@@ -42608,34 +43337,6 @@
         "GA": "15",
         "GAA": "3.75",
         "Save%": "0.870",
-        "SO": "0"
-      }
-    ],
-    "Joshua J Stevens": [
-      {
-        "season": 27,
-        "division": "",
-        "team": "Tri Valley Blue Devils 16A",
-        "type": "goalie",
-        "jersey": "81",
-        "GP": "8",
-        "Shots": "203",
-        "GA": "17",
-        "GAA": "2.13",
-        "Save%": "0.916",
-        "SO": "2"
-      },
-      {
-        "season": 28,
-        "division": "",
-        "team": "Tri Valley Blue Devils 16A",
-        "type": "goalie",
-        "jersey": "81",
-        "GP": "7",
-        "Shots": "197",
-        "GA": "24",
-        "GAA": "3.43",
-        "Save%": "0.878",
         "SO": "0"
       }
     ],
@@ -42996,7 +43697,7 @@
         "SO": "0"
       }
     ],
-    "Eleanore J Kirshner": [
+    "Eleanore Kirshner": [
       {
         "season": 27,
         "division": "",
@@ -43158,7 +43859,7 @@
         "Pts": "17"
       }
     ],
-    "Elissa Moore Knight": [
+    "Elissa Moore-Knight": [
       {
         "season": 28,
         "division": "",
@@ -43172,6 +43873,48 @@
         "PIM": "",
         "PtsPerGame": "0.29",
         "Pts": "5"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "Cupertino Cougars 10A",
+        "type": "skater",
+        "jersey": "13",
+        "GP": "13",
+        "G": "0",
+        "A": "7",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.54",
+        "Pts": "7"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "Golden State Elite 12AA-1",
+        "type": "skater",
+        "jersey": "13",
+        "GP": "16",
+        "G": "1",
+        "A": "2",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.19",
+        "Pts": "3"
+      },
+      {
+        "season": 31,
+        "division": "",
+        "team": "Tri Valley Blue Devils 12AA-1",
+        "type": "skater",
+        "jersey": "22",
+        "GP": "15",
+        "G": "10",
+        "A": "9",
+        "Hat": "1",
+        "PIM": "",
+        "PtsPerGame": "1.27",
+        "Pts": "19"
       }
     ],
     "Landon Pacleb": [
@@ -43248,9 +43991,7 @@
         "PIM": "",
         "PtsPerGame": "0.50",
         "Pts": "2"
-      }
-    ],
-    "Nikolai J Visneski": [
+      },
       {
         "season": 28,
         "division": "",
@@ -43376,34 +44117,6 @@
         "PIM": "",
         "PtsPerGame": "0.54",
         "Pts": "7"
-      }
-    ],
-    "Ramon A Zuniga": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "San Jose Jr Sharks 10A-1",
-        "type": "goalie",
-        "jersey": "31",
-        "GP": "14",
-        "Shots": "167",
-        "GA": "27",
-        "GAA": "1.93",
-        "Save%": "0.838",
-        "SO": "0"
-      },
-      {
-        "season": 30,
-        "division": "",
-        "team": "San Jose Jr Sharks 12AA-2",
-        "type": "goalie",
-        "jersey": "31",
-        "GP": "8",
-        "Shots": "214",
-        "GA": "25",
-        "GAA": "3.13",
-        "Save%": "0.883",
-        "SO": "0"
       }
     ],
     "Benicio Caceres": [
@@ -44860,7 +45573,7 @@
         "SO": "0"
       }
     ],
-    "Austyn L Kosmynka": [
+    "Austyn Kosmynka": [
       {
         "season": 28,
         "division": "",
@@ -44899,6 +45612,20 @@
         "GAA": "4.11",
         "Save%": "0.862",
         "SO": "0"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "San Jose Jr Sharks 12AA-2",
+        "type": "skater",
+        "jersey": "29",
+        "GP": "7",
+        "G": "0",
+        "A": "0",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.00",
+        "Pts": "0"
       }
     ],
     "John Canoyer IV": [
@@ -49252,24 +49979,7 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Monroe M Iwanaga": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Santa Clara Blackhawks 10B",
-        "type": "goalie",
-        "jersey": "29",
-        "GP": "3",
-        "Shots": "30",
-        "GA": "10",
-        "GAA": "3.33",
-        "Save%": "0.667",
-        "SO": "0"
-      }
-    ],
-    "Madison L Ramirez": [
+      },
       {
         "season": 28,
         "division": "",
@@ -49320,6 +50030,21 @@
         "GA": "42",
         "GAA": "3.00",
         "Save%": "0.869",
+        "SO": "0"
+      }
+    ],
+    "Monroe M Iwanaga": [
+      {
+        "season": 28,
+        "division": "",
+        "team": "Santa Clara Blackhawks 10B",
+        "type": "goalie",
+        "jersey": "29",
+        "GP": "3",
+        "Shots": "30",
+        "GA": "10",
+        "GAA": "3.33",
+        "Save%": "0.667",
         "SO": "0"
       }
     ],
@@ -51779,73 +52504,6 @@
         "PIM": "",
         "PtsPerGame": "0.31",
         "Pts": "5"
-      }
-    ],
-    "Avery C Lewis": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "San Francisco Sabercats 10BB",
-        "type": "goalie",
-        "jersey": "34",
-        "GP": "4",
-        "Shots": "60",
-        "GA": "13",
-        "GAA": "3.25",
-        "Save%": "0.783",
-        "SO": "0"
-      },
-      {
-        "season": 29,
-        "division": "",
-        "team": "San Francisco Sabercats 12B",
-        "type": "goalie",
-        "jersey": "34",
-        "GP": "18",
-        "Shots": "523",
-        "GA": "68",
-        "GAA": "3.78",
-        "Save%": "0.870",
-        "SO": "0"
-      },
-      {
-        "season": 30,
-        "division": "",
-        "team": "San Francisco Sabercats 12BB",
-        "type": "goalie",
-        "jersey": "34",
-        "GP": "15",
-        "Shots": "549",
-        "GA": "89",
-        "GAA": "5.93",
-        "Save%": "0.838",
-        "SO": "0"
-      },
-      {
-        "season": 31,
-        "division": "",
-        "team": "San Jose Jr Sharks 12AA-1",
-        "type": "goalie",
-        "jersey": "34",
-        "GP": "11",
-        "Shots": "170",
-        "GA": "28",
-        "GAA": "2.55",
-        "Save%": "0.835",
-        "SO": "0"
-      },
-      {
-        "season": 31,
-        "division": "",
-        "team": "San Jose Jr Sharks Girls 12AAA",
-        "type": "goalie",
-        "jersey": "34",
-        "GP": "8",
-        "Shots": "113",
-        "GA": "5",
-        "GAA": "0.63",
-        "Save%": "0.956",
-        "SO": "5"
       }
     ],
     "Everett Ward": [
@@ -55086,6 +55744,45 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Tri Valley Blue Devils 10B",
+        "type": "goalie",
+        "jersey": "31",
+        "GP": "15",
+        "Shots": "313",
+        "GA": "87",
+        "GAA": "5.80",
+        "Save%": "0.722",
+        "SO": "0"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "Tri Valley Lady Blue Devils 10BB",
+        "type": "goalie",
+        "jersey": "31",
+        "GP": "16",
+        "Shots": "291",
+        "GA": "46",
+        "GAA": "2.88",
+        "Save%": "0.842",
+        "SO": "2"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "Tri Valley Blue Devils 12AA-2",
+        "type": "goalie",
+        "jersey": "00",
+        "GP": "14",
+        "Shots": "280",
+        "GA": "51",
+        "GAA": "3.64",
+        "Save%": "0.818",
+        "SO": "0"
       }
     ],
     "Dexter L Chen": [
@@ -55130,47 +55827,6 @@
         "GA": "17",
         "GAA": "5.67",
         "Save%": "0.553",
-        "SO": "0"
-      }
-    ],
-    "Gracelyn A Nilsson": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Tri Valley Blue Devils 10B",
-        "type": "goalie",
-        "jersey": "31",
-        "GP": "15",
-        "Shots": "313",
-        "GA": "87",
-        "GAA": "5.80",
-        "Save%": "0.722",
-        "SO": "0"
-      },
-      {
-        "season": 29,
-        "division": "",
-        "team": "Tri Valley Lady Blue Devils 10BB",
-        "type": "goalie",
-        "jersey": "31",
-        "GP": "16",
-        "Shots": "291",
-        "GA": "46",
-        "GAA": "2.88",
-        "Save%": "0.842",
-        "SO": "2"
-      },
-      {
-        "season": 30,
-        "division": "",
-        "team": "Tri Valley Blue Devils 12AA-2",
-        "type": "goalie",
-        "jersey": "00",
-        "GP": "14",
-        "Shots": "280",
-        "GA": "51",
-        "GAA": "3.64",
-        "Save%": "0.818",
         "SO": "0"
       }
     ],
@@ -56041,21 +56697,6 @@
         "SO": "1"
       }
     ],
-    "Calib J James": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Tri Valley Blue Devils 10A-1",
-        "type": "goalie",
-        "jersey": "87",
-        "GP": "1",
-        "Shots": "16",
-        "GA": "2",
-        "GAA": "2.00",
-        "Save%": "0.875",
-        "SO": "0"
-      }
-    ],
     "Jaxon W Silva": [
       {
         "season": 28,
@@ -56188,21 +56829,6 @@
         "SO": "5"
       }
     ],
-    "Lachlan O Mauger": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Cupertino Cougars 12A",
-        "type": "goalie",
-        "jersey": "62",
-        "GP": "15",
-        "Shots": "356",
-        "GA": "48",
-        "GAA": "3.20",
-        "Save%": "0.865",
-        "SO": "1"
-      }
-    ],
     "Edwin Egov": [
       {
         "season": 28,
@@ -56291,21 +56917,6 @@
         "PIM": "",
         "PtsPerGame": "0.50",
         "Pts": "8"
-      }
-    ],
-    "Hunter M Bolan": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Capital Thunder 12A",
-        "type": "goalie",
-        "jersey": "70",
-        "GP": "6",
-        "Shots": "186",
-        "GA": "18",
-        "GAA": "3.00",
-        "Save%": "0.903",
-        "SO": "0"
       }
     ],
     "Weston Gould": [
@@ -56442,36 +57053,6 @@
         "Pts": "2"
       }
     ],
-    "Benjamin Michaels": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Reno Ice 12A",
-        "type": "skater",
-        "jersey": "29",
-        "GP": "1",
-        "G": "0",
-        "A": "0",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.00",
-        "Pts": "0"
-      },
-      {
-        "season": 29,
-        "division": "",
-        "team": "Reno Ice 14A",
-        "type": "skater",
-        "jersey": "29",
-        "GP": "4",
-        "G": "0",
-        "A": "0",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.00",
-        "Pts": "0"
-      }
-    ],
     "Mio Pham": [
       {
         "season": 28,
@@ -56558,50 +57139,6 @@
         "PIM": "",
         "PtsPerGame": "1.93",
         "Pts": "29"
-      }
-    ],
-    "Nolan Johnston Lee": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "San Jose Jr Sharks 12AA-2",
-        "type": "skater",
-        "jersey": "24",
-        "GP": "11",
-        "G": "2",
-        "A": "1",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.27",
-        "Pts": "3"
-      },
-      {
-        "season": 29,
-        "division": "",
-        "team": "San Jose Jr Sharks 14A",
-        "type": "skater",
-        "jersey": "24",
-        "GP": "18",
-        "G": "4",
-        "A": "4",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.44",
-        "Pts": "8"
-      },
-      {
-        "season": 31,
-        "division": "",
-        "team": "San Jose Jr Sharks 16A-1",
-        "type": "skater",
-        "jersey": "24",
-        "GP": "13",
-        "G": "9",
-        "A": "13",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "1.69",
-        "Pts": "22"
       }
     ],
     "Andrew Van Tassell": [
@@ -57510,47 +58047,6 @@
         "SO": "0"
       }
     ],
-    "Ronan G Piovesan": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "San Mateo Black Stars 12B",
-        "type": "goalie",
-        "jersey": "41",
-        "GP": "11",
-        "Shots": "237",
-        "GA": "28",
-        "GAA": "2.55",
-        "Save%": "0.882",
-        "SO": "0"
-      },
-      {
-        "season": 29,
-        "division": "",
-        "team": "Cupertino Cougars 12A",
-        "type": "goalie",
-        "jersey": "55",
-        "GP": "11",
-        "Shots": "214",
-        "GA": "26",
-        "GAA": "2.36",
-        "Save%": "0.879",
-        "SO": "0"
-      },
-      {
-        "season": 30,
-        "division": "",
-        "team": "Cupertino Cougars 14BB",
-        "type": "goalie",
-        "jersey": "41",
-        "GP": "9",
-        "Shots": "250",
-        "GA": "27",
-        "GAA": "3.00",
-        "Save%": "0.892",
-        "SO": "0"
-      }
-    ],
     "Liam Murphy": [
       {
         "season": 28,
@@ -57931,60 +58427,6 @@
         "GAA": "1.67",
         "Save%": "0.821",
         "SO": "1"
-      }
-    ],
-    "Hannah A Yarbrough": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Santa Clara Blackhawks 12B",
-        "type": "goalie",
-        "jersey": "24",
-        "GP": "15",
-        "Shots": "195",
-        "GA": "24",
-        "GAA": "1.60",
-        "Save%": "0.877",
-        "SO": "0"
-      },
-      {
-        "season": 29,
-        "division": "",
-        "team": "Santa Clara Blackhawks 12BB",
-        "type": "goalie",
-        "jersey": "24",
-        "GP": "6",
-        "Shots": "142",
-        "GA": "20",
-        "GAA": "3.33",
-        "Save%": "0.859",
-        "SO": "0"
-      },
-      {
-        "season": 29,
-        "division": "",
-        "team": "Tri Valley Lady Blue Devils 12AAA",
-        "type": "goalie",
-        "jersey": "24",
-        "GP": "18",
-        "Shots": "264",
-        "GA": "28",
-        "GAA": "1.56",
-        "Save%": "0.894",
-        "SO": "6"
-      },
-      {
-        "season": 30,
-        "division": "",
-        "team": "San Mateo Black Stars 14B",
-        "type": "goalie",
-        "jersey": "92",
-        "GP": "13",
-        "Shots": "225",
-        "GA": "34",
-        "GAA": "2.62",
-        "Save%": "0.849",
-        "SO": "0"
       }
     ],
     "Dohyun Kim": [
@@ -58483,34 +58925,6 @@
         "PIM": "",
         "PtsPerGame": "0.40",
         "Pts": "4"
-      }
-    ],
-    "Zachary B Kolar": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Tri Valley Blue Devils 12AA-2",
-        "type": "goalie",
-        "jersey": "35",
-        "GP": "16",
-        "Shots": "372",
-        "GA": "47",
-        "GAA": "2.94",
-        "Save%": "0.874",
-        "SO": "0"
-      },
-      {
-        "season": 30,
-        "division": "",
-        "team": "Tri Valley Blue Devils 14A",
-        "type": "goalie",
-        "jersey": "35",
-        "GP": "7",
-        "Shots": "161",
-        "GA": "14",
-        "GAA": "2.00",
-        "Save%": "0.913",
-        "SO": "1"
       }
     ],
     "Wesley Shen": [
@@ -59356,7 +59770,7 @@
         "Pts": "1"
       }
     ],
-    "Luke MacEdo": [
+    "Luke Macedo": [
       {
         "season": 28,
         "division": "",
@@ -59400,21 +59814,6 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Zairen C Mecartea": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Fresno Jr Monsters 12BB",
-        "type": "goalie",
-        "jersey": "6",
-        "GP": "16",
-        "Shots": "556",
-        "GA": "108",
-        "GAA": "6.75",
-        "Save%": "0.806",
-        "SO": "0"
       }
     ],
     "Jacob Milton": [
@@ -60637,48 +61036,7 @@
         "Pts": "5"
       }
     ],
-    "Alexandre E Haddad": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Tri Valley Blue Devils 12A",
-        "type": "goalie",
-        "jersey": "32",
-        "GP": "13",
-        "Shots": "447",
-        "GA": "78",
-        "GAA": "6.00",
-        "Save%": "0.826",
-        "SO": "0"
-      },
-      {
-        "season": 30,
-        "division": "",
-        "team": "Santa Clara Blackhawks 14",
-        "type": "goalie",
-        "jersey": "*",
-        "GP": "2",
-        "Shots": "79",
-        "GA": "7",
-        "GAA": "3.50",
-        "Save%": "0.911",
-        "SO": "0"
-      },
-      {
-        "season": 31,
-        "division": "",
-        "team": "Tri Valley Blue Devils 14A",
-        "type": "goalie",
-        "jersey": "32",
-        "GP": "8",
-        "Shots": "242",
-        "GA": "17",
-        "GAA": "2.13",
-        "Save%": "0.930",
-        "SO": "1"
-      }
-    ],
-    "Leonardo Sebastian Iii": [
+    "Leonardo Sebastian III": [
       {
         "season": 28,
         "division": "",
@@ -60740,22 +61098,6 @@
         "PIM": "",
         "PtsPerGame": "0.79",
         "Pts": "11"
-      }
-    ],
-    "Stanely Tang": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Cupertino Cougars 14BB",
-        "type": "skater",
-        "jersey": "12",
-        "GP": "10",
-        "G": "5",
-        "A": "2",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.70",
-        "Pts": "7"
       }
     ],
     "Thomas Sherry": [
@@ -60832,52 +61174,6 @@
         "PIM": "",
         "PtsPerGame": "0.25",
         "Pts": "4"
-      }
-    ],
-    "Clementine Dickson Child": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Cupertino Cougars 14BB",
-        "type": "skater",
-        "jersey": "41",
-        "GP": "6",
-        "G": "0",
-        "A": "0",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.00",
-        "Pts": "0"
-      }
-    ],
-    "Jackson R Barany": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Cupertino Cougars 14BB",
-        "type": "goalie",
-        "jersey": "31",
-        "GP": "9",
-        "Shots": "185",
-        "GA": "19",
-        "GAA": "2.11",
-        "Save%": "0.897",
-        "SO": "1"
-      }
-    ],
-    "Clementine E Dickson Child": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Cupertino Cougars 14BB",
-        "type": "goalie",
-        "jersey": "41",
-        "GP": "6",
-        "Shots": "137",
-        "GA": "22",
-        "GAA": "3.67",
-        "Save%": "0.839",
-        "SO": "0"
       }
     ],
     "Nikolay Barkhatov": [
@@ -61012,6 +61308,58 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "San Jose Jr Sharks 14A",
+        "type": "goalie",
+        "jersey": "13",
+        "GP": "5",
+        "Shots": "94",
+        "GA": "16",
+        "GAA": "3.20",
+        "Save%": "0.830",
+        "SO": "0"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "San Jose Jr Sharks 14A",
+        "type": "goalie",
+        "jersey": "13",
+        "GP": "13",
+        "Shots": "238",
+        "GA": "36",
+        "GAA": "2.77",
+        "Save%": "0.849",
+        "SO": "0"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "San Jose Jr Sharks 16A-2",
+        "type": "goalie",
+        "jersey": "13",
+        "GP": "13",
+        "Shots": "487",
+        "GA": "69",
+        "GAA": "5.31",
+        "Save%": "0.858",
+        "SO": "0"
+      },
+      {
+        "season": 31,
+        "division": "",
+        "team": "San Jose Jr Sharks 16A-1",
+        "type": "goalie",
+        "jersey": "29",
+        "GP": "8",
+        "Shots": "138",
+        "GA": "17",
+        "GAA": "2.13",
+        "Save%": "0.877",
+        "SO": "1"
       }
     ],
     "Gavin Regua Jimenez": [
@@ -61070,60 +61418,6 @@
         "GAA": "1.67",
         "Save%": "0.919",
         "SO": "0"
-      }
-    ],
-    "Julian P Loudon": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "San Jose Jr Sharks 14A",
-        "type": "goalie",
-        "jersey": "13",
-        "GP": "5",
-        "Shots": "94",
-        "GA": "16",
-        "GAA": "3.20",
-        "Save%": "0.830",
-        "SO": "0"
-      },
-      {
-        "season": 29,
-        "division": "",
-        "team": "San Jose Jr Sharks 14A",
-        "type": "goalie",
-        "jersey": "13",
-        "GP": "13",
-        "Shots": "238",
-        "GA": "36",
-        "GAA": "2.77",
-        "Save%": "0.849",
-        "SO": "0"
-      },
-      {
-        "season": 30,
-        "division": "",
-        "team": "San Jose Jr Sharks 16A-2",
-        "type": "goalie",
-        "jersey": "13",
-        "GP": "13",
-        "Shots": "487",
-        "GA": "69",
-        "GAA": "5.31",
-        "Save%": "0.858",
-        "SO": "0"
-      },
-      {
-        "season": 31,
-        "division": "",
-        "team": "San Jose Jr Sharks 16A-1",
-        "type": "goalie",
-        "jersey": "29",
-        "GP": "8",
-        "Shots": "138",
-        "GA": "17",
-        "GAA": "2.13",
-        "Save%": "0.877",
-        "SO": "1"
       }
     ],
     "Gavin J Regua Jimenez": [
@@ -61294,7 +61588,7 @@
         "Pts": "0"
       }
     ],
-    "Michael-Angelo A Sijher": [
+    "Michael-Angelo Sijher": [
       {
         "season": 28,
         "division": "",
@@ -61457,21 +61751,6 @@
         "SO": "0"
       }
     ],
-    "Abigail B Yeung": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Reno Ice 14A",
-        "type": "goalie",
-        "jersey": "30",
-        "GP": "10",
-        "Shots": "201",
-        "GA": "44",
-        "GAA": "4.40",
-        "Save%": "0.781",
-        "SO": "0"
-      }
-    ],
     "Brendan Keskull-Moffatt": [
       {
         "season": 28,
@@ -61486,22 +61765,6 @@
         "PIM": "",
         "PtsPerGame": "0.89",
         "Pts": "16"
-      }
-    ],
-    "Boston Heston Rojas": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Vacaville Jets 14B",
-        "type": "skater",
-        "jersey": "35",
-        "GP": "18",
-        "G": "8",
-        "A": "4",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.67",
-        "Pts": "12"
       }
     ],
     "Elizabeth Ward": [
@@ -62058,21 +62321,6 @@
         "Pts": "0"
       }
     ],
-    "Cole L Nerland": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Fresno Jr Monsters 14BB",
-        "type": "goalie",
-        "jersey": "37",
-        "GP": "12",
-        "Shots": "163",
-        "GA": "40",
-        "GAA": "3.33",
-        "Save%": "0.755",
-        "SO": "0"
-      }
-    ],
     "Lev Gromov": [
       {
         "season": 28,
@@ -62415,47 +62663,6 @@
         "Pts": "0"
       }
     ],
-    "Ethan C Bilardello": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Santa Clara Blackhawks 14",
-        "type": "goalie",
-        "jersey": "24",
-        "GP": "13",
-        "Shots": "315",
-        "GA": "42",
-        "GAA": "3.23",
-        "Save%": "0.867",
-        "SO": "0"
-      },
-      {
-        "season": 29,
-        "division": "",
-        "team": "San Jose Jr Sharks 14A",
-        "type": "goalie",
-        "jersey": "4",
-        "GP": "15",
-        "Shots": "296",
-        "GA": "25",
-        "GAA": "1.67",
-        "Save%": "0.916",
-        "SO": "0"
-      },
-      {
-        "season": 30,
-        "division": "",
-        "team": "Cupertino Cougars 16A",
-        "type": "goalie",
-        "jersey": "74",
-        "GP": "8",
-        "Shots": "168",
-        "GA": "19",
-        "GAA": "2.38",
-        "Save%": "0.887",
-        "SO": "1"
-      }
-    ],
     "Connor Hues": [
       {
         "season": 28,
@@ -62629,34 +62836,6 @@
         "GAA": "1.33",
         "Save%": "0.906",
         "SO": "3"
-      }
-    ],
-    "Albin J Engstroem": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Cupertino Cougars 14B",
-        "type": "goalie",
-        "jersey": "83",
-        "GP": "10",
-        "Shots": "375",
-        "GA": "53",
-        "GAA": "5.30",
-        "Save%": "0.859",
-        "SO": "1"
-      },
-      {
-        "season": 29,
-        "division": "",
-        "team": "Cupertino Cougars 14BB",
-        "type": "goalie",
-        "jersey": "83",
-        "GP": "9",
-        "Shots": "188",
-        "GA": "13",
-        "GAA": "1.44",
-        "Save%": "0.931",
-        "SO": "2"
       }
     ],
     "Madison Wingerd": [
@@ -62892,36 +63071,6 @@
         "SO": "0"
       }
     ],
-    "Madaline Stevens": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Tri Valley Blue Devils 14A",
-        "type": "skater",
-        "jersey": "81",
-        "GP": "6",
-        "G": "0",
-        "A": "0",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.00",
-        "Pts": "0"
-      },
-      {
-        "season": 29,
-        "division": "",
-        "team": "Tri-Valley Blue Devils 14A",
-        "type": "skater",
-        "jersey": "90",
-        "GP": "2",
-        "G": "0",
-        "A": "0",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.00",
-        "Pts": "0"
-      }
-    ],
     "Brody Glass": [
       {
         "season": 28,
@@ -62968,6 +63117,19 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Oakland Bears 14B",
+        "type": "goalie",
+        "jersey": "",
+        "GP": "1",
+        "Shots": "22",
+        "GA": "8",
+        "GAA": "8.00",
+        "Save%": "0.636",
+        "SO": "0"
       }
     ],
     "Walter Kane": [
@@ -62984,21 +63146,6 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Stella A Boutrous": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Oakland Bears 14B",
-        "type": "goalie",
-        "jersey": "",
-        "GP": "1",
-        "Shots": "22",
-        "GA": "8",
-        "GAA": "8.00",
-        "Save%": "0.636",
-        "SO": "0"
       }
     ],
     "Dominic I Rosales": [
@@ -63062,37 +63209,7 @@
         "PIM": "",
         "PtsPerGame": "0.91",
         "Pts": "10"
-      }
-    ],
-    "Jacob A Heller": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "San Francisco Sabercats 16A",
-        "type": "goalie",
-        "jersey": "32",
-        "GP": "8",
-        "Shots": "159",
-        "GA": "24",
-        "GAA": "3.00",
-        "Save%": "0.849",
-        "SO": "0"
       },
-      {
-        "season": 29,
-        "division": "",
-        "team": "San Francisco Sabercats 16A",
-        "type": "goalie",
-        "jersey": "32",
-        "GP": "12",
-        "Shots": "334",
-        "GA": "39",
-        "GAA": "3.25",
-        "Save%": "0.883",
-        "SO": "0"
-      }
-    ],
-    "Noah Y Leriger": [
       {
         "season": 28,
         "division": "",
@@ -63232,22 +63349,6 @@
         "Pts": "1"
       }
     ],
-    "Logan Ashley": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Capital Thunder 16A-1",
-        "type": "skater",
-        "jersey": "31",
-        "GP": "3",
-        "G": "0",
-        "A": "0",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.00",
-        "Pts": "0"
-      }
-    ],
     "Andrew P Rominger": [
       {
         "season": 28,
@@ -63384,6 +63485,19 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
+      },
+      {
+        "season": 28,
+        "division": "",
+        "team": "Tri Valley Blue Devils 16A",
+        "type": "goalie",
+        "jersey": "89",
+        "GP": "7",
+        "Shots": "146",
+        "GA": "22",
+        "GAA": "3.14",
+        "Save%": "0.849",
+        "SO": "0"
       }
     ],
     "Amber Kaplenko": [
@@ -63416,21 +63530,6 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Branden N Bedley": [
-      {
-        "season": 28,
-        "division": "",
-        "team": "Tri Valley Blue Devils 16A",
-        "type": "goalie",
-        "jersey": "89",
-        "GP": "7",
-        "Shots": "146",
-        "GA": "22",
-        "GAA": "3.14",
-        "Save%": "0.849",
-        "SO": "0"
       }
     ],
     "George Wear": [
@@ -63926,50 +64025,6 @@
         "PIM": "",
         "PtsPerGame": "1.38",
         "Pts": "22"
-      }
-    ],
-    "Elissa Moore-Knight": [
-      {
-        "season": 29,
-        "division": "",
-        "team": "Cupertino Cougars 10A",
-        "type": "skater",
-        "jersey": "13",
-        "GP": "13",
-        "G": "0",
-        "A": "7",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.54",
-        "Pts": "7"
-      },
-      {
-        "season": 30,
-        "division": "",
-        "team": "Golden State Elite 12AA-1",
-        "type": "skater",
-        "jersey": "13",
-        "GP": "16",
-        "G": "1",
-        "A": "2",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.19",
-        "Pts": "3"
-      },
-      {
-        "season": 31,
-        "division": "",
-        "team": "Tri Valley Blue Devils 12AA-1",
-        "type": "skater",
-        "jersey": "22",
-        "GP": "15",
-        "G": "10",
-        "A": "9",
-        "Hat": "1",
-        "PIM": "",
-        "PtsPerGame": "1.27",
-        "Pts": "19"
       }
     ],
     "Alex Wu": [
@@ -65949,50 +66004,7 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Benjamin J Getchell": [
-      {
-        "season": 29,
-        "division": "",
-        "team": "Vacaville Jets 10BB",
-        "type": "goalie",
-        "jersey": "8",
-        "GP": "4",
-        "Shots": "35",
-        "GA": "3",
-        "GAA": "0.75",
-        "Save%": "0.914",
-        "SO": "0"
       },
-      {
-        "season": 30,
-        "division": "",
-        "team": "Vacaville Jets 10B",
-        "type": "goalie",
-        "jersey": "8",
-        "GP": "3",
-        "Shots": "29",
-        "GA": "13",
-        "GAA": "4.33",
-        "Save%": "0.552",
-        "SO": "1"
-      },
-      {
-        "season": 31,
-        "division": "",
-        "team": "Vacaville Jets 12B",
-        "type": "goalie",
-        "jersey": "8",
-        "GP": "1",
-        "Shots": "34",
-        "GA": "10",
-        "GAA": "10.00",
-        "Save%": "0.706",
-        "SO": "0"
-      }
-    ],
-    "Coral A Hoobler": [
       {
         "season": 29,
         "division": "",
@@ -66043,6 +66055,47 @@
         "GA": "26",
         "GAA": "3.71",
         "Save%": "0.776",
+        "SO": "0"
+      }
+    ],
+    "Benjamin J Getchell": [
+      {
+        "season": 29,
+        "division": "",
+        "team": "Vacaville Jets 10BB",
+        "type": "goalie",
+        "jersey": "8",
+        "GP": "4",
+        "Shots": "35",
+        "GA": "3",
+        "GAA": "0.75",
+        "Save%": "0.914",
+        "SO": "0"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "Vacaville Jets 10B",
+        "type": "goalie",
+        "jersey": "8",
+        "GP": "3",
+        "Shots": "29",
+        "GA": "13",
+        "GAA": "4.33",
+        "Save%": "0.552",
+        "SO": "1"
+      },
+      {
+        "season": 31,
+        "division": "",
+        "team": "Vacaville Jets 12B",
+        "type": "goalie",
+        "jersey": "8",
+        "GP": "1",
+        "Shots": "34",
+        "GA": "10",
+        "GAA": "10.00",
+        "Save%": "0.706",
         "SO": "0"
       }
     ],
@@ -68096,6 +68149,32 @@
         "PIM": "",
         "PtsPerGame": "0.63",
         "Pts": "5"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "San Jose Jr Sharks Girls 10B",
+        "type": "goalie",
+        "jersey": "8",
+        "GP": "11",
+        "Shots": "249",
+        "GA": "42",
+        "GAA": "3.82",
+        "Save%": "0.831",
+        "SO": "0"
+      },
+      {
+        "season": 31,
+        "division": "",
+        "team": "San Jose Jr Sharks Girls 12AAA",
+        "type": "goalie",
+        "jersey": "8",
+        "GP": "7",
+        "Shots": "162",
+        "GA": "27",
+        "GAA": "3.86",
+        "Save%": "0.833",
+        "SO": "0"
       }
     ],
     "Eleanor Chen": [
@@ -68158,6 +68237,45 @@
         "PIM": "",
         "PtsPerGame": "0.25",
         "Pts": "1"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "San Jose Jr Sharks Girls 10B",
+        "type": "goalie",
+        "jersey": "72",
+        "GP": "2",
+        "Shots": "43",
+        "GA": "0",
+        "GAA": "0.00",
+        "Save%": "1.000",
+        "SO": "2"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "San Jose Jr Sharks 10B-1",
+        "type": "goalie",
+        "jersey": "72",
+        "GP": "16",
+        "Shots": "217",
+        "GA": "45",
+        "GAA": "2.81",
+        "Save%": "0.793",
+        "SO": "0"
+      },
+      {
+        "season": 31,
+        "division": "",
+        "team": "San Jose Jr Sharks 12A",
+        "type": "goalie",
+        "jersey": "72",
+        "GP": "15",
+        "Shots": "109",
+        "GA": "12",
+        "GAA": "0.80",
+        "Save%": "0.890",
+        "SO": "0"
       }
     ],
     "Charlie Coleman": [
@@ -68234,75 +68352,6 @@
         "PIM": "",
         "PtsPerGame": "1.00",
         "Pts": "16"
-      }
-    ],
-    "Kathryn E Chang": [
-      {
-        "season": 29,
-        "division": "",
-        "team": "San Jose Jr Sharks Girls 10B",
-        "type": "goalie",
-        "jersey": "8",
-        "GP": "11",
-        "Shots": "249",
-        "GA": "42",
-        "GAA": "3.82",
-        "Save%": "0.831",
-        "SO": "0"
-      },
-      {
-        "season": 31,
-        "division": "",
-        "team": "San Jose Jr Sharks Girls 12AAA",
-        "type": "goalie",
-        "jersey": "8",
-        "GP": "7",
-        "Shots": "162",
-        "GA": "27",
-        "GAA": "3.86",
-        "Save%": "0.833",
-        "SO": "0"
-      }
-    ],
-    "Selma F Tossavainen": [
-      {
-        "season": 29,
-        "division": "",
-        "team": "San Jose Jr Sharks Girls 10B",
-        "type": "goalie",
-        "jersey": "72",
-        "GP": "2",
-        "Shots": "43",
-        "GA": "0",
-        "GAA": "0.00",
-        "Save%": "1.000",
-        "SO": "2"
-      },
-      {
-        "season": 29,
-        "division": "",
-        "team": "San Jose Jr Sharks 10B-1",
-        "type": "goalie",
-        "jersey": "72",
-        "GP": "16",
-        "Shots": "217",
-        "GA": "45",
-        "GAA": "2.81",
-        "Save%": "0.793",
-        "SO": "0"
-      },
-      {
-        "season": 31,
-        "division": "",
-        "team": "San Jose Jr Sharks 12A",
-        "type": "goalie",
-        "jersey": "72",
-        "GP": "15",
-        "Shots": "109",
-        "GA": "12",
-        "GAA": "0.80",
-        "Save%": "0.890",
-        "SO": "0"
       }
     ],
     "Oleksandr Savchenko": [
@@ -71268,6 +71317,45 @@
         "PIM": "",
         "PtsPerGame": "0.57",
         "Pts": "4"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "San Francisco Sabercats 10B",
+        "type": "goalie",
+        "jersey": "32",
+        "GP": "5",
+        "Shots": "157",
+        "GA": "56",
+        "GAA": "11.20",
+        "Save%": "0.643",
+        "SO": "0"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "San Francisco Sabercats 10BB",
+        "type": "goalie",
+        "jersey": "32",
+        "GP": "10",
+        "Shots": "303",
+        "GA": "96",
+        "GAA": "9.60",
+        "Save%": "0.683",
+        "SO": "0"
+      },
+      {
+        "season": 31,
+        "division": "",
+        "team": "San Francisco Sabercats 12B",
+        "type": "goalie",
+        "jersey": "32",
+        "GP": "11",
+        "Shots": "376",
+        "GA": "71",
+        "GAA": "6.45",
+        "Save%": "0.811",
+        "SO": "0"
       }
     ],
     "William Santiago": [
@@ -71761,47 +71849,6 @@
         "SO": "0"
       }
     ],
-    "Coraline Y Lu": [
-      {
-        "season": 29,
-        "division": "",
-        "team": "San Francisco Sabercats 10B",
-        "type": "goalie",
-        "jersey": "32",
-        "GP": "5",
-        "Shots": "157",
-        "GA": "56",
-        "GAA": "11.20",
-        "Save%": "0.643",
-        "SO": "0"
-      },
-      {
-        "season": 30,
-        "division": "",
-        "team": "San Francisco Sabercats 10BB",
-        "type": "goalie",
-        "jersey": "32",
-        "GP": "10",
-        "Shots": "303",
-        "GA": "96",
-        "GAA": "9.60",
-        "Save%": "0.683",
-        "SO": "0"
-      },
-      {
-        "season": 31,
-        "division": "",
-        "team": "San Francisco Sabercats 12B",
-        "type": "goalie",
-        "jersey": "32",
-        "GP": "11",
-        "Shots": "376",
-        "GA": "71",
-        "GAA": "6.45",
-        "Save%": "0.811",
-        "SO": "0"
-      }
-    ],
     "Suhyun Cho": [
       {
         "season": 29,
@@ -71888,6 +71935,19 @@
         "PIM": "",
         "PtsPerGame": "1.00",
         "Pts": "10"
+      },
+      {
+        "season": 30,
+        "division": "",
+        "team": "Tri Valley Lady Blue Devils 10BB",
+        "type": "goalie",
+        "jersey": "13",
+        "GP": "7",
+        "Shots": "242",
+        "GA": "47",
+        "GAA": "6.71",
+        "Save%": "0.806",
+        "SO": "0"
       }
     ],
     "Libby Cardillo": [
@@ -72196,6 +72256,19 @@
         "PIM": "",
         "PtsPerGame": "0.33",
         "Pts": "4"
+      },
+      {
+        "season": 29,
+        "division": "",
+        "team": "Stockton Colts 10BB",
+        "type": "goalie",
+        "jersey": "2",
+        "GP": "2",
+        "Shots": "10",
+        "GA": "1",
+        "GAA": "0.50",
+        "Save%": "0.900",
+        "SO": "1"
       }
     ],
     "Jerel McKoy Gines": [
@@ -72240,21 +72313,6 @@
         "PIM": "",
         "PtsPerGame": "0.21",
         "Pts": "3"
-      }
-    ],
-    "Campbell M Delgado": [
-      {
-        "season": 29,
-        "division": "",
-        "team": "Stockton Colts 10BB",
-        "type": "goalie",
-        "jersey": "2",
-        "GP": "2",
-        "Shots": "10",
-        "GA": "1",
-        "GAA": "0.50",
-        "Save%": "0.900",
-        "SO": "1"
       }
     ],
     "Cole Sunseri": [
@@ -75321,9 +75379,7 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "William A Weafer": [
+      },
       {
         "season": 29,
         "division": "",
@@ -75367,7 +75423,7 @@
         "Pts": "3"
       }
     ],
-    "Chase B Saito": [
+    "Chase Saito": [
       {
         "season": 29,
         "division": "",
@@ -75477,21 +75533,6 @@
         "GA": "24",
         "GAA": "3.00",
         "Save%": "0.897",
-        "SO": "0"
-      }
-    ],
-    "Julianna B Reyes": [
-      {
-        "season": 29,
-        "division": "",
-        "team": "San Francisco Sabercats 12BB",
-        "type": "goalie",
-        "jersey": "6",
-        "GP": "1",
-        "Shots": "9",
-        "GA": "0",
-        "GAA": "0.00",
-        "Save%": "1.000",
         "SO": "0"
       }
     ],
@@ -77337,7 +77378,7 @@
         "SO": "0"
       }
     ],
-    "Annabelle R Lee": [
+    "Annabelle Lee": [
       {
         "season": 29,
         "division": "",
@@ -78500,7 +78541,7 @@
         "Pts": "1"
       }
     ],
-    "Arseni Yanav": [
+    "Arseni Yanau": [
       {
         "season": 29,
         "division": "",
@@ -78529,35 +78570,6 @@
         "PIM": "",
         "PtsPerGame": "0.11",
         "Pts": "2"
-      }
-    ],
-    "Kazuhiro Mitra-Kozuka": [
-      {
-        "season": 29,
-        "division": "",
-        "team": "Cupertino Cougars 14BB",
-        "type": "skater",
-        "jersey": "31",
-        "GP": "8",
-        "G": "0",
-        "A": "0",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.00",
-        "Pts": "0"
-      },
-      {
-        "season": 29,
-        "division": "",
-        "team": "Cupertino Cougars 14BB",
-        "type": "goalie",
-        "jersey": "31",
-        "GP": "9",
-        "Shots": "216",
-        "GA": "17",
-        "GAA": "1.89",
-        "Save%": "0.921",
-        "SO": "1"
       }
     ],
     "Duncan Ross": [
@@ -78606,64 +78618,6 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Oliver Welborn": [
-      {
-        "season": 29,
-        "division": "",
-        "team": "Oakland Bears 14B",
-        "type": "skater",
-        "jersey": "24",
-        "GP": "3",
-        "G": "0",
-        "A": "0",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.00",
-        "Pts": "0"
-      },
-      {
-        "season": 30,
-        "division": "",
-        "team": "Oakland Bears 14B",
-        "type": "skater",
-        "jersey": "24",
-        "GP": "2",
-        "G": "0",
-        "A": "0",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.00",
-        "Pts": "0"
-      }
-    ],
-    "Noa S Bernstein": [
-      {
-        "season": 29,
-        "division": "",
-        "team": "Oakland Bears 14B",
-        "type": "goalie",
-        "jersey": "1",
-        "GP": "7",
-        "Shots": "67",
-        "GA": "13",
-        "GAA": "1.86",
-        "Save%": "0.806",
-        "SO": "0"
-      },
-      {
-        "season": 30,
-        "division": "",
-        "team": "San Francisco Sabercats 14BB",
-        "type": "goalie",
-        "jersey": "42",
-        "GP": "11",
-        "Shots": "145",
-        "GA": "14",
-        "GAA": "1.27",
-        "Save%": "0.903",
-        "SO": "0"
       }
     ],
     "Matt Klym": [
@@ -79707,9 +79661,7 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Cole M Lee": [
+      },
       {
         "season": 29,
         "division": "",
@@ -80247,34 +80199,6 @@
         "Pts": "1"
       }
     ],
-    "Logan D Delancey": [
-      {
-        "season": 29,
-        "division": "",
-        "team": "Tri Valley Blue Devils 14A",
-        "type": "goalie",
-        "jersey": "84",
-        "GP": "11",
-        "Shots": "250",
-        "GA": "22",
-        "GAA": "2.00",
-        "Save%": "0.912",
-        "SO": "3"
-      },
-      {
-        "season": 31,
-        "division": "",
-        "team": "Santa Clara Blackhawks 16A",
-        "type": "goalie",
-        "jersey": "84",
-        "GP": "7",
-        "Shots": "207",
-        "GA": "30",
-        "GAA": "4.29",
-        "Save%": "0.855",
-        "SO": "1"
-      }
-    ],
     "Anthony Zaitz": [
       {
         "season": 29,
@@ -80709,7 +80633,7 @@
         "Pts": "4"
       }
     ],
-    "Thomas J Vurich": [
+    "Thomas Vurich": [
       {
         "season": 29,
         "division": "",
@@ -80735,6 +80659,20 @@
         "GAA": "0.86",
         "Save%": "0.925",
         "SO": "3"
+      },
+      {
+        "season": 31,
+        "division": "",
+        "team": "San Jose Jr Sharks 16A-1",
+        "type": "skater",
+        "jersey": "80",
+        "GP": "8",
+        "G": "0",
+        "A": "0",
+        "Hat": "0",
+        "PIM": "",
+        "PtsPerGame": "0.00",
+        "Pts": "0"
       }
     ],
     "Caleb Lee": [
@@ -80917,37 +80855,6 @@
         "PIM": "",
         "PtsPerGame": "0.00",
         "Pts": "0"
-      }
-    ],
-    "Catherine Lee": [
-      {
-        "season": 29,
-        "division": "",
-        "team": "San Francisco Sabercats 16A",
-        "type": "skater",
-        "jersey": "1",
-        "GP": "5",
-        "G": "0",
-        "A": "0",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.00",
-        "Pts": "0"
-      }
-    ],
-    "Kaleo A Anoruo": [
-      {
-        "season": 29,
-        "division": "",
-        "team": "San Francisco Sabercats 16A",
-        "type": "goalie",
-        "jersey": "7",
-        "GP": "1",
-        "Shots": "2",
-        "GA": "2",
-        "GAA": "2.00",
-        "Save%": "0.000",
-        "SO": "0"
       }
     ],
     "Benjamin Jovanovic": [
@@ -87847,21 +87754,6 @@
         "Pts": "0"
       }
     ],
-    "Charlotte G Colombo": [
-      {
-        "season": 30,
-        "division": "",
-        "team": "Tri Valley Lady Blue Devils 10BB",
-        "type": "goalie",
-        "jersey": "13",
-        "GP": "7",
-        "Shots": "242",
-        "GA": "47",
-        "GAA": "6.71",
-        "Save%": "0.806",
-        "SO": "0"
-      }
-    ],
     "John Pattaphongse": [
       {
         "season": 30,
@@ -89653,22 +89545,6 @@
         "PIM": "",
         "PtsPerGame": "1.83",
         "Pts": "22"
-      }
-    ],
-    "Austyn Kosmynka": [
-      {
-        "season": 30,
-        "division": "",
-        "team": "San Jose Jr Sharks 12AA-2",
-        "type": "skater",
-        "jersey": "29",
-        "GP": "7",
-        "G": "0",
-        "A": "0",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.00",
-        "Pts": "0"
       }
     ],
     "Danny Velasco Osalla": [
@@ -100077,22 +99953,6 @@
         "PIM": "",
         "PtsPerGame": "0.55",
         "Pts": "6"
-      }
-    ],
-    "Thomas Vurich": [
-      {
-        "season": 31,
-        "division": "",
-        "team": "San Jose Jr Sharks 16A-1",
-        "type": "skater",
-        "jersey": "80",
-        "GP": "8",
-        "G": "0",
-        "A": "0",
-        "Hat": "0",
-        "PIM": "",
-        "PtsPerGame": "0.00",
-        "Pts": "0"
       }
     ],
     "Max White": [
