@@ -42,8 +42,8 @@
   tbody tr:last-child{border-bottom:none;}
   tbody tr:hover{background:var(--surface2);}
   tbody td{padding:10px 14px;white-space:nowrap;}
-  td.player-link{color:var(--accent);cursor:pointer;font-weight:500;}
-  td.player-link:hover{text-decoration:underline;}
+  td.player-link,.player-link{color:var(--accent);cursor:pointer;font-weight:500;}
+  td.player-link:hover,.player-link:hover{text-decoration:underline;}
   .team-link{color:var(--accent);cursor:pointer;}
   .team-link:hover{text-decoration:underline;}
   .num{text-align:right;font-variant-numeric:tabular-nums;}
@@ -436,7 +436,7 @@ function renderSkaterTable(entries,showTeamDiv,tableId){
     const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
     const pts=entryPts(e);
     const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer(\''+escAttr(e.playerName)+'\')">'+escHtml(e.playerName)+byLabel(e.playerName)+'</span>'),td(e.jersey||'','jersey')];
-    if(showTeamDiv)base.push(td(escHtml(e.teamBase||e.team||'')),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
+    if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToBrowseTeam('+e.season+',\''+escAttr(e.teamBase||e.team||'')+'\')">'+escHtml(e.teamBase||e.team||'')+'</span>'),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
     base.push(td(e.GP||0,'num'),td(e.G||0,'num'),td(e.A||0,'num'),td(pts,'num pts'),td(e.PIM||0,'num'),td(dispSusp(e),'num'),td(entryPtsPerGame(e),'num'));
     return '<tr>'+base.join('')+'</tr>';
   };
@@ -467,7 +467,7 @@ function attachSortHandlers(tableId,entries,showTeamDiv){
         const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
         const pts=entryPts(e);
         const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer(\''+escAttr(e.playerName)+'\')">'+escHtml(e.playerName)+byLabel(e.playerName)+'</span>'),td(e.jersey||'','jersey')];
-        if(showTeamDiv)base.push(td(escHtml(e.teamBase||e.team||'')),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
+        if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToBrowseTeam('+e.season+',\''+escAttr(e.teamBase||e.team||'')+'\')">'+escHtml(e.teamBase||e.team||'')+'</span>'),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
         base.push(td(e.GP||0,'num'),td(e.G||0,'num'),td(e.A||0,'num'),td(pts,'num pts'),td(e.PIM||0,'num'),td(dispSusp(e),'num'),td(entryPtsPerGame(e),'num'));
         return '<tr>'+base.join('')+'</tr>';
       }).join('');
@@ -484,7 +484,7 @@ function renderGoalieTable(entries,showTeamDiv,tableId){
   const makeRow=(e,i)=>{
     const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
     const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer(\''+escAttr(e.playerName)+'\')">'+escHtml(e.playerName)+byLabel(e.playerName)+'</span>'),td(e.jersey||'','jersey')];
-    if(showTeamDiv)base.push(td(escHtml(e.teamBase||e.team||'')),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
+    if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToBrowseTeam('+e.season+',\''+escAttr(e.teamBase||e.team||'')+'\')">'+escHtml(e.teamBase||e.team||'')+'</span>'),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
     const gaa=parseFloat(e.GAA)||0;
     const sv=entrySavePctVal(e);
     base.push(td(e.GP||0,'num'),td(e.Shots||e.SHOTS||0,'num'),td(entryGA(e),'num'),td(gaa.toFixed(2),'num'),td(sv.toFixed(3),'num'),td(e.SO||'','num'));
@@ -516,7 +516,7 @@ function attachGoalieSortHandlers(tableId,entries,showTeamDiv){
       tbody.innerHTML=entries.map((e,i)=>{
         const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
         const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer(\''+escAttr(e.playerName)+'\')">'+escHtml(e.playerName)+byLabel(e.playerName)+'</span>'),td(e.jersey||'','jersey')];
-        if(showTeamDiv)base.push(td(escHtml(e.teamBase||e.team||'')),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
+        if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToBrowseTeam('+e.season+',\''+escAttr(e.teamBase||e.team||'')+'\')">'+escHtml(e.teamBase||e.team||'')+'</span>'),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
         const gaa=parseFloat(e.GAA)||0;
         const sv=entrySavePctVal(e);
         base.push(td(e.GP||0,'num'),td(e.Shots||e.SHOTS||0,'num'),td(entryGA(e),'num'),td(gaa.toFixed(2),'num'),td(sv.toFixed(3),'num'),td(e.SO||0,'num'));
