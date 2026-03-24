@@ -332,11 +332,62 @@ for (const [name, entries] of Object.entries(RAW)) {
 })();
 
 // ── View switching ──
+function captureAppState(viewOverride) {
+  var views = ['browse','club','player','migration'];
+  var v = viewOverride || views.find(function(v){ return document.getElementById('view-'+v).classList.contains('active'); }) || 'browse';
+  var s = {view: v};
+  if (v === 'browse') {
+    s.season = document.getElementById('sel-season').value;
+    s.club   = document.getElementById('sel-club-browse').value;
+    s.div    = document.getElementById('sel-div-browse').value;
+    s.type   = document.getElementById('sel-type').value;
+    s.minGP  = document.getElementById('sel-min-gp').value;
+  } else if (v === 'player') {
+    s.playerName = document.getElementById('player-search').value;
+  } else if (v === 'club') {
+    s.clubName   = document.getElementById('sel-club').value;
+    s.clubSeason = document.getElementById('sel-club-season').value;
+  }
+  return s;
+}
+function applyAppState(s) {
+  if (!s || !s.view) return;
+  var viewOrder = ['browse','club','player','migration'];
+  document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
+  document.querySelectorAll('.tab-btn').forEach(function(el){el.classList.remove('active');});
+  document.getElementById('view-'+s.view).classList.add('active');
+  var ti = viewOrder.indexOf(s.view);
+  if (ti >= 0) document.querySelectorAll('.tab-btn')[ti].classList.add('active');
+  if (s.view === 'browse') {
+    if (s.season) document.getElementById('sel-season').value = s.season;
+    if (s.type)   document.getElementById('sel-type').value = s.type;
+    if (s.minGP)  document.getElementById('sel-min-gp').value = s.minGP;
+    onSeasonChange();
+    if (s.club) document.getElementById('sel-club-browse').value = s.club;
+    onClubBrowseChange();
+    if (s.div)  document.getElementById('sel-div-browse').value = s.div;
+    onBrowseRender();
+  } else if (s.view === 'player') {
+    document.getElementById('player-search').value = s.playerName || '';
+    document.getElementById('ac-list').style.display = 'none';
+    if (s.playerName) renderPlayerHistory(s.playerName);
+  } else if (s.view === 'club') {
+    if (s.clubName)   document.getElementById('sel-club').value = s.clubName;
+    if (s.clubSeason) document.getElementById('sel-club-season').value = s.clubSeason;
+    renderClub();
+  } else if (s.view === 'migration') {
+    renderMigration();
+  }
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+window.addEventListener('popstate', function(e){ applyAppState(e.state); });
+
 function showView(v, btn) {
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(el=>el.classList.remove('active'));
   document.getElementById('view-'+v).classList.add('active');
   if(btn) btn.classList.add('active');
+  history.pushState(captureAppState(v), '');
 }
 
 // ════════════════════════════════════════
@@ -915,6 +966,7 @@ document.addEventListener('click',e=>{if(!e.target.closest('.search-wrap'))docum
 function selectPlayer(name){
   document.getElementById('player-search').value=name;
   document.getElementById('ac-list').style.display='none';
+  history.pushState({view:'player', playerName:name}, '');
   renderPlayerHistory(name);
 }
 function goToPlayer(name){
@@ -924,6 +976,7 @@ function goToPlayer(name){
   document.querySelectorAll('.tab-btn')[2].classList.add('active');
   document.getElementById('player-search').value=name;
   document.getElementById('ac-list').style.display='none';
+  history.pushState({view:'player', playerName:name}, '');
   renderPlayerHistory(name);
 }
 function goToBrowseTeam(season, team){
@@ -947,6 +1000,9 @@ function goToBrowseTeam(season, team){
   // Set division and render
   if(div)document.getElementById('sel-div-browse').value=div;
   onBrowseRender();
+  history.pushState({view:'browse', season:String(season), club:club, div:div,
+    type:document.getElementById('sel-type').value,
+    minGP:document.getElementById('sel-min-gp').value}, '');
   window.scrollTo({top:0,behavior:'smooth'});
 }
 function renderPlayerHistory(name){
@@ -1607,6 +1663,7 @@ window.ALL_PLAYER_NAMES = Object.keys(COMBINED_RAW).sort();
 refreshBirthYears();
 initBrowse();
 initClub();
+history.replaceState(captureAppState(), '');
 // Expose init functions for cross-script access
 window.initBrowse = initBrowse;
 window.initClub = initClub;
