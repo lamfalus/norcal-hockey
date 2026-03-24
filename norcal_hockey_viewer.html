@@ -44,6 +44,8 @@
   tbody td{padding:10px 14px;white-space:nowrap;}
   td.player-link{color:var(--accent);cursor:pointer;font-weight:500;}
   td.player-link:hover{text-decoration:underline;}
+  .team-link{color:var(--accent);cursor:pointer;}
+  .team-link:hover{text-decoration:underline;}
   .num{text-align:right;font-variant-numeric:tabular-nums;}
   .pts{color:var(--accent2);font-weight:700;}
   .jersey{color:var(--muted);font-size:.82rem;}
@@ -893,7 +895,9 @@ function onPlayerSearch(){
     const entries=(COMBINED_RAW||{})[name]||RAW[name];
     if(!entries||!entries.length) return '';
     const seasons=[...new Set(entries.map(e=>e.season))].sort();
-    const lastTeam=[...entries].sort((a,b)=>b.season-a.season)[0].team;
+    const lastSeason=Math.max(...entries.map(e=>e.season));
+    const lastSeasonEntries=entries.filter(e=>e.season===lastSeason);
+    const lastTeam=lastSeasonEntries.sort((a,b)=>(parseInt(b.GP)||0)-(parseInt(a.GP)||0))[0].team;
     return '<div class="autocomplete-item" onclick="selectPlayer(\''+escAttr(name)+'\')"><span>'+escHtml(name)+byLabel(name)+'</span><span class="ac-sub">S'+seasons.join(', S')+' · '+escHtml(lastTeam)+'</span></div>';
   }).join('');
   list.style.display='block';
@@ -921,6 +925,29 @@ function goToPlayer(name){
   document.getElementById('player-search').value=name;
   document.getElementById('ac-list').style.display='none';
   renderPlayerHistory(name);
+}
+function goToBrowseTeam(season, team){
+  // Look up matching entry to get club and division
+  var match=(window.ALL_ENTRIES||[]).find(function(e){
+    return e.season===season&&(e.team===team||e.teamBase===team);
+  });
+  var club=match?(match.club||''):'';
+  var div=match?(match.division||divisionForEntry(match)):'';
+  // Switch to browse view
+  document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
+  document.querySelectorAll('.tab-btn').forEach(function(el){el.classList.remove('active');});
+  document.getElementById('view-browse').classList.add('active');
+  document.querySelectorAll('.tab-btn')[0].classList.add('active');
+  // Set season and populate dropdowns
+  document.getElementById('sel-season').value=season;
+  onSeasonChange();
+  // Set club and repopulate division dropdown
+  if(club)document.getElementById('sel-club-browse').value=club;
+  onClubBrowseChange();
+  // Set division and render
+  if(div)document.getElementById('sel-div-browse').value=div;
+  onBrowseRender();
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 function renderPlayerHistory(name){
   const entries=(COMBINED_RAW[name]||RAW[name]||[]);
@@ -962,13 +989,14 @@ function renderPlayerHistory(name){
   }
   let seasonSections=seasons.map(s=>{
     const sEntries=entries.filter(e=>e.season===s);
-    const skaters=sEntries.filter(e=>e.type==='skater');
-    const goalies=sEntries.filter(e=>e.type==='goalie');
+    const skaters=sEntries.filter(e=>e.type==='skater').sort((a,b)=>(parseInt(b.GP)||0)-(parseInt(a.GP)||0));
+    const goalies=sEntries.filter(e=>e.type==='goalie').sort((a,b)=>(parseInt(b.GP)||0)-(parseInt(a.GP)||0));
     // Shared helpers for row building
     const R = 'style="text-align:right"';
+    const teamLink = e => '<span class="team-link" onclick="goToBrowseTeam('+e.season+',\''+escAttr(e.teamBase||e.team||'')+'\')">'+escHtml(e.teamBase||e.team||'')+'</span>';
     const skaterRow = e =>
         '<tr>'
-        +'<td>'+escHtml(e.teamBase||e.team||'')+'</td>'
+        +'<td>'+teamLink(e)+'</td>'
         +'<td><span class="div-badge">'+escHtml(e.division||'')+'</span></td>'
         +'<td class="jersey">'+(e.jersey||'')+'</td>'
         +'<td class="num">'+(e.GP||0)+'</td>'
@@ -981,7 +1009,7 @@ function renderPlayerHistory(name){
         +'</tr>';
     const goalieRow = e =>
         '<tr class="goalie-row">'
-        +'<td>'+escHtml(e.teamBase||e.team||'')+'</td>'
+        +'<td>'+teamLink(e)+'</td>'
         +'<td><span class="div-badge">'+escHtml(e.division||'')+'</span></td>'
         +'<td class="jersey">'+(e.jersey||'')+'</td>'
         +'<td class="num">'+(e.GP||0)+'</td>'
@@ -1070,16 +1098,26 @@ function normalizeRaw(rawObj) {
 // ── Birth year inference ──
 var BIRTH_YEARS = {};
 
+// Returns the division string for an entry. If e.division is blank (common for
+// goalie entries), falls back to parsing the age/tier suffix from the team name.
+// e.g. "San Jose Jr Sharks 10B-1" → "10B", "Cupertino Cougars 12A" → "12A"
+function divisionForEntry(e) {
+  if (e.division) return e.division;
+  var m = (e.team||'').match(/(\d+[A-Za-z]+)(?:-\d+)?$/);
+  return m ? m[1].toUpperCase() : '';
+}
+
 function inferBirthYear(entries) {
   var possible = null;
 
   entries.forEach(function(e) {
-    if (e.type !== 'skater' || !e.division) return;
+    var div = divisionForEntry(e);
+    if (!div) return;
     var startYear = 1994 + e.season; // S27→2021, S31→2025
     var set = null;
 
     // NorCal format: "16U", "18U AA", etc. — 2-year range
-    var mU = e.division.match(/^(\d+)U/);
+    var mU = div.match(/^(\d+)U/);
     if (mU) {
       var ageLimit = parseInt(mU[1]);
       set = {};
@@ -1090,7 +1128,7 @@ function inferBirthYear(entries) {
     // Boys AAA ages 12-16: single birth year (AAA = top tier, age-locked).
     // Everything else (AA, A, girls, 17-18): 2-year range like NorCal XU.
     if (!set) {
-      var mC = e.division.match(/^(Girls )?(\d+)(A+)$/);
+      var mC = div.match(/^(Girls )?(\d+)(A+)$/);
       if (mC) {
         var isGirls = !!mC[1];
         var age = parseInt(mC[2]);
@@ -1110,7 +1148,7 @@ function inferBirthYear(entries) {
     // These don't match the U-format or A-tier patterns above, but the leading number
     // still tells us the age group → 2-year range.
     if (!set) {
-      var mN = e.division.match(/^(?:Girls )?(\d+)[A-Z]/);
+      var mN = div.match(/^(?:Girls )?(\d+)[A-Z]/);
       if (mN) {
         var age = parseInt(mN[1]);
         if (age >= 10 && age <= 18) {
@@ -1182,18 +1220,25 @@ function inferBirthYear(entries) {
 
 // Returns array of possible birth years for a single entry (same logic as inferBirthYear)
 function entryBirthYearSet(e) {
-  if (!e.division) return null; // include goalies so clustering gets full birth-year constraints
+  var div = divisionForEntry(e);
+  if (!div) return null;
   var startYear = 1994 + e.season;
-  var mU = e.division.match(/^(\d+)U/);
+  var mU = div.match(/^(\d+)U/);
   if (mU) {
     var age = parseInt(mU[1]);
     return [startYear - age, startYear - age + 1];
   }
-  var mC = e.division.match(/^(Girls )?(\d+)(A+)$/);
+  var mC = div.match(/^(Girls )?(\d+)(A+)$/);
   if (mC) {
     var isGirls = !!mC[1], age = parseInt(mC[2]), tier = mC[3];
     if (!isGirls && tier === 'AAA' && age >= 12 && age <= 16) return [startYear - age]; // boys AAA: single year
     if (age >= 12 && age <= 18) return [startYear - age, startYear - age + 1]; // everything else: 2-year range
+  }
+  // Catch-all: "10B", "12BB", "14A-1", etc. — extract leading age number
+  var mN = div.match(/^(?:Girls )?(\d+)[A-Z]/);
+  if (mN) {
+    var age = parseInt(mN[1]);
+    if (age >= 10 && age <= 18) return [startYear - age, startYear - age + 1];
   }
   return null;
 }
@@ -1473,17 +1518,17 @@ function mergeMiddleNameVariants() {
   var cr = window.COMBINED_RAW;
   if (!cr) return;
 
-  // Returns true if any season appears under more than one variant.
-  // Duplicate rows within the same variant (e.g. skater + goalie, same season)
-  // are de-duplicated first so they don't falsely trigger a conflict.
+  // Returns true if any season+type combination appears under more than one variant.
+  // Using season+type as the key means a goalie record in S29 and a skater record
+  // in S29 (two-way player split across names) do NOT count as a conflict.
   function hasOverlap(variants) {
-    var allSeasons = {}, overlap = false;
+    var allKeys = {}, overlap = false;
     variants.forEach(function(v) {
-      var seasonsThisVariant = {};
-      (cr[v] || []).forEach(function(e) { seasonsThisVariant[e.season] = true; });
-      Object.keys(seasonsThisVariant).forEach(function(s) {
-        if (allSeasons[s]) overlap = true;
-        allSeasons[s] = true;
+      var keysThisVariant = {};
+      (cr[v] || []).forEach(function(e) { keysThisVariant[e.season + '|' + (e.type||'')] = true; });
+      Object.keys(keysThisVariant).forEach(function(k) {
+        if (allKeys[k]) overlap = true;
+        allKeys[k] = true;
       });
     });
     return overlap;
