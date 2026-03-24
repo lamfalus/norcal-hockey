@@ -37,16 +37,19 @@
     const doc   = await getDoc(`/display-stats?league=${LEAGUE}&season=${season}`);
     const teams = [];
     const seen  = new Set();
-    let curDiv  = '';
-    doc.querySelectorAll('table tr').forEach(row => {
-      const rowText = row.innerText.trim();
-      // Division header rows contain "Schedule" but no team links
-      if (rowText.includes('Schedule') && !row.querySelector('a[href*="display-schedule"]')) {
-        const m = rowText.match(/^(.*?)\s*Schedule/);
-        if (m) curDiv = m[1].trim();
-        return;
-      }
-      // Team rows contain a link to display-schedule
+
+    // Build a map of data-id → division label from section header rows.
+    // Section headers have data-parent="" and text containing "Schedule".
+    const divById = {};
+    doc.querySelectorAll('tr[data-id]').forEach(row => {
+      if (row.getAttribute('data-parent') !== '') return;
+      const text = row.innerText.trim();
+      const m = text.match(/^(.*?)\s*Schedule/);
+      if (m) divById[row.getAttribute('data-id')] = m[1].trim();
+    });
+
+    // Team rows have a display-schedule link; their data-parent points to the division.
+    doc.querySelectorAll('tr[data-parent]').forEach(row => {
       const link = row.querySelector('a[href*="display-schedule"]');
       if (!link) return;
       const m = link.href.match(/[?&]team=(\d+)/);
@@ -54,7 +57,8 @@
       const teamId = m[1];
       if (seen.has(teamId)) return;
       seen.add(teamId);
-      teams.push({ teamId, teamName: norm(link.innerText), division: curDiv });
+      const divLabel = divById[row.getAttribute('data-parent')] || '';
+      teams.push({ teamId, teamName: norm(link.innerText), division: divLabel });
     });
     return teams;
   }
@@ -86,6 +90,7 @@
               season,
               division:   t.division,
               team:       t.teamName,
+              teamId:     t.teamId,
               type:       'skater',
               jersey:     cell(c,1),
               GP:         cell(c,2),
@@ -112,6 +117,7 @@
               season,
               division:  t.division,
               team:      t.teamName,
+              teamId:    t.teamId,
               type:      'goalie',
               jersey:    cell(c,1),
               GP:        cell(c,2),

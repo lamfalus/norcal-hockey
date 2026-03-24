@@ -90,12 +90,19 @@ This endpoint serves `Access-Control-Allow-Origin: *`, so the fetch works from a
 
 ### Name Normalization
 
-When data loads (both from the embedded stub and from the auto-fetch), all player names are normalized through `normalizeName()` before being stored:
+After each data load, all player names are run through a multi-pass normalization pipeline via `refreshBirthYears()`. The passes run in order:
 
-1. **Collapse whitespace** — `"Noe  Toth"` (double space from goalie table HTML) → `"Noe Toth"`
-2. **Strip middle initials** — `"Nikolai J Visneski"` or `"Nikolai J. Visneski"` → `"Nikolai Visneski"`
+1. **`stripPeriodsFromNames()`** — removes all `.` characters from every name and collapses any resulting double spaces. This handles punctuation variants like `Avery St. Onge` → `Avery St Onge`.
 
-After normalization, entries with the same resulting name are merged into a single player record. This is how two-way players (appearing in both skater and goalie tables) are unified.
+2. **`mergeCaseVariants()`** — groups names that are identical when lowercased and merges them into a single canonical record (keeping the spelling with the most entries). This handles data-entry inconsistencies like `Carlos Ayon Ii` → `Carlos Ayon II`. Only merges when no season overlap exists across the variants.
+
+3. **`mergeNumericSuffixVariants()`** — groups names that share the same base after stripping a trailing Roman numeral or Arabic number (`II`, `III`, `2`, `3`, etc.) and merges them. This handles cases like `Carlos Ayon II` and `Carlos Ayon 3` being the same player entered inconsistently across seasons. Only merges when no season overlap exists.
+
+4. **`resolveCollisions()`** — handles edge cases where the above merges would produce conflicting season data.
+
+5. **`mergeMiddleNameVariants()`** — groups names that share the same first and last name (ignoring any middle name or initial) and merges them. This handles cases like `Shiv Ritesh Kadu` → `Shiv Kadu`. Only merges when no season overlap exists and the shorter (two-word) form is the canonical name.
+
+After normalization, entries with the same resulting name are combined into a single player record. This is how two-way players (appearing in both skater and goalie tables) are unified.
 
 ### Birth Year Inference
 
@@ -135,7 +142,7 @@ Browse all players historically associated with a club (e.g., "Cupertino Cougars
 - **Club** — select from all clubs in the database
 - **Season** — optionally narrow to a single season; defaults to all seasons
 
-The view shows aggregate totals at the top (total unique players, total goals, etc.) followed by team cards. Clicking a team card expands to show that team's full skater and goalie roster.
+The view shows aggregate totals at the top (total unique players, total goals, etc.) followed by team cards. Clicking a team card expands to show that team's full roster in a single unified table. Skaters and goalies are rendered in the same table with shared columns — **#** (rank), **Player**, **Jersey**, and **GP** align vertically between both groups. A section divider and goalie sub-header row separate the two groups within the table.
 
 ### 3. Player Lookup
 
@@ -151,18 +158,25 @@ Clicking any player name in Browse or Club View calls `goToPlayer()` which switc
 
 ### 4. Player Flow
 
-An interactive SVG alluvial (Sankey-style) diagram showing player migration between clubs across seasons. Controls:
+An interactive SVG alluvial (Sankey-style) diagram showing player migration between clubs across seasons. Flow data includes both skaters and goalies. Controls:
 
 - **From Season / To Season** — define the range of seasons to visualize
 - **Age Division** — optionally filter to a specific division (e.g., 10U A only)
 - **Min players per flow** — hides thin ribbons below a threshold to reduce clutter
-
-Each vertical column represents one season. Each colored block within a column represents a club, sized proportionally to the number of players. Ribbons between adjacent season columns show how many players moved from one club to another.
+- **Focus Club** — pin a specific club to highlight only its flows
 
 **Hover behavior:**
-- Hovering any club block (except the rightmost column) highlights all outgoing ribbons from that club with a player count label on each ribbon, dimming all others.
-- Hovering a club in the rightmost column highlights all *incoming* ribbons showing where those players came from.
-- Mouseout restores all ribbons.
+- Hovering a source (left) club block highlights all outgoing ribbons with a player count label on each, dimming others. The native tooltip shows the total player count for that club.
+- Hovering a destination (right) club block highlights all incoming ribbons.
+- When a **Focus Club** is selected from the dropdown, hover behavior becomes focus-aware:
+  - Hovering a source block shows only the count flowing to the focused club (not the total), and the tooltip updates to reflect that specific flow.
+  - Hovering a destination block shows only the count received from the focused club, with a matching tooltip.
+  - The block total label is suppressed while a focus club is active, so only the relevant flow count is shown.
+- Mouseout restores all ribbons and labels.
+
+**Click behavior:**
+- Clicking any club block opens a player list popup showing who moved between clubs.
+- When a focus club is active, clicking a source block shows players flowing to that focus club; clicking a destination block shows players received from the focus club.
 
 A color-coded legend below the diagram identifies each club.
 
