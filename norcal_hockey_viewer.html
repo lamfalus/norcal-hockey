@@ -1106,6 +1106,8 @@ function renderPlayerHistory(name){
   const totalPIM=skaterEntries.reduce((s,e)=>s+(parseInt(e.PIM)||0),0);
   const goalieGP=goalieEntries.reduce((s,e)=>s+(parseInt(e.GP)||0),0);
   const goalieGA=goalieEntries.reduce((s,e)=>s+entryGA(e),0);
+  const goalieShots=goalieEntries.reduce((s,e)=>s+(parseInt(e.Shots||e.SHOTS)||0),0);
+  const goalieSavePct=goalieShots>0?((goalieShots-goalieGA)/goalieShots).toFixed(3):'—';
   const goalieSO=goalieEntries.reduce((s,e)=>s+(parseInt(e.SO)||0),0);
   let summaryCards='';
   if(skaterEntries.length>0){
@@ -1124,7 +1126,9 @@ function renderPlayerHistory(name){
     summaryCards='<div class="stat-summary">'
       +'<div class="stat-card"><div class="stat-val">'+seasons.length+'</div><div class="stat-lbl">Seasons</div></div>'
       +'<div class="stat-card"><div class="stat-val">'+goalieGP+'</div><div class="stat-lbl">Career GP</div></div>'
+      +'<div class="stat-card"><div class="stat-val">'+goalieShots+'</div><div class="stat-lbl">Shots Faced</div></div>'
       +'<div class="stat-card"><div class="stat-val">'+goalieGA+'</div><div class="stat-lbl">Goals Allowed</div></div>'
+      +'<div class="stat-card"><div class="stat-val">'+goalieSavePct+'</div><div class="stat-lbl">Save%</div></div>'
       +'<div class="stat-card"><div class="stat-val">'+goalieSO+'</div><div class="stat-lbl">Shutouts</div></div>'
       +'</div>';
   }
