@@ -11,7 +11,7 @@
     --green:#4caf7d;--red:#f76f6f;--radius:10px;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;}
   header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;}
   header h1{font-size:1.15rem;font-weight:700;letter-spacing:.02em;}
   header h1 span{color:var(--accent);}
@@ -32,9 +32,9 @@
   .section-heading h2{font-size:1.3rem;font-weight:700;}
   .badge{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:2px 10px;font-size:.78rem;color:var(--muted);}
   .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}
-  .table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);}
+  .table-wrap{border-radius:var(--radius);border:1px solid var(--border);}
   table{width:100%;border-collapse:collapse;font-size:.88rem;}
-  thead th{background:var(--surface2);color:var(--muted);padding:10px 14px;text-align:left;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap;}
+  thead th{background:var(--surface2);color:var(--muted);padding:10px 14px;text-align:left;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap;position:sticky;top:var(--header-h,57px);z-index:10;}
   thead th:hover{color:var(--text);}
   thead th.sort-asc::after{content:' ▲';font-size:.65rem;}
   thead th.sort-desc::after{content:' ▼';font-size:.65rem;}
@@ -51,8 +51,11 @@
   .jersey{color:var(--muted);font-size:.82rem;}
   .goalie-row td:first-child::before{content:'🥅 ';font-size:.8rem;}
   .ph-section-divider td{background:var(--surface2);color:var(--muted);font-size:.72rem;font-weight:700;letter-spacing:.05em;padding:3px 8px;border-top:2px solid var(--border);}
-  .ph-goalie-subhdr td{color:var(--muted);font-size:.75rem;font-weight:600;text-align:right;padding:2px 8px;background:var(--surface2);}
-  .ph-goalie-subhdr td:first-child,.ph-goalie-subhdr td:nth-child(2),.ph-goalie-subhdr td:nth-child(3){text-align:left;}
+  .ph-goalie-subhdr td{color:var(--muted);font-size:.75rem;font-weight:600;text-align:right;padding:10px 14px;background:var(--surface2);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;}
+  .ph-goalie-subhdr td:nth-child(2),.ph-goalie-subhdr td:nth-child(3){text-align:left;}
+  .ph-goalie-subhdr td:hover{color:var(--text);}
+  .ph-goalie-subhdr td.sort-asc::after{content:' ▲';font-size:.65rem;}
+  .ph-goalie-subhdr td.sort-desc::after{content:' ▼';font-size:.65rem;}
   /* Fixed-layout tables so GP and stat columns stay locked at the same x across all seasons */
   .ph-table{table-layout:fixed;width:100%;}
   .ph-table td:first-child,.ph-table th:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -115,7 +118,7 @@
     select,input[type=text]{min-width:unset;width:100%;font-size:1rem;}
     .search-wrap{width:100%;}
     /* Tables — tighter cells, smooth touch scroll */
-    .table-wrap{-webkit-overflow-scrolling:touch;}
+    main{-webkit-overflow-scrolling:touch;}
     thead th{padding:8px 10px;font-size:.68rem;}
     tbody td{padding:8px 10px;font-size:.82rem;}
     /* Player lookup */
@@ -481,8 +484,10 @@ function onBrowseRender(){
     attachGoalieSortHandlers('browse-goalie-table',gl,true);
   }
 }
+// Shared first-6-column widths for skater/goalie browse tables so columns align.
+const BROWSE_SHARED_COLS='<col style="width:3%"><col style="width:20%"><col style="width:4%"><col style="width:19%"><col style="width:9%"><col style="width:5%">';
 function renderSkaterTable(entries,showTeamDiv,tableId){
-  const cols=showTeamDiv?['Rank','Player','#','Team','Division','GP','G','A','PTS','PIM','SUSP','Pts/GP']:['Rank','Player','#','GP','G','A','PTS','PIM','SUSP','Pts/GP'];
+  const cols=showTeamDiv?['Rk','Player','#','Team','Division','GP','G','A','PTS','PIM','SUSP','Pts/GP']:['Rk','Player','#','GP','G','A','PTS','PIM','SUSP','Pts/GP'];
   const makeRow=(e,i)=>{
     const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
     const pts=entryPts(e);
@@ -492,7 +497,9 @@ function renderSkaterTable(entries,showTeamDiv,tableId){
     return '<tr>'+base.join('')+'</tr>';
   };
   const hdrs=cols.map((c,i)=>{const r=i>=(showTeamDiv?5:3)?' style="text-align:right"':'';return '<th data-col="'+c+'"'+r+'>'+c+'</th>';}).join('');
-  return '<div class="table-wrap"><table id="'+(tableId||'t')+'"><thead><tr>'+hdrs+'</tr></thead><tbody>'+entries.map(makeRow).join('')+'</tbody></table></div>';
+  const cg=showTeamDiv?'<colgroup>'+BROWSE_SHARED_COLS+'<col style="width:6%"><col style="width:6%"><col style="width:7%"><col style="width:6%"><col style="width:6%"><col style="width:9%"></colgroup>':'';
+  const tableStyle=showTeamDiv?' style="table-layout:fixed;width:100%"':'';
+  return '<div class="table-wrap"><table id="'+(tableId||'t')+'"'+tableStyle+'>'+cg+'<thead><tr>'+hdrs+'</tr></thead><tbody>'+entries.map(makeRow).join('')+'</tbody></table></div>';
 }
 function attachSortHandlers(tableId,entries,showTeamDiv){
   const table=document.getElementById(tableId);
@@ -531,7 +538,7 @@ function attachSortHandlers(tableId,entries,showTeamDiv){
 }
 let browseGoalieSort={col:'GAA',dir:1};
 function renderGoalieTable(entries,showTeamDiv,tableId){
-  const cols=showTeamDiv?['Rank','Goalie','#','Team','Division','GP','Shots','GA','GAA','Save%','SO']:['Rank','Goalie','#','GP','Shots','GA','GAA','Save%','SO'];
+  const cols=showTeamDiv?['Rk','Goalie','#','Team','Division','GP','Shots','GA','GAA','Save%','SO']:['Rk','Goalie','#','GP','Shots','GA','GAA','Save%','SO'];
   const makeRow=(e,i)=>{
     const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
     const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer(\''+escAttr(e.playerName)+'\')">'+escHtml(e.playerName)+byLabel(e.playerName)+'</span>'),td(e.jersey||'','jersey')];
@@ -543,7 +550,9 @@ function renderGoalieTable(entries,showTeamDiv,tableId){
   };
   const rightStart=showTeamDiv?5:3;
   const hdrs=cols.map((c,i)=>{const r=i>=rightStart?' style="text-align:right"':'';return '<th data-col="'+c+'"'+r+'>'+c+'</th>';}).join('');
-  return '<div class="table-wrap"><table id="'+(tableId||'gt')+'"><thead><tr>'+hdrs+'</tr></thead><tbody>'+entries.map(makeRow).join('')+'</tbody></table></div>';
+  const cg=showTeamDiv?'<colgroup>'+BROWSE_SHARED_COLS+'<col style="width:8%"><col style="width:7%"><col style="width:8%"><col style="width:10%"><col style="width:7%"></colgroup>':'';
+  const tableStyle=showTeamDiv?' style="table-layout:fixed;width:100%"':'';
+  return '<div class="table-wrap"><table id="'+(tableId||'gt')+'"'+tableStyle+'>'+cg+'<thead><tr>'+hdrs+'</tr></thead><tbody>'+entries.map(makeRow).join('')+'</tbody></table></div>';
 }
 function attachGoalieSortHandlers(tableId,entries,showTeamDiv){
   const table=document.getElementById(tableId);
@@ -711,6 +720,8 @@ var ALL_CLUBS = Object.keys(CLUB_TEAM_MAP).sort((a,b)=>clubDisplayName(a).locale
 // VIEW 3: Club View
 // ═══════════════════════════════════════
 let clubSortState = { col: null, dir: 1 };
+let clubSkaterSort = { col: 'PTS', dir: -1 };
+let clubGoalieSort = { col: 'GAA', dir: 1 };
 
 function initClub() {
   const sel = document.getElementById('sel-club');
@@ -840,41 +851,49 @@ function showTeamRoster(team, season, club) {
   const panel = document.getElementById('club-roster-panel');
   if (!panel) return;
 
-  const entries = ALL_ENTRIES.filter(e =>
+  let skaters = ALL_ENTRIES.filter(e =>
     e.season === season && normalizeTeam(e.teamBase||e.team) === team && e.type === 'skater'
   );
-  const gEntries = ALL_ENTRIES.filter(e =>
+  let goalies = ALL_ENTRIES.filter(e =>
     e.season === season && normalizeTeam(e.teamBase||e.team) === team && e.type === 'goalie'
   );
 
-  // Sort by pts desc
-  entries.sort((a,b) => entryPts(b) - entryPts(a));
+  // Reset sort state for fresh team load
+  clubSkaterSort = { col: 'PTS', dir: -1 };
+  clubGoalieSort = { col: 'GAA', dir: 1 };
 
-  const skaterRows = entries.map((e,i) => `<tr>
-    <td class="num">${i+1}</td>
-    <td class="player-link" onclick="goToPlayer('${escAttr(e.playerName)}')">${escHtml(e.playerName)}${byLabel(e.playerName)}</td>
-    <td class="jersey">${e.jersey||''}</td>
-    <td class="num">${e.GP||0}</td>
-    <td class="num">${e.G||0}</td>
-    <td class="num">${e.A||0}</td>
-    <td class="num pts">${entryPts(e)}</td>
-    <td class="num">${e.PIM||0}</td>
-    <td class="num">${dispSusp(e)}</td>
-    <td class="num">${entryPtsPerGame(e)}</td>
-  </tr>`).join('');
+  skaters.sort((a,b) => entryPts(b) - entryPts(a));
+  goalies.sort((a,b) => (parseFloat(a.GAA)||0) - (parseFloat(b.GAA)||0));
 
-  const goalieRows = gEntries.map(e => `<tr class="goalie-row">
-    <td></td>
-    <td class="player-link" onclick="goToPlayer('${escAttr(e.playerName)}')">${escHtml(e.playerName)}${byLabel(e.playerName)}</td>
-    <td class="jersey">${e.jersey||''}</td>
-    <td class="num">${e.GP||0}</td>
-    <td class="num">${e.Shots||e.SHOTS||0}</td>
-    <td class="num">${entryGA(e)}</td>
-    <td class="num">${e.GAA||'0.00'}</td>
-    <td class="num" style="color:var(--green)">${entrySavePct(e)||'.000'}</td>
-    <td class="num">${e.SO||''}</td>
-    <td></td>
-  </tr>`).join('');
+  function makeSkaterRow(e, i) {
+    return `<tr>
+      <td class="num">${i+1}</td>
+      <td class="player-link" onclick="goToPlayer('${escAttr(e.playerName)}')">${escHtml(e.playerName)}${byLabel(e.playerName)}</td>
+      <td class="jersey">${e.jersey||''}</td>
+      <td class="num">${e.GP||0}</td>
+      <td class="num">${e.G||0}</td>
+      <td class="num">${e.A||0}</td>
+      <td class="num pts">${entryPts(e)}</td>
+      <td class="num">${e.PIM||0}</td>
+      <td class="num">${dispSusp(e)}</td>
+      <td class="num">${entryPtsPerGame(e)}</td>
+    </tr>`;
+  }
+
+  function makeGoalieRow(e, i) {
+    return `<tr>
+      <td class="num">${i+1}</td>
+      <td class="player-link" onclick="goToPlayer('${escAttr(e.playerName)}')">${escHtml(e.playerName)}${byLabel(e.playerName)}</td>
+      <td class="jersey">${e.jersey||''}</td>
+      <td class="num">${e.GP||0}</td>
+      <td class="num">${e.Shots||e.SHOTS||0}</td>
+      <td class="num">${entryGA(e)}</td>
+      <td class="num">${(parseFloat(e.GAA)||0).toFixed(2)}</td>
+      <td class="num" style="color:var(--green)">${entrySavePct(e)||'.000'}</td>
+      <td class="num">${e.SO||''}</td>
+      <td></td>
+    </tr>`;
+  }
 
   // Highlight active card
   document.querySelectorAll('.club-team-card').forEach(c => {
@@ -884,34 +903,100 @@ function showTeamRoster(team, season, club) {
   panel.innerHTML = `
     <div class="panel" style="margin-top:20px">
       <div class="panel-title">${escHtml(teamSuffix(team))} · Roster</div>
-      ${(skaterRows.length || goalieRows.length) ? `
+      ${(skaters.length || goalies.length) ? `
       <div class="table-wrap">
-        <table>
-          ${skaterRows.length ? `
+        <table id="club-roster-table">
+          ${skaters.length ? `
           <thead><tr>
-            <th>#</th><th>Player</th><th>Jersey</th>
-            <th style="text-align:right">GP</th><th style="text-align:right">G</th>
-            <th style="text-align:right">A</th><th style="text-align:right">PTS</th>
-            <th style="text-align:right">PIM</th><th style="text-align:right">SUSP</th>
-            <th style="text-align:right">Pts/GP</th>
+            <th data-col="Rk" style="text-align:right">Rk</th>
+            <th data-col="Player">Player</th>
+            <th data-col="#">#</th>
+            <th data-col="GP" style="text-align:right">GP</th>
+            <th data-col="G" style="text-align:right">G</th>
+            <th data-col="A" style="text-align:right">A</th>
+            <th data-col="PTS" style="text-align:right">PTS</th>
+            <th data-col="PIM" style="text-align:right">PIM</th>
+            <th data-col="SUSP" style="text-align:right">SUSP</th>
+            <th data-col="Pts/GP" style="text-align:right">Pts/GP</th>
           </tr></thead>
-          <tbody>${skaterRows}</tbody>` : ''}
-          ${goalieRows.length ? `
+          <tbody id="club-skater-tbody">${skaters.map(makeSkaterRow).join('')}</tbody>` : ''}
+          ${goalies.length ? `
           <tbody>
-            ${skaterRows.length ? `<tr class="ph-section-divider"><td colspan="10"></td></tr>` : ''}
+            ${skaters.length ? `<tr class="ph-section-divider"><td colspan="10"></td></tr>` : ''}
             <tr class="ph-goalie-subhdr">
-              <td></td><td>Goalie</td><td>Jersey</td>
-              <td>GP</td><td>Shots</td>
-              <td>GA</td><td>GAA</td>
-              <td>Save%</td><td>SO</td>
+              <td data-gcol="Rk">Rk</td>
+              <td data-gcol="Goalie">Goalie</td>
+              <td data-gcol="#">#</td>
+              <td data-gcol="GP">GP</td>
+              <td data-gcol="Shots">Shots</td>
+              <td data-gcol="GA">GA</td>
+              <td data-gcol="GAA">GAA</td>
+              <td data-gcol="Save%">Save%</td>
+              <td data-gcol="SO">SO</td>
               <td></td>
             </tr>
-            ${goalieRows}
-          </tbody>` : ''}
+          </tbody>
+          <tbody id="club-goalie-tbody">${goalies.map(makeGoalieRow).join('')}</tbody>` : ''}
         </table>
       </div>` : '<p style="color:var(--muted);padding:10px">No roster data.</p>'}
     </div>
   `;
+
+  // Attach skater sort handlers
+  const table = document.getElementById('club-roster-table');
+  if (table) {
+    const skaterTbody = document.getElementById('club-skater-tbody');
+    table.querySelectorAll('thead th[data-col]').forEach(th => {
+      th.addEventListener('click', () => {
+        const col = th.dataset.col;
+        if (clubSkaterSort.col === col) clubSkaterSort.dir *= -1;
+        else { clubSkaterSort.col = col; clubSkaterSort.dir = (col === 'Player' || col === '#') ? 1 : -1; }
+        skaters.sort((a,b) => {
+          let va, vb;
+          if (col === 'Player') { va = a.playerName; vb = b.playerName; }
+          else if (col === '#') { va = parseInt(a.jersey)||0; vb = parseInt(b.jersey)||0; }
+          else if (col === 'PTS') { va = entryPts(a); vb = entryPts(b); }
+          else if (col === 'Pts/GP') { va = parseFloat(entryPtsPerGame(a))||0; vb = parseFloat(entryPtsPerGame(b))||0; }
+          else if (col === 'Rk') { va = entryPts(a); vb = entryPts(b); clubSkaterSort.dir = -1; }
+          else { va = parseInt(a[col])||0; vb = parseInt(b[col])||0; }
+          if (typeof va === 'string') return clubSkaterSort.dir * va.localeCompare(vb);
+          return clubSkaterSort.dir * (va - vb);
+        });
+        if (skaterTbody) skaterTbody.innerHTML = skaters.map(makeSkaterRow).join('');
+        table.querySelectorAll('thead th').forEach(t => t.classList.remove('sort-asc','sort-desc'));
+        th.classList.add(clubSkaterSort.dir === 1 ? 'sort-asc' : 'sort-desc');
+      });
+    });
+    const defTh = table.querySelector('thead th[data-col="PTS"]');
+    if (defTh) defTh.classList.add('sort-desc');
+
+    // Attach goalie sort handlers
+    const goalieTbody = document.getElementById('club-goalie-tbody');
+    table.querySelectorAll('.ph-goalie-subhdr td[data-gcol]').forEach(td => {
+      td.addEventListener('click', () => {
+        const col = td.dataset.gcol;
+        if (clubGoalieSort.col === col) clubGoalieSort.dir *= -1;
+        else { clubGoalieSort.col = col; clubGoalieSort.dir = (col === 'Goalie' || col === '#') ? 1 : (col === 'GAA' ? 1 : -1); }
+        goalies.sort((a,b) => {
+          let va, vb;
+          if (col === 'Goalie') { va = a.playerName; vb = b.playerName; }
+          else if (col === '#') { va = parseInt(a.jersey)||0; vb = parseInt(b.jersey)||0; }
+          else if (col === 'GAA') { va = parseFloat(a.GAA)||0; vb = parseFloat(b.GAA)||0; }
+          else if (col === 'Save%') { va = entrySavePctVal(a); vb = entrySavePctVal(b); }
+          else if (col === 'Rk') { va = parseFloat(a.GAA)||0; vb = parseFloat(b.GAA)||0; clubGoalieSort.dir = 1; }
+          else { va = parseInt(a[col])||0; vb = parseInt(b[col])||0; }
+          if (typeof va === 'string') return clubGoalieSort.dir * va.localeCompare(vb);
+          return clubGoalieSort.dir * (va - vb);
+        });
+        if (goalieTbody) goalieTbody.innerHTML = goalies.map(makeGoalieRow).join('');
+        table.querySelectorAll('.ph-goalie-subhdr td').forEach(t => t.classList.remove('sort-asc','sort-desc'));
+        td.classList.add(clubGoalieSort.dir === 1 ? 'sort-asc' : 'sort-desc');
+      });
+    });
+    const defGTd = table.querySelector('.ph-goalie-subhdr td[data-gcol="GAA"]');
+    if (defGTd) defGTd.classList.add('sort-asc');
+  }
+
   panel.scrollIntoView({ behavior:'smooth', block:'nearest' });
 }
 
@@ -1224,6 +1309,60 @@ function inferBirthYear(entries) {
       if (Object.keys(next).length > 0) possible = next; // only narrow, never wipe
     }
   });
+
+  // ── "Can't play down" lower-bound enforcement ─────────────────────────────
+  // A player can play UP (younger than the age group) but NEVER down (overage).
+  // Each entry gives a hard lower bound: birthYear ≥ startYear − ageGroup.
+  // If the intersection was corrupted by a playing-up entry, recompute it
+  // using only entries whose normal range overlaps the global lower bound.
+  (function() {
+    var globalLB = null;
+    entries.forEach(function(e) {
+      var bySet = entryBirthYearSet(e);
+      if (!bySet) return;
+      var lb = bySet[0]; // startYear - ageGroup
+      if (globalLB === null || lb > globalLB) globalLB = lb;
+    });
+    if (globalLB === null || !possible) return;
+
+    // Filter possible to years that don't violate the lower bound
+    var filtered = {};
+    Object.keys(possible).forEach(function(y) {
+      if (parseInt(y) >= globalLB) filtered[y] = true;
+    });
+    if (Object.keys(filtered).length > 0) {
+      possible = filtered; // narrowed — done
+      return;
+    }
+
+    // possible was entirely below globalLB (playing-up entry corrupted it).
+    // Re-intersect, skipping any entry whose upper bound falls below globalLB
+    // (those are the playing-up entries that caused the problem).
+    possible = null;
+    entries.forEach(function(e) {
+      var bySet = entryBirthYearSet(e);
+      if (!bySet) return;
+      var ub = bySet[bySet.length - 1]; // startYear - ageGroup + 1
+      if (ub < globalLB) return; // playing-up entry — skip
+      var set = {};
+      bySet.forEach(function(y) { set[y] = true; });
+      if (!possible) {
+        possible = set;
+      } else {
+        var next = {};
+        Object.keys(possible).forEach(function(y) { if (set[y]) next[y] = true; });
+        if (Object.keys(next).length > 0) possible = next;
+      }
+    });
+    // Apply the lower bound to the recomputed result
+    if (possible) {
+      var filtered2 = {};
+      Object.keys(possible).forEach(function(y) {
+        if (parseInt(y) >= globalLB) filtered2[y] = true;
+      });
+      if (Object.keys(filtered2).length > 0) possible = filtered2;
+    }
+  })();
 
   if (!possible) return null;
   var keys = Object.keys(possible);
@@ -1664,6 +1803,7 @@ refreshBirthYears();
 initBrowse();
 initClub();
 history.replaceState(captureAppState(), '');
+document.documentElement.style.setProperty('--header-h', document.querySelector('header').offsetHeight + 'px');
 // Expose init functions for cross-script access
 window.initBrowse = initBrowse;
 window.initClub = initClub;
