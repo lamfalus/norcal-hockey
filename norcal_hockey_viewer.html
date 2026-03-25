@@ -1826,7 +1826,7 @@ function migShowPlayerPopup(names, clubLabel, seasonLabel, ev) {
            + closeBtn
            + '</div>'
            + '<div class="mig-popup-body">'
-           + sorted.map(function(n) { return '<div class="mig-popup-name">' + escHtml(n) + '</div>'; }).join('')
+           + sorted.map(function(n) { return '<div class="mig-popup-name"><span class="player-link" onclick="document.getElementById(\'mig-player-popup\').style.display=\'none\';goToPlayer(\'' + escAttr(n) + '\')">' + escHtml(n) + '</span></div>'; }).join('')
            + '</div>';
   popup.innerHTML = html;
   var closeEl = document.getElementById('mig-popup-close-btn');
