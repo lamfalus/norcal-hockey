@@ -1,0 +1,38 @@
+[Unit]
+Description=NorCal hockey stats collector (incremental update)
+Documentation=https://github.com/lamfalus/norcal-hockey
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=%i
+WorkingDirectory=/home/%i/norcal-hockey
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m norcalstats.cli --config /home/%i/norcal-hockey/norcalstats.json update
+
+# A full night's crawl is long but must not run forever.
+TimeoutStartSec=6h
+
+# The crawl is network- and disk-bound; keep it out of the way of anything
+# else on the Pi.
+Nice=10
+IOSchedulingClass=idle
+
+# Hardening: this only needs to read the repo, write the data dir, and talk
+# to one website.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/%i/norcal-hockey
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

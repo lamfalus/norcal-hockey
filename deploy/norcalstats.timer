@@ -1,0 +1,16 @@
+[Unit]
+Description=Nightly NorCal hockey stats update
+Documentation=https://github.com/lamfalus/norcal-hockey
+
+[Timer]
+# Games finish late and scoresheets are entered afterwards, so collect in the
+# small hours. The randomized delay avoids hitting the site at a round number
+# of minutes past the hour every single night.
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=45m
+
+# If the Pi was off (or asleep) at 03:30, run once it is back.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

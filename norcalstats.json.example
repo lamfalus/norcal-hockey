@@ -1,0 +1,20 @@
+{
+  "_comment": "Copy to norcalstats.json and edit. Every field is optional; these are the defaults worth knowing about.",
+
+  "data_dir": "data",
+  "export_dir": ".",
+
+  "delay": 1.5,
+  "max_requests": 20000,
+
+  "recheck_days": 10,
+
+  "keep_raw": true,
+
+  "publish": false,
+  "git_remote": "origin",
+  "git_branch": "main",
+
+  "log_level": "INFO",
+  "log_file": "data/norcalstats.log"
+}

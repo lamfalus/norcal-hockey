@@ -1,0 +1,10 @@
+data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+norcalstats.json
+__pycache__/
+*.py[cod]
+.venv/
+*.tmp
+.claude/settings.local.json

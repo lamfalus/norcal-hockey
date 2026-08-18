@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "norcalstats"
+version = "2.0.0"
+description = "Game-level stats collector for NorCal youth hockey (stats.caha.timetoscore.com)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Mike Lamfalusi" }]
+# No runtime dependencies on purpose: this runs unattended on a Raspberry Pi
+# for a whole season, and the standard library does not break under it.
+dependencies = []
+
+[project.scripts]
+norcalstats = "norcalstats.cli:main"
+
+[tool.setuptools]
+packages = ["norcalstats", "norcalstats.sources"]
+
+[tool.setuptools.package-data]
+norcalstats = ["schema.sql"]
