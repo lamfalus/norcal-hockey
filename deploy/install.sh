@@ -61,6 +61,20 @@ fi
 
 mkdir -p "$REPO_DIR/data"
 
+# ------------------------------------------------------------- command
+BIN_DIR="$HOME/.local/bin"
+say "Linking the 'norcalstats' command into $BIN_DIR"
+mkdir -p "$BIN_DIR"
+ln -sf "$REPO_DIR/norcalstats-cli" "$BIN_DIR/norcalstats"
+chmod +x "$REPO_DIR/norcalstats-cli"
+if command -v norcalstats >/dev/null 2>&1; then
+  echo "  norcalstats is on your PATH"
+else
+  warn "$BIN_DIR is not on your PATH. Add it with:"
+  warn "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc && . ~/.bashrc"
+  warn "Until then, use: python3 -m norcalstats.cli ..."
+fi
+
 # ------------------------------------------------------------- systemd
 if ! command -v systemctl >/dev/null; then
   warn "systemd not found; skipping timer installation."
