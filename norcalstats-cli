@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Run the collector from anywhere, without installing anything.
+#
+#     norcalstats backfill --from-season 27
+#
+# instead of needing to cd into the repository and spell out
+# `python3 -m norcalstats.cli`. Raspberry Pi OS refuses system-wide pip
+# installs (PEP 668) and the collector deliberately has no dependencies, so a
+# wrapper is simpler than a virtualenv just to get a command name.
+#
+# install.sh links this into ~/.local/bin/norcalstats.
+
+set -euo pipefail
+
+# Resolve symlinks so the repository is found when this is linked onto PATH.
+target="${BASH_SOURCE[0]}"
+if readlink -f / >/dev/null 2>&1; then
+  target="$(readlink -f "$target")"            # GNU coreutils, as on the Pi
+else
+  while [ -L "$target" ]; do                   # portable fallback
+    link="$(readlink "$target")"
+    case "$link" in
+      /*) target="$link" ;;
+      *)  target="$(dirname "$target")/$link" ;;
+    esac
+  done
+fi
+repo="$(cd "$(dirname "$target")" && pwd)"
+
+if [ ! -d "$repo/norcalstats" ]; then
+  echo "norcalstats: cannot find the package next to $target" >&2
+  echo "  This script must stay in the repository, or be symlinked to it." >&2
+  exit 1
+fi
+
+# Put the repository on the import path rather than cd-ing into it, so relative
+# paths the caller passes still mean what they expect.
+export PYTHONPATH="$repo${PYTHONPATH:+:$PYTHONPATH}"
+
+# Use the repository's config unless the caller named one. Without this, running
+# from another directory would silently fall back to defaults and write its
+# database somewhere unexpected.
+config="$repo/norcalstats.json"
+if [ -f "$config" ]; then
+  for arg in "$@"; do
+    if [ "$arg" = "--config" ]; then
+      config=""
+      break
+    fi
+  done
+  if [ -n "$config" ]; then
+    set -- --config "$config" "$@"
+  fi
+fi
+
+exec python3 -m norcalstats.cli "$@"
