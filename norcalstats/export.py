@@ -552,3 +552,13 @@ def _human(size: int) -> str:
             return f"{size:.0f}{unit}" if unit == "B" else f"{size:.1f}{unit}"
         size /= 1024.0
     return f"{size}B"
+
+
+def player_count(path: Path) -> Optional[int]:
+    """Number of players in an exported legacy file, or None if unreadable."""
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    players = payload.get("players")
+    return len(players) if isinstance(players, (dict, list)) else None

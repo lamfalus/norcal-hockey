@@ -16,6 +16,7 @@ is deliberately conservative:
 
 from __future__ import annotations
 
+import json
 import logging
 import subprocess
 from pathlib import Path
@@ -70,6 +71,54 @@ def has_unrelated_staged_changes(repo: Path, paths: Sequence[str]) -> list[str]:
     ]
 
 
+#: Refuse to publish when an export loses more than this fraction of its
+#: players. A partial backfill, a half-finished run, or a pointed-at-the-wrong
+#: database mistake all look like a sudden collapse in the player count, and
+#: overwriting a good published file with a thin one is the worst outcome here.
+MAX_SHRINK = 0.10
+
+
+def check_shrinkage(
+    repo: Path, files: Iterable[str], *, max_shrink: float = MAX_SHRINK
+) -> list[str]:
+    """Complaints about exports that lost a large share of their players.
+
+    Compares each JSON export in the working tree against the version already
+    committed, so the guard works however the file was produced.
+    """
+    problems: list[str] = []
+    for name in files:
+        if not name.endswith(".json"):
+            continue
+        committed = _git(repo, "show", f"HEAD:{name}", check=False)
+        if committed.returncode != 0:
+            continue  # not committed yet; nothing to lose
+
+        before = _player_count(committed.stdout)
+        after = _player_count((repo / name).read_text(encoding="utf-8"))
+        if before is None or after is None or before == 0:
+            continue
+        if after < before * (1 - max_shrink):
+            problems.append(
+                f"{name}: {after} players, down from {before} already published "
+                f"({(1 - after / before):.0%} fewer)"
+            )
+    return problems
+
+
+def _player_count(text: str) -> Optional[int]:
+    try:
+        payload = json.loads(text)
+    except (ValueError, TypeError):
+        return None
+    players = payload.get("players")
+    if isinstance(players, dict):
+        return len(players)
+    if isinstance(players, list):
+        return len(players)
+    return None
+
+
 def publish(
     repo: Path,
     files: Iterable[str],
@@ -79,6 +128,7 @@ def publish(
     branch: str = "main",
     push: bool = True,
     dry_run: bool = False,
+    force: bool = False,
 ) -> Optional[str]:
     """Commit the given export files and push. Returns the commit sha, or None.
 
@@ -106,6 +156,16 @@ def publish(
     if not changed:
         log.info("exports unchanged; nothing to publish")
         return None
+
+    if not force:
+        shrunk = check_shrinkage(repo, files)
+        if shrunk:
+            raise PublishError(
+                "refusing to publish an export that lost most of its players:\n  "
+                + "\n  ".join(shrunk)
+                + "\nThis usually means the database is only partly filled -- let the "
+                "backfill finish, or pass --force if the drop is intended."
+            )
 
     current = _git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
     if current != branch:

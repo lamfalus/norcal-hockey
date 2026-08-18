@@ -96,6 +96,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_publish.add_argument("--repo", type=Path, help="repository path (default: export dir)")
     p_publish.add_argument("--dry-run", action="store_true")
     p_publish.add_argument("--no-push", action="store_true", help="commit but do not push")
+    p_publish.add_argument("--force", action="store_true",
+                           help="publish even if the export lost most of its players")
 
     sub.add_parser("status", help="summarize the database")
     sub.add_parser("seasons", help="list the seasons the site currently offers")
@@ -281,6 +283,9 @@ def _cmd_reparse(conn, config: Config, args) -> int:
 
 
 def _cmd_export(conn, config: Config, *, game_logs: bool = False) -> int:
+    # What the viewer is serving now, so the new file can be put next to it.
+    live = _live_player_count(config)
+
     written = export_mod.export_all(
         conn,
         export_dir=config.export_dir,
@@ -290,7 +295,25 @@ def _cmd_export(conn, config: Config, *, game_logs: bool = False) -> int:
     )
     for name, size in written.items():
         print(f"  {name}: {export_mod._human(size)}")
+
+    fresh = export_mod.player_count(Path(config.export_dir) / config.legacy_json)
+    if live and fresh is not None:
+        change = fresh - live
+        print(f"\n  players: {fresh:,} (published: {live:,}, {change:+,})")
+        if fresh < live * (1 - publish_mod.MAX_SHRINK):
+            print("  WARNING: far fewer players than the published file. If the "
+                  "backfill is still running this is expected;\n"
+                  "           publishing will refuse until it catches up.")
     return 0
+
+
+def _live_player_count(config: Config) -> Optional[int]:
+    """Player count in the currently published export, if there is one."""
+    for candidate in (Path.cwd() / config.legacy_json,
+                      Path(config.export_dir) / config.legacy_json):
+        if candidate.is_file():
+            return export_mod.player_count(candidate)
+    return None
 
 
 def _cmd_publish(conn, config: Config, args) -> int:
@@ -305,6 +328,7 @@ def _cmd_publish(conn, config: Config, args) -> int:
             remote=config.git_remote,
             branch=config.git_branch,
             push=not getattr(args, "no_push", False),
+            force=getattr(args, "force", False),
             dry_run=getattr(args, "dry_run", False),
         )
     except publish_mod.PublishError as exc:

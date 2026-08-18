@@ -490,6 +490,40 @@ Then seed the archive:
 python3 -m norcalstats.cli backfill --from-season 27
 ```
 
+### Checking a run before it goes live
+
+Crawl commands write the exports automatically, and the legacy export lands on
+top of the file the viewer serves. Pass `--no-export` while a backfill is still
+running, then inspect deliberately:
+
+```bash
+python3 -m norcalstats.cli status              # what the database holds
+python3 -m norcalstats.cli audit               # data-quality findings
+python3 -m norcalstats.cli review list         # names and teams needing a decision
+python3 -m norcalstats.cli export --out /tmp/check
+```
+
+`--out` writes somewhere harmless so nothing is overwritten while you look.
+
+Export always reports how the new file compares with the published one:
+
+```
+  players: 44 (published: 2,900, -2,856)
+  WARNING: far fewer players than the published file.
+```
+
+and **publishing refuses outright** when an export loses more than 10% of its
+players:
+
+```
+refusing to publish an export that lost most of its players:
+  norcal_hockey_players_s27-s31.json: 44 players, down from 2900 (98% fewer)
+```
+
+A partly-filled database produces a perfectly valid but tiny file, and
+overwriting good published data with it is the worst thing the collector could
+do. `--force` overrides the check when a drop really is intended.
+
 ### Publishing to GitHub
 
 Publishing is **off by default**. To enable it, set `"publish": true` in
@@ -523,7 +557,7 @@ requests.
 python3 -m unittest discover -s tests -t .
 ```
 
-200 tests, no network access — they run against real pages saved in
+207 tests, no network access — they run against real pages saved in
 `tests/fixtures/` from both ends of the backfill range (2021 and 2025), so a
 format change in either direction is caught. The fixtures deliberately include
 the awkward cases: cells opened `<td>` and closed `</th>`, a game with a score

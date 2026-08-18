@@ -334,6 +334,74 @@ class TestExport(PipelineTestCase):
         self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"a": 1})
 
 
+class TestPublishGuard(unittest.TestCase):
+    """Publishing must refuse to replace a full export with a thin one.
+
+    A half-finished backfill produces a valid but tiny file; overwriting the
+    published data with it is the worst outcome the collector can produce.
+    """
+
+    def setUp(self):
+        import subprocess
+        from norcalstats import publish as publish_mod
+
+        self.publish = publish_mod
+        self.tmp = tempfile.TemporaryDirectory()
+        self.repo = pathlib.Path(self.tmp.name)
+        for args in (["init", "-q", "-b", "main"],
+                     ["config", "user.email", "t@example.com"],
+                     ["config", "user.name", "Test"]):
+            subprocess.run(["git", *args], cwd=self.repo, capture_output=True)
+        self._write(500)
+        subprocess.run(["git", "add", "-A"], cwd=self.repo, capture_output=True)
+        subprocess.run(["git", "commit", "-qm", "seed"], cwd=self.repo,
+                       capture_output=True)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _write(self, players: int) -> None:
+        (self.repo / "export.json").write_text(json.dumps({
+            "metadata": {}, "players": {f"Player {i}": [] for i in range(players)},
+        }), encoding="utf-8")
+
+    def test_a_full_export_publishes(self):
+        self._write(500)
+        self.assertEqual(self.publish.check_shrinkage(self.repo, ["export.json"]), [])
+
+    def test_a_small_gain_is_fine(self):
+        self._write(520)
+        self.assertEqual(self.publish.check_shrinkage(self.repo, ["export.json"]), [])
+
+    def test_a_slight_drop_is_tolerated(self):
+        # Players do leave; a few percent is normal season-to-season churn.
+        self._write(480)
+        self.assertEqual(self.publish.check_shrinkage(self.repo, ["export.json"]), [])
+
+    def test_a_collapse_is_refused(self):
+        self._write(40)
+        problems = self.publish.check_shrinkage(self.repo, ["export.json"])
+        self.assertEqual(len(problems), 1)
+        self.assertIn("40 players", problems[0])
+        self.assertIn("500", problems[0])
+
+    def test_publish_raises_rather_than_committing(self):
+        self._write(40)
+        with self.assertRaises(self.publish.PublishError) as caught:
+            self.publish.publish(self.repo, ["export.json"], message="m", push=False)
+        self.assertIn("lost most of its players", str(caught.exception))
+
+    def test_force_overrides_the_guard(self):
+        self._write(40)
+        sha = self.publish.publish(
+            self.repo, ["export.json"], message="m", push=False, force=True)
+        self.assertIsNotNone(sha)
+
+    def test_a_file_never_published_before_is_allowed(self):
+        (self.repo / "new.json").write_text('{"players": {}}', encoding="utf-8")
+        self.assertEqual(self.publish.check_shrinkage(self.repo, ["new.json"]), [])
+
+
 class TestSchema(unittest.TestCase):
     def test_init_is_idempotent_and_adds_new_columns(self):
         with tempfile.TemporaryDirectory() as tmp:
