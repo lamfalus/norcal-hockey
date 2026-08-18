@@ -32,6 +32,15 @@ class FetchError(RuntimeError):
     """A page could not be retrieved after all retries."""
 
 
+class RequestCeilingReached(FetchError):
+    """The per-run request limit was hit.
+
+    Distinct from an ordinary failure because it says nothing about the page
+    being fetched: the run should stop and be resumed, not record every
+    remaining item as broken.
+    """
+
+
 @dataclass
 class Page:
     url: str
@@ -141,9 +150,9 @@ class Fetcher:
             raise FetchError(f"offline and not archived: {key or url}")
 
         if self.requests_made >= self.max_requests:
-            raise FetchError(
+            raise RequestCeilingReached(
                 f"request ceiling reached ({self.max_requests}); "
-                "raise max_requests or narrow the run"
+                "raise max_requests, or re-run to continue where this left off"
             )
 
         html = self._get_with_retries(url)

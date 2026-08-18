@@ -334,6 +334,40 @@ class TestExport(PipelineTestCase):
         self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"a": 1})
 
 
+class TestRequestCeiling(unittest.TestCase):
+    """Hitting the ceiling must stop the run, not fail every remaining item."""
+
+    def test_the_ceiling_raises_its_own_error(self):
+        from norcalstats.fetch import FetchError, RequestCeilingReached
+
+        fetcher = Fetcher("https://example.invalid", max_requests=0)
+        with self.assertRaises(RequestCeilingReached):
+            fetcher.get("/anything")
+        # Still a FetchError, so existing handlers keep working.
+        self.assertTrue(issubclass(RequestCeilingReached, FetchError))
+
+    def test_the_archive_is_still_served_at_the_ceiling(self):
+        # A page already collected costs no request, so a resumed run makes
+        # progress rather than stopping again immediately.
+        with tempfile.TemporaryDirectory() as tmp:
+            raw = pathlib.Path(tmp)
+            fetcher = Fetcher("https://example.invalid", raw_dir=raw,
+                              max_requests=99)
+            fetcher._write_raw("k", "", "<html>cached</html>")
+
+            starved = Fetcher("https://example.invalid", raw_dir=raw,
+                              max_requests=0)
+            page = starved.get("/anything", key="k", use_cache=True)
+            self.assertTrue(page.from_cache)
+            self.assertEqual(starved.requests_made, 0)
+
+    def test_stats_report_an_early_stop(self):
+        stats = pipeline.Stats()
+        self.assertFalse(stats.stopped_early)
+        stats.stopped_early = True
+        self.assertTrue(stats.stopped_early)
+
+
 class TestPublishGuard(unittest.TestCase):
     """Publishing must refuse to replace a full export with a thin one.
 

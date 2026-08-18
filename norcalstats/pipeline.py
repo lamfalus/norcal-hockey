@@ -30,7 +30,7 @@ from typing import Iterable, Optional
 from . import identity, names as N, review
 from .config import Config
 from .db import Run, get_meta, now, set_meta, upsert
-from .fetch import Fetcher, FetchError
+from .fetch import Fetcher, FetchError, RequestCeilingReached
 from .sources import timetoscore as tts
 
 log = logging.getLogger(__name__)
@@ -45,6 +45,8 @@ class Stats:
     scoresheets: int = 0
     skipped: int = 0
     errors: int = 0
+    #: Set when the request ceiling stopped the run before it finished.
+    stopped_early: bool = False
 
     def summary(self) -> str:
         return (f"{self.seasons} seasons, {self.teams} teams, "
@@ -356,6 +358,9 @@ class Pipeline:
                     season_id, league_id, priority=priority,
                     use_cache=use_cache, only_teams=only_teams,
                 )
+            except RequestCeilingReached:
+                self.stats.stopped_early = True
+                raise
             except FetchError as exc:
                 log.error("S%d league %s: %s", season_id, league_id, exc)
                 self.stats.errors += 1
@@ -412,6 +417,9 @@ class Pipeline:
             try:
                 self._scan_team(season_id, league_id, team, start_year,
                                 division_ids, use_cache)
+            except RequestCeilingReached:
+                self.stats.stopped_early = True
+                raise
             except FetchError as exc:
                 log.error("S%d L%s team %s: %s",
                           season_id, league_id, team.team_id, exc)
@@ -695,6 +703,15 @@ class Pipeline:
                     key=f"s{season_id}/game/{game_id}",
                     use_cache=use_cache,
                 )
+            except RequestCeilingReached as exc:
+                # Not a problem with this game: stop, keeping what was already
+                # collected. Re-running continues from here.
+                log.warning("%s", exc)
+                log.warning("stopped after %d of %d scoresheet(s); "
+                            "re-run the same command to continue", i - 1, total)
+                self.conn.commit()
+                self.stats.stopped_early = True
+                return
             except FetchError as exc:
                 log.error("game %s: %s", game_id, exc)
                 self.conn.execute(

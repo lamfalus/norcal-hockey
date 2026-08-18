@@ -262,6 +262,9 @@ def _cmd_crawl(conn, config: Config, args, *, mode: str) -> int:
         only_teams=set(args.teams) if args.teams else None,
     )
     print(stats.summary())
+    if stats.stopped_early:
+        print("\n  Stopped at the request ceiling before finishing."
+              "\n  Re-run the same command to continue, or raise --max-requests.")
 
     if not args.no_export:
         _cmd_export(conn, config)
