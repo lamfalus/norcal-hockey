@@ -467,8 +467,12 @@ per-player game logs (much larger).
 ```bash
 git clone https://github.com/lamfalus/norcal-hockey
 cd norcal-hockey
-./deploy/install.sh
+bash deploy/install.sh
 ```
+
+(Invoked through `bash` rather than as `./deploy/install.sh`, so it runs even if
+the executable bit was lost — the collector is authored on Windows, where git
+does not track it by default.)
 
 This checks the Python version, writes a default `norcalstats.json`, and
 installs a systemd timer that runs nightly at 03:30 with a randomized delay.
