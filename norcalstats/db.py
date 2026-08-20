@@ -135,18 +135,45 @@ def _migrate_v3_relabel_placeholder_rosters(conn: sqlite3.Connection) -> None:
         return
 
     marks = ",".join("?" for _ in bogus)
-    rows = conn.execute(
-        f"UPDATE game_rosters SET role = 'placeholder', player_id = NULL "
-        f"WHERE name IN ({marks})", bogus).rowcount
-    # The identities they created are not people; drop them so they cannot be
-    # reused. The next derive rebuilds player_names from scratch anyway.
-    conn.execute(f"DELETE FROM player_names WHERE name IN ({marks})", bogus)
-    conn.execute(
-        "DELETE FROM players WHERE player_id NOT IN "
-        "(SELECT player_id FROM player_names)")
+    victims = [
+        row["player_id"] for row in conn.execute(
+            f"SELECT DISTINCT player_id FROM player_names WHERE name IN ({marks})",
+            bogus)
+    ]
+
     conn.commit()
-    log.info("relabelled %d placeholder roster row(s): %s",
-             rows, ", ".join(sorted(bogus)[:5]))
+    # The identities these placeholders created are referenced from the event
+    # tables, so those references are cleared before the rows go. Foreign keys
+    # are relaxed for the rewrite, as in the v2 migration.
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        rows = conn.execute(
+            f"UPDATE game_rosters SET role = 'placeholder', player_id = NULL "
+            f"WHERE name IN ({marks})", bogus).rowcount
+
+        if victims:
+            ids = ",".join("?" for _ in victims)
+            for table, column in (
+                ("goals", "scorer_player_id"),
+                ("goals", "assist1_player_id"),
+                ("goals", "assist2_player_id"),
+                ("penalties", "player_id"),
+                ("goalie_stints", "player_id"),
+                ("game_rosters", "player_id"),
+            ):
+                conn.execute(
+                    f"UPDATE {table} SET {column} = NULL "
+                    f"WHERE {column} IN ({ids})", victims)
+            for table in ("player_team_seasons", "player_game_stats",
+                          "player_names", "players"):
+                conn.execute(
+                    f"DELETE FROM {table} WHERE player_id IN ({ids})", victims)
+        conn.commit()
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+
+    log.info("relabelled %d placeholder roster row(s) and removed %d bogus "
+             "player(s): %s", rows, len(victims), ", ".join(sorted(bogus)[:5]))
 
 
 def _migrate_v2_league_scoped_divisions(conn: sqlite3.Connection) -> None:
