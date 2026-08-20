@@ -27,6 +27,7 @@ from datetime import date
 from typing import Iterable, Optional
 
 from ..htmltable import Table, all_tables, clean, find_tables, to_int
+from ..names import is_placeholder as _is_placeholder
 
 #: Bumped when parsing changes in a way that should trigger a re-parse of
 #: already-archived scoresheets.
@@ -638,7 +639,15 @@ def _parse_roster_grid(table: Table) -> list[RosterEntry]:
             jersey, position, name = (g.strip() for g in group)
             if not name or name.lower() == "name":
                 continue
-            role = "coach" if jersey.upper() in _STAFF_MARKERS else "player"
+            if jersey.upper() in _STAFF_MARKERS:
+                role = "coach"
+            elif _is_placeholder(name):
+                # "Not Signed In", "Home Unknown Goalie 1": the sheet exists but
+                # the roster does not. Kept so the gap is visible, but never
+                # treated as a person.
+                role = "placeholder"
+            else:
+                role = "player"
             entries.append(RosterEntry(
                 slot=slot, jersey=jersey, position=position.upper(),
                 name=name, role=role,

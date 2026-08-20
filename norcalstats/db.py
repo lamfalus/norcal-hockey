@@ -10,7 +10,7 @@ from typing import Any, Iterable, Optional, Sequence
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 
@@ -104,6 +104,49 @@ def _migrate(conn: sqlite3.Connection, from_version: int) -> None:
     """
     if from_version < 2:
         _migrate_v2_league_scoped_divisions(conn)
+    if from_version < 3:
+        _migrate_v3_relabel_placeholder_rosters(conn)
+
+
+def _migrate_v3_relabel_placeholder_rosters(conn: sqlite3.Connection) -> None:
+    """v2 -> v3: stop treating roster placeholders as people.
+
+    "Not Signed In" is what the site prints when a roster was never submitted.
+    It was stored as a player, so an entire roster collapsed into one identity
+    -- 1,588 roster rows across 81 teams in one database -- and the duplicate
+    (game, player) rows that produced aborted every derive with a UNIQUE
+    constraint failure, leaving no derived stats at all.
+
+    Relabels the stored rows so the next run is correct without re-fetching or
+    re-parsing anything.
+    """
+    from .names import is_placeholder
+
+    try:
+        names = [
+            row["name"] for row in conn.execute(
+                "SELECT DISTINCT name FROM game_rosters WHERE role = 'player'")
+        ]
+    except sqlite3.Error:
+        return
+
+    bogus = [name for name in names if is_placeholder(name)]
+    if not bogus:
+        return
+
+    marks = ",".join("?" for _ in bogus)
+    rows = conn.execute(
+        f"UPDATE game_rosters SET role = 'placeholder', player_id = NULL "
+        f"WHERE name IN ({marks})", bogus).rowcount
+    # The identities they created are not people; drop them so they cannot be
+    # reused. The next derive rebuilds player_names from scratch anyway.
+    conn.execute(f"DELETE FROM player_names WHERE name IN ({marks})", bogus)
+    conn.execute(
+        "DELETE FROM players WHERE player_id NOT IN "
+        "(SELECT player_id FROM player_names)")
+    conn.commit()
+    log.info("relabelled %d placeholder roster row(s): %s",
+             rows, ", ".join(sorted(bogus)[:5]))
 
 
 def _migrate_v2_league_scoped_divisions(conn: sqlite3.Connection) -> None:

@@ -334,6 +334,112 @@ class TestExport(PipelineTestCase):
         self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"a": 1})
 
 
+class TestRosterPlaceholders(PipelineTestCase):
+    """A roster that was never submitted must not become a player.
+
+    The site prints "Not Signed In" for every slot when no roster was filed.
+    Treated as a name, one identity absorbed whole rosters -- 1,588 rows across
+    81 teams -- and the duplicate (game, player) rows aborted every derive with
+    a UNIQUE constraint failure, leaving no derived stats at all.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.seed_season_and_team()
+
+    def _roster(self, game_id, names, side="home"):
+        for slot, name in enumerate(names):
+            self.conn.execute(
+                "INSERT INTO game_rosters(game_id, side, slot, jersey, position, "
+                "name, role) VALUES (?,?,?,?,'',?,?)",
+                (game_id, side, slot, str(10 + slot), name,
+                 "placeholder" if __import__("norcalstats.names", fromlist=["x"])
+                 .is_placeholder(name) else "player"))
+        self.conn.commit()
+
+    def test_placeholder_names_are_recognised(self):
+        from norcalstats import names as N
+        for name in ("Not Signed In", "Home Unknown Goalie 1",
+                     "Visitor Unknown Goalie", "unknown", "TBD"):
+            self.assertTrue(N.is_placeholder(name), name)
+
+    def test_real_names_are_not_mistaken_for_placeholders(self):
+        from norcalstats import names as N
+        for name in ("Sol Orlov", "Norman Player", "Unknown Smith",
+                     "Gavin B Duganne"):
+            self.assertFalse(N.is_placeholder(name), name)
+
+    def test_the_parser_marks_them_placeholder(self):
+        from norcalstats.sources import timetoscore as tts
+        grid = ("<table><tr><th>#</th><th>P</th><th>Name</th></tr>"
+                "<tr><td>95</td><td>G</td><td>Not Signed In</td></tr>"
+                "<tr><td>44</td><td></td><td>Sol Orlov</td></tr></table>")
+        entries = tts._parse_roster_grid(all_tables_first(grid))
+        roles = {e.name: e.role for e in entries}
+        self.assertEqual(roles["Not Signed In"], "placeholder")
+        self.assertEqual(roles["Sol Orlov"], "player")
+
+    def test_derive_survives_a_player_listed_twice(self):
+        # A genuine duplicate: the same child on the sheet twice. This used to
+        # abort the entire derive stage.
+        self._roster(50647, ["Kai Garrett", "Kai Garrett", "Sol Orlov"])
+        identity.rebuild(self.conn)
+        pipeline.rebuild_player_game_stats(self.conn)   # must not raise
+        self.conn.commit()
+
+        rows = db.scalar(
+            self.conn, "SELECT COUNT(*) FROM player_game_stats WHERE game_id = 50647")
+        self.assertEqual(rows, 2, "one row per player, not one per roster line")
+
+    def test_placeholders_never_reach_the_stats(self):
+        self._roster(50684, ["Not Signed In", "Not Signed In", "Sol Orlov"])
+        identity.rebuild(self.conn)
+        pipeline.rebuild_player_game_stats(self.conn)
+        self.conn.commit()
+
+        names = [r["display_name"] for r in self.conn.execute(
+            "SELECT display_name FROM players")]
+        self.assertNotIn("Not Signed In", names)
+        self.assertEqual(
+            db.scalar(self.conn,
+                      "SELECT COUNT(*) FROM player_game_stats WHERE game_id = 50684"),
+            1, "only the real player counts")
+
+
+def all_tables_first(html):
+    from norcalstats.htmltable import all_tables
+    return all_tables(html)[0]
+
+
+class TestPlaceholderMigration(unittest.TestCase):
+    """An existing database must heal itself without refetching."""
+
+    def test_v2_database_is_repaired_in_place(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "old.sqlite3"
+            conn = db.connect(path)
+            conn.execute("INSERT INTO seasons(season_id,label,first_seen_at) "
+                         "VALUES (31,'Fall 2025','x')")
+            conn.execute("INSERT INTO games(game_id,season_id) VALUES (1,31)")
+            for slot, name in enumerate(["Not Signed In", "Not Signed In", "Sol Orlov"]):
+                conn.execute(
+                    "INSERT INTO game_rosters(game_id,side,slot,name,role) "
+                    "VALUES (1,'home',?,?,'player')", (slot, name))
+            db.set_meta(conn, "schema_version", "2")
+            conn.commit()
+            conn.close()
+
+            conn = db.connect(path)          # triggers the migration
+            try:
+                roles = dict(conn.execute(
+                    "SELECT name, role FROM game_rosters GROUP BY name, role").fetchall())
+                self.assertEqual(roles["Not Signed In"], "placeholder")
+                self.assertEqual(roles["Sol Orlov"], "player")
+                self.assertEqual(db.get_meta(conn, "schema_version"), "3")
+            finally:
+                conn.close()
+
+
 class TestRequestCeiling(unittest.TestCase):
     """Hitting the ceiling must stop the run, not fail every remaining item."""
 

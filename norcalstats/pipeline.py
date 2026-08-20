@@ -999,7 +999,14 @@ def raise_team_questions(conn: sqlite3.Connection) -> None:
 
 
 def rebuild_player_game_stats(conn: sqlite3.Connection) -> None:
-    """Materialize per-player, per-game stat lines from the event tables."""
+    """Materialize per-player, per-game stat lines from the event tables.
+
+    One player can hold several roster rows in a single game: listed twice on
+    the sheet, or -- before placeholders were recognised -- sharing a name with
+    everyone on an unsubmitted roster. Those rows are collapsed to one first.
+    Inserting them directly violates the primary key, and that used to abort the
+    whole derive stage, leaving the database with no derived stats at all.
+    """
     conn.execute("DELETE FROM player_game_stats")
     conn.execute("""
         INSERT INTO player_game_stats(
@@ -1018,12 +1025,22 @@ def rebuild_player_game_stats(conn: sqlite3.Connection) -> None:
                COALESCE(pen.count, 0),
                COALESCE(sc.ppg, 0),
                COALESCE(sc.shg, 0),
-               CASE WHEN UPPER(COALESCE(r.position, '')) = 'G' THEN 1 ELSE 0 END,
-               CASE WHEN UPPER(COALESCE(r.position, '')) = 'G'
+               r.is_goalie,
+               CASE WHEN r.is_goalie = 1
                     THEN (SELECT COUNT(*) FROM goals og
                            WHERE og.game_id = r.game_id AND og.side <> r.side)
                     ELSE NULL END
-          FROM game_rosters r
+          FROM (
+                -- One row per player per game, whatever the sheet listed.
+                SELECT game_id, player_id,
+                       MIN(side)   AS side,
+                       MIN(jersey) AS jersey,
+                       MAX(CASE WHEN UPPER(COALESCE(position, '')) = 'G'
+                                THEN 1 ELSE 0 END) AS is_goalie
+                  FROM game_rosters
+                 WHERE player_id IS NOT NULL AND role = 'player'
+                 GROUP BY game_id, player_id
+          ) r
           JOIN games g ON g.game_id = r.game_id
           LEFT JOIN (
                 SELECT game_id, scorer_player_id AS pid, COUNT(*) AS goals,
@@ -1048,7 +1065,6 @@ def rebuild_player_game_stats(conn: sqlite3.Connection) -> None:
                   FROM penalties WHERE player_id IS NOT NULL
                  GROUP BY game_id, player_id
           ) pen ON pen.game_id = r.game_id AND pen.pid = r.player_id
-         WHERE r.player_id IS NOT NULL AND r.role = 'player'
     """)
 
 

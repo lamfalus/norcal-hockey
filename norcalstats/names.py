@@ -286,6 +286,28 @@ def extract_club(team_name: str) -> str:
 # -------------------------------------------------------------- birth years
 
 
+#: Placeholders the site prints in the name column when a roster was not
+#: submitted electronically, or a goalie could not be identified. They are not
+#: people: "Not Signed In" alone appeared on 81 different teams and up to 36
+#: times in a single game, which silently merged whole rosters into one
+#: "player" and then broke every derived stat.
+_PLACEHOLDER_NAMES = re.compile(
+    r"""^\s*(
+        not\s*signed\s*in
+      | (home|visitor|away)?\s*unknown\s*(goalie|player|skater)?\s*\d*
+      | unknown
+      | no\s*goalie
+      | tbd | n/?a | none | player | goalie | skater
+    )\s*\d*\s*$""",
+    re.I | re.X,
+)
+
+
+def is_placeholder(name: str) -> bool:
+    """True when a roster entry names no actual person."""
+    return bool(_PLACEHOLDER_NAMES.match(collapse(name or "")))
+
+
 #: Girls play in two arrangements here: a dedicated division ("Girls 16-U"),
 #: or a girls team entered into an otherwise co-ed division ("San Jose Jr
 #: Sharks Girls" in 10U B West, "Stockton Colts Girls 10G-1").

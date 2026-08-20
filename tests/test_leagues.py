@@ -556,7 +556,8 @@ class TestMigrationV1toV2(unittest.TestCase):
 
             conn = db.connect(path)   # triggers the migration
             try:
-                self.assertEqual(db.get_meta(conn, "schema_version"), "2")
+                self.assertEqual(db.get_meta(conn, "schema_version"),
+                                 str(db.SCHEMA_VERSION))
 
                 # The manual decision survived -- this is the whole point.
                 row = conn.execute(
@@ -589,7 +590,8 @@ class TestMigrationV1toV2(unittest.TestCase):
             db.connect(path).close()
             conn = db.connect(path)
             try:
-                self.assertEqual(db.get_meta(conn, "schema_version"), "2")
+                self.assertEqual(db.get_meta(conn, "schema_version"),
+                                 str(db.SCHEMA_VERSION))
                 self.assertEqual(db.scalar(conn, "SELECT COUNT(*) FROM divisions"), 1)
             finally:
                 conn.close()
