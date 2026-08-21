@@ -591,6 +591,10 @@ function buildEntries() {
   APP.players.forEach(function(p) {
     var goalieSeasons = {};
     p.seasons.forEach(function(s) { if (s.goalie) goalieSeasons[s.season] = (goalieSeasons[s.season] || 0) + 1; });
+    // Just this player's rows. Reaching into the full list to find them again
+    // means scanning all 25,000 of them once per player, which is most of a
+    // ten-second load and happens again on every filter change.
+    var mine = [];
 
     p.seasons.forEach(function(s) {
       if (classes && !classes[s['class']]) return;
@@ -612,6 +616,7 @@ function buildEntries() {
           GP: 0, G: 0, A: 0, PIM: 0, PPG: 0, SHG: 0, GA: 0
         };
         rows.push(row);
+        mine.push(row);
       }
       row.GP += s.gp;
       row.G += s.g;
@@ -628,8 +633,8 @@ function buildEntries() {
     // That table is per season, so it can only be trusted onto a row when the
     // goalie played for a single team that season.
     if (p.official) {
-      rows.forEach(function(row) {
-        if (row.playerId !== p.id || row.type !== 'goalie') return;
+      mine.forEach(function(row) {
+        if (row.type !== 'goalie') return;
         if (goalieSeasons[row.season] !== 1) return;
         var off = p.official[row.season + ':goalie'];
         if (!off) return;
