@@ -97,7 +97,8 @@ class TestCoreFile(AppDataTestCase):
         # display name but no spelling and no stat line. They are unreachable
         # by search and empty when opened.
         self.conn.execute(
-            "INSERT INTO players(player_id, display_name) VALUES (999999, 'Ghost Player')")
+            "INSERT INTO players(player_id, display_name, canonical_name)"
+            " VALUES (999999, 'Ghost Player', 'ghost player')")
         self.conn.commit()
         self.write()
         names = [p["name"] for p in self.core()["players"]]
