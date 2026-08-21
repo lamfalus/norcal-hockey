@@ -161,6 +161,26 @@ class TestShards(AppDataTestCase):
             self.assertEqual(player["shard"], appdata.shard_for(player["id"]))
             self.assertTrue((self.out / f"logs/p{player['shard']:02d}.json").exists())
 
+    def test_a_scheduled_game_is_carried_without_a_score(self):
+        # A team page is a schedule as much as a record, and the current season
+        # regularly has nothing but scheduled games.
+        self.conn.execute(
+            "INSERT INTO games(game_id,season_id,league_id,division_id,date_iso,"
+            "home_team_id,away_team_id,status,game_class) "
+            "VALUES (9,31,3,(SELECT division_id FROM divisions),'2026-01-15',"
+            "58,129,'scheduled','regular')")
+        self.conn.commit()
+        self.write()
+        payload = json.loads((self.out / "games" / "s31.json").read_text(encoding="utf-8"))
+        game = payload["games"]["9"]
+        self.assertEqual(game["status"], "scheduled")
+        self.assertNotIn("hg", game, "an unplayed game must not report a score")
+        self.assertNotIn("ag", game)
+        # and a played one still carries its result, with no status noise
+        played = payload["games"]["1"]
+        self.assertEqual((played["hg"], played["ag"]), (3, 1))
+        self.assertNotIn("status", played)
+
     def test_game_detail_is_per_season(self):
         self.write()
         detail = json.loads(

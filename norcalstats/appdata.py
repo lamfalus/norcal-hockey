@@ -261,29 +261,42 @@ def build_player_logs(conn: sqlite3.Connection) -> dict[int, dict]:
 
 
 def build_game_detail(conn: sqlite3.Connection) -> dict[int, dict]:
-    """Goals, penalties and period scores per season, for box scores."""
+    """Every game of a season, with its events where it has been played.
+
+    Scheduled games are included, not just finished ones. A team page is a
+    schedule as much as a record, and dropping the unplayed games would empty
+    it exactly where it matters most: a season that has started but finished
+    nothing has 119 scheduled games and no final ones at all.
+    """
     games: dict[int, dict[str, dict]] = defaultdict(dict)
 
     for r in conn.execute("""
         SELECT game_id, season_id, league_id, division_id, date_iso, time_text,
-               rink, level, game_class, game_type,
+               rink, level, game_class, game_type, status,
                home_team_id, away_team_id, home_name, away_name,
                home_goals, away_goals
-          FROM games WHERE status = 'final' ORDER BY date_iso
+          FROM games ORDER BY date_iso
     """):
-        games[r["season_id"]][str(r["game_id"])] = {
+        entry = {
             "date": r["date_iso"], "time": r["time_text"], "rink": r["rink"],
             "level": r["level"], "class": r["game_class"], "type": r["game_type"],
             "league": r["league_id"], "division": r["division_id"],
             "home": r["home_team_id"], "away": r["away_team_id"],
             "homeName": r["home_name"], "awayName": r["away_name"],
-            "hg": r["home_goals"], "ag": r["away_goals"],
             "periods": {}, "goals": [], "penalties": [],
         }
+        if r["status"] == "final":
+            entry["hg"] = r["home_goals"]
+            entry["ag"] = r["away_goals"]
+        else:
+            # No score, and no events to attach: the app reads the absence of a
+            # result as "not played yet" rather than as nil-nil.
+            entry["status"] = r["status"]
+        games[r["season_id"]][str(r["game_id"])] = entry
 
     seasons = {
         r["game_id"]: r["season_id"]
-        for r in conn.execute("SELECT game_id, season_id FROM games WHERE status='final'")
+        for r in conn.execute("SELECT game_id, season_id FROM games")
     }
 
     def bucket(game_id: int) -> Optional[dict]:

@@ -42,6 +42,39 @@
   .res-l{color:var(--red,#e5484d);font-weight:600;}
   .res-t{color:var(--muted);font-weight:600;}
   .strength-tag{font-size:.68rem;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;color:var(--muted);}
+  /* Team page */
+  .team-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px;}
+  .team-head h2{font-size:1.35rem;}
+  .team-sub{color:var(--muted);font-size:.85rem;margin-bottom:18px;}
+  .team-link{cursor:pointer;color:var(--accent);}
+  .team-link:hover{text-decoration:underline;}
+  .game-link{cursor:pointer;}
+  .game-link:hover{background:var(--surface2);}
+  .sched{color:var(--muted);font-style:italic;}
+  .period-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:8px;}
+  .period-cell{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center;}
+  .period-cell .pc-lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+  .period-cell .pc-val{font-size:1.15rem;font-weight:600;margin-top:3px;}
+  .period-cell .pc-split{font-size:.72rem;color:var(--muted);margin-top:2px;}
+  /* Box score */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;display:flex;
+         align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto;}
+  .modal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+              max-width:840px;width:100%;padding:22px;position:relative;}
+  .modal-close{position:absolute;top:10px;right:12px;background:transparent;border:none;
+               color:var(--muted);font-size:1.5rem;line-height:1;cursor:pointer;}
+  .modal-close:hover{color:var(--text);}
+  .box-head{text-align:center;margin-bottom:4px;}
+  .box-score-line{font-size:1.5rem;font-weight:700;}
+  .box-meta{color:var(--muted);font-size:.82rem;text-align:center;margin-bottom:18px;}
+  .box-sect{font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);
+            margin:18px 0 8px;}
+  .box-side{font-weight:600;}
+  .goal-assists{color:var(--muted);font-size:.85rem;}
+  /* Linemates */
+  .mate-row{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:.88rem;}
+  .mate-bar{height:7px;background:var(--accent);border-radius:3px;min-width:2px;}
+  .mate-n{color:var(--muted);font-size:.8rem;min-width:46px;}
   label{display:flex;flex-direction:column;gap:5px;font-size:.82rem;color:var(--muted);}
   select,input[type=text]{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:.92rem;min-width:180px;outline:none;transition:border-color .15s;}
   select:focus,input[type=text]:focus{border-color:var(--accent);}
@@ -327,7 +360,22 @@
   <div style="margin-top:12px;padding:0 4px;" id="migration-legend"></div>
 </div>
 
+<!-- VIEW 5: a single team. Reached by clicking a team anywhere, not from the
+     tab bar: it only means anything once you have picked one. -->
+<div class="view" id="view-team">
+  <div id="team-content"></div>
+</div>
+
 </main>
+
+<!-- The box score opens over whatever you were looking at, because you always
+     arrive from a schedule or a game log and want to go back to it. -->
+<div id="box-score" class="modal" style="display:none">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeBoxScore()">×</button>
+    <div id="box-score-body"></div>
+  </div>
+</div>
 <script>
 window.onerror = function(msg,src,line,col,err) {
   document.body.insertAdjacentHTML('afterbegin','<div style="position:fixed;top:0;left:0;right:0;background:red;color:white;padding:10px;z-index:9999;font-size:14px">JS ERROR line '+line+': '+msg+'</div>');
@@ -688,7 +736,7 @@ function loadSeasonGames(season) {
 
 // ── View switching ──
 function captureAppState(viewOverride) {
-  var views = ['browse','club','player','migration'];
+  var views = ['browse','club','player','team','migration'];
   var v = viewOverride || views.find(function(v){ return document.getElementById('view-'+v).classList.contains('active'); }) || 'browse';
   var s = {view: v};
   if (v === 'browse') {
@@ -702,12 +750,22 @@ function captureAppState(viewOverride) {
   } else if (v === 'club') {
     s.clubName   = document.getElementById('sel-club').value;
     s.clubSeason = document.getElementById('sel-club-season').value;
+  } else if (v === 'team') {
+    s.teamKey = CURRENT_TEAM_KEY;
   }
   return s;
 }
 function applyAppState(s) {
   if (!s || !s.view) return;
   var viewOrder = ['browse','club','player','migration'];
+  if (s.view === 'team') {
+    document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
+    document.querySelectorAll('.tab-btn').forEach(function(el){el.classList.remove('active');});
+    document.getElementById('view-team').classList.add('active');
+    if (s.teamKey) renderTeam(s.teamKey);
+    window.scrollTo({top:0, behavior:'smooth'});
+    return;
+  }
   document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
   document.querySelectorAll('.tab-btn').forEach(function(el){el.classList.remove('active');});
   document.getElementById('view-'+s.view).classList.add('active');
@@ -840,17 +898,17 @@ function onBrowseRender(){
 // Shared first-6-column widths for skater/goalie browse tables so columns align.
 const BROWSE_SHARED_COLS='<col style="width:3%"><col style="width:20%"><col style="width:4%"><col style="width:19%"><col style="width:9%"><col style="width:5%">';
 function renderSkaterTable(entries,showTeamDiv,tableId){
-  const cols=showTeamDiv?['Rk','Player','#','Team','Division','GP','G','A','PTS','PIM','PPG','Pts/GP']:['Rk','Player','#','GP','G','A','PTS','PIM','PPG','Pts/GP'];
+  const cols=showTeamDiv?['Rk','Player','#','Team','Division','GP','G','A','PTS','PIM','PPG','SHG','Pts/GP']:['Rk','Player','#','GP','G','A','PTS','PIM','PPG','SHG','Pts/GP'];
   const makeRow=(e,i)=>{
     const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
     const pts=entryPts(e);
     const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer('+e.playerId+')">'+escHtml(e.playerName)+byLabel(e.playerId)+'</span>'),td(e.jersey||'','jersey')];
-    if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToBrowseTeam(\''+escAttr(e.teamKey)+'\')">'+escHtml(e.team)+'</span>'),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
-    base.push(td(e.GP||0,'num'),td(e.G||0,'num'),td(e.A||0,'num'),td(pts,'num pts'),td(e.PIM||0,'num'),td(e.PPG||0,'num'),td(entryPtsPerGame(e),'num'));
+    if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToTeam(\''+escAttr(e.teamKey)+'\')">'+escHtml(e.team)+'</span>'),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
+    base.push(td(e.GP||0,'num'),td(e.G||0,'num'),td(e.A||0,'num'),td(pts,'num pts'),td(e.PIM||0,'num'),td(e.PPG||0,'num'),td(e.SHG||0,'num'),td(entryPtsPerGame(e),'num'));
     return '<tr>'+base.join('')+'</tr>';
   };
   const hdrs=cols.map((c,i)=>{const r=i>=(showTeamDiv?5:3)?' style="text-align:right"':'';return '<th data-col="'+c+'"'+r+'>'+c+'</th>';}).join('');
-  const cg=showTeamDiv?'<colgroup>'+BROWSE_SHARED_COLS+'<col style="width:6%"><col style="width:6%"><col style="width:7%"><col style="width:6%"><col style="width:6%"><col style="width:9%"></colgroup>':'';
+  const cg=showTeamDiv?'<colgroup>'+BROWSE_SHARED_COLS+'<col style="width:6%"><col style="width:6%"><col style="width:7%"><col style="width:6%"><col style="width:5%"><col style="width:5%"><col style="width:8%"></colgroup>':'';
   const tableStyle=showTeamDiv?' style="table-layout:fixed;width:100%"':'';
   return '<div class="table-wrap"><table id="'+(tableId||'t')+'"'+tableStyle+'>'+cg+'<thead><tr>'+hdrs+'</tr></thead><tbody>'+entries.map(makeRow).join('')+'</tbody></table></div>';
 }
@@ -878,8 +936,8 @@ function attachSortHandlers(tableId,entries,showTeamDiv){
         const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
         const pts=entryPts(e);
         const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer('+e.playerId+')">'+escHtml(e.playerName)+byLabel(e.playerId)+'</span>'),td(e.jersey||'','jersey')];
-        if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToBrowseTeam(\''+escAttr(e.teamKey)+'\')">'+escHtml(e.team)+'</span>'),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
-        base.push(td(e.GP||0,'num'),td(e.G||0,'num'),td(e.A||0,'num'),td(pts,'num pts'),td(e.PIM||0,'num'),td(e.PPG||0,'num'),td(entryPtsPerGame(e),'num'));
+        if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToTeam(\''+escAttr(e.teamKey)+'\')">'+escHtml(e.team)+'</span>'),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
+        base.push(td(e.GP||0,'num'),td(e.G||0,'num'),td(e.A||0,'num'),td(pts,'num pts'),td(e.PIM||0,'num'),td(e.PPG||0,'num'),td(e.SHG||0,'num'),td(entryPtsPerGame(e),'num'));
         return '<tr>'+base.join('')+'</tr>';
       }).join('');
       table.querySelectorAll('th').forEach(t=>t.classList.remove('sort-asc','sort-desc'));
@@ -895,7 +953,7 @@ function renderGoalieTable(entries,showTeamDiv,tableId){
   const makeRow=(e,i)=>{
     const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
     const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer('+e.playerId+')">'+escHtml(e.playerName)+byLabel(e.playerId)+'</span>'),td(e.jersey||'','jersey')];
-    if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToBrowseTeam(\''+escAttr(e.teamKey)+'\')">'+escHtml(e.team)+'</span>'),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
+    if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToTeam(\''+escAttr(e.teamKey)+'\')">'+escHtml(e.team)+'</span>'),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
         base.push(td(e.GP||0,'num'),td(entryShots(e),'num'),td(entryGA(e),'num'),td(entryGAADisplay(e),'num'),td(entrySavePct(e)||'—','num'),td(e.SO!=null?e.SO:'','num'));
     return '<tr>'+base.join('')+'</tr>';
   };
@@ -927,7 +985,7 @@ function attachGoalieSortHandlers(tableId,entries,showTeamDiv){
       tbody.innerHTML=entries.map((e,i)=>{
         const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
         const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer('+e.playerId+')">'+escHtml(e.playerName)+byLabel(e.playerId)+'</span>'),td(e.jersey||'','jersey')];
-        if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToBrowseTeam(\''+escAttr(e.teamKey)+'\')">'+escHtml(e.team)+'</span>'),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
+        if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToTeam(\''+escAttr(e.teamKey)+'\')">'+escHtml(e.team)+'</span>'),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
         base.push(td(e.GP||0,'num'),td(entryShots(e),'num'),td(entryGA(e),'num'),td(entryGAADisplay(e),'num'),td(entrySavePct(e)||'—','num'),td(e.SO!=null?e.SO:'','num'));
         return '<tr>'+base.join('')+'</tr>';
       }).join('');
@@ -1107,7 +1165,7 @@ function renderClubSeason(club, season, teams, content) {
   const teamCards = teams.map(t => {
     const tPlayers = new Set(t.entries.map(e => e.playerId));
     const league = APP.leagueById[t.leagueId];
-    return `<div class="club-team-card" data-team-key="${escHtml(t.key)}" onclick="showTeamRoster('${escAttr(t.key)}')">
+    return `<div class="club-team-card" data-team-key="${escHtml(t.key)}" onclick="goToTeam('${escAttr(t.key)}')">
       <div class="ctc-name">${escHtml(t.short)}</div>
       <div class="ctc-div"><span class="div-badge">${escHtml(t.division)}</span>${league ? ` <span class="div-badge">${escHtml(league.name)}</span>` : ''}</div>
       <div class="ctc-stats">
@@ -1375,6 +1433,7 @@ function goToPlayer(playerId) {
   renderPlayerHistory(playerId);
 }
 
+// Kept for history entries written before the team page existed.
 function goToBrowseTeam(key) {
   const match = ALL_ENTRIES.filter(e => e.teamKey === key)[0];
   if (!match) return;
@@ -1421,6 +1480,7 @@ function renderPlayerHistory(playerId) {
   const totalPts = sum(skaterEntries, entryPts);
   const totalPIM = sum(skaterEntries, e => parseInt(e.PIM));
   const totalPPG = sum(skaterEntries, e => parseInt(e.PPG));
+  const totalSHG = sum(skaterEntries, e => parseInt(e.SHG));
   const goalieGP = sum(goalieEntries, e => parseInt(e.GP));
   const goalieGA = sum(goalieEntries, entryGA);
 
@@ -1434,6 +1494,7 @@ function renderPlayerHistory(playerId) {
       + '<div class="stat-card"><div class="stat-val" style="color:var(--accent2)">' + totalPts + '</div><div class="stat-lbl">Points</div></div>'
       + '<div class="stat-card"><div class="stat-val">' + totalPIM + '</div><div class="stat-lbl">PIM</div></div>'
       + '<div class="stat-card"><div class="stat-val">' + totalPPG + '</div><div class="stat-lbl">PP Goals</div></div>'
+      + (totalSHG ? '<div class="stat-card"><div class="stat-val">' + totalSHG + '</div><div class="stat-lbl">SH Goals</div></div>' : '')
       + (isTwoWay ? '<div class="stat-card"><div class="stat-val">' + goalieGP + '</div><div class="stat-lbl">Goalie GP</div></div>'
         + '<div class="stat-card"><div class="stat-val">' + goalieGA + '</div><div class="stat-lbl">Goals Allowed</div></div>' : '')
       + '</div>';
@@ -1451,7 +1512,7 @@ function renderPlayerHistory(playerId) {
     ? '<div class="alias-note">Also listed as ' + player.aliases.map(escHtml).join(', ') + '</div>' : '';
 
   const R = 'style="text-align:right"';
-  const teamLink = e => '<span class="team-link" onclick="goToBrowseTeam(\'' + escAttr(e.teamKey) + '\')">' + escHtml(e.team) + '</span>';
+  const teamLink = e => '<span class="team-link" onclick="goToTeam(\'' + escAttr(e.teamKey) + '\')">' + escHtml(e.team) + '</span>';
   const skaterRow = e =>
     '<tr>'
     + '<td>' + teamLink(e) + '</td>'
@@ -1531,9 +1592,11 @@ function renderPlayerHistory(playerId) {
 
   content.innerHTML = '<div class="player-history-header"><h2>' + escHtml(player.name) + bornLabel(playerId) + '</h2>'
     + (isTwoWay ? '<span class="div-badge">⛸ + 🥅 Two-Way</span>' : isGoalie ? '<span class="div-badge">🥅 Goalie</span>' : '')
-    + '</div>' + aliasNote + summaryCards + seasonSections;
+    + '</div>' + aliasNote + summaryCards + seasonSections
+    + '<div id="linemates"></div>';
 
   renderGameLogs(playerId, seasons);
+  renderLinemates(playerId, seasons);
 }
 
 // ── Game log ──────────────────────────────────────────────────────────────
@@ -1580,9 +1643,11 @@ function renderGameLogTable(season, games) {
     var mark = [];
     if (g.ppg) mark.push('<span class="strength-tag" title="Power play goals">PP' + (g.ppg > 1 ? '×' + g.ppg : '') + '</span>');
     if (g.shg) mark.push('<span class="strength-tag" title="Short-handed goals">SH' + (g.shg > 1 ? '×' + g.shg : '') + '</span>');
-    return '<tr>'
+    return '<tr class="game-link" onclick="openBoxScore(' + g.season + ',\'' + g.game + '\')">'
       + '<td class="log-date">' + escHtml(formatGameDate(g.date)) + '</td>'
-      + '<td>' + (g.home ? '<span class="log-vs">vs</span> ' : '<span class="log-vs">@</span> ') + escHtml(oppName) + '</td>'
+      + '<td>' + (g.home ? '<span class="log-vs">vs</span> ' : '<span class="log-vs">@</span> ')
+      + '<span class="team-link" onclick="event.stopPropagation();goToTeam(\''
+      + escAttr(teamKey(g.season, g.opp)) + '\')">' + escHtml(oppName) + '</span></td>'
       + '<td class="log-class">' + escHtml(gameClassLabel(g['class'])) + '</td>'
       + '<td class="num"><span class="' + cls + '">' + result + '</span> ' + g['for'] + '–' + g.against + '</td>'
       + (g.goalie
@@ -1722,6 +1787,484 @@ function boot() {
 }
 
 boot();
+
+// ════════════════════════════════════════
+// VIEW 5: Team
+// ════════════════════════════════════════
+// A season's worth of one team: where it finished, every game it played or is
+// due to play, when it scores, and who was on it. Everything here comes from
+// one season shard, fetched on demand -- the team page is the first thing in
+// the app that needs game-level detail.
+var CURRENT_TEAM_KEY = null;
+
+function goToTeam(key) {
+  CURRENT_TEAM_KEY = key;
+  document.querySelectorAll('.view').forEach(function(el) { el.classList.remove('active'); });
+  document.querySelectorAll('.tab-btn').forEach(function(el) { el.classList.remove('active'); });
+  document.getElementById('view-team').classList.add('active');
+  history.pushState({ view: 'team', teamKey: key }, '');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  renderTeam(key);
+}
+
+// Every game a team appears in that season, oldest first.
+function teamGames(season, teamId, games) {
+  var out = [];
+  Object.keys(games).forEach(function(id) {
+    var g = games[id];
+    if (g.home !== teamId && g.away !== teamId) return;
+    var home = g.home === teamId;
+    var played = g.hg != null && g.ag != null;
+    out.push({
+      id: id, game: g, home: home, played: played,
+      opp: home ? g.away : g.home,
+      oppName: home ? g.awayName : g.homeName,
+      gf: played ? (home ? g.hg : g.ag) : null,
+      ga: played ? (home ? g.ag : g.hg) : null
+    });
+  });
+  return out.sort(function(a, b) { return (a.game.date || '').localeCompare(b.game.date || ''); });
+}
+
+function resultOf(row) {
+  if (!row.played) return null;
+  return row.gf > row.ga ? 'W' : (row.gf < row.ga ? 'L' : 'T');
+}
+
+function renderTeam(key) {
+  var host = document.getElementById('team-content');
+  var team = APP.teamByKey[key];
+  if (!team) { host.innerHTML = '<div class="empty"><div class="icon">❌</div>Team not found.</div>'; return; }
+
+  var div = APP.divisionById[team.division];
+  var league = APP.leagueById[team.league];
+  var standing = APP.standingsByKey[key];
+  var roster = ALL_ENTRIES.filter(function(e) { return e.teamKey === key; });
+
+  var record = '';
+  if (standing && standing.gp) {
+    var parts = [standing.w, standing.l];
+    var labels = 'W-L';
+    if (standing.t) { parts.push(standing.t); labels += '-T'; }
+    if (standing.otl) { parts.push(standing.otl); labels += '-OTL'; }
+    // The league's own table, which counts the regular season only. The
+    // schedule below counts everything, so the two game counts differ and the
+    // label has to say which is which.
+    record = '<div class="panel-title" style="margin-bottom:8px">League standings · regular season</div>'
+      + '<div class="club-totals-bar">'
+      + '<div class="ctb-item"><span class="ctb-val">' + parts.join('-') + '</span><span class="ctb-lbl">' + labels + '</span></div>'
+      + '<div class="ctb-item"><span class="ctb-val">' + standing.gp + '</span><span class="ctb-lbl">Games</span></div>'
+      + '<div class="ctb-item" style="color:var(--accent2)"><span class="ctb-val">' + standing.pts + '</span><span class="ctb-lbl">Points</span></div>'
+      + '<div class="ctb-item"><span class="ctb-val">' + standing.gf + '</span><span class="ctb-lbl">Goals For</span></div>'
+      + '<div class="ctb-item"><span class="ctb-val">' + standing.ga + '</span><span class="ctb-lbl">Goals Against</span></div>'
+      + '</div>';
+  }
+
+  host.innerHTML =
+    '<div class="team-head"><h2>' + escHtml(teamName(team)) + '</h2>'
+    + '<span class="season-badge">' + SEASON_LABELS[team.season] + '</span>'
+    + (div ? '<span class="div-badge">' + escHtml(div.name) + '</span>' : '')
+    + (league ? '<span class="div-badge">' + escHtml(league.name) + '</span>' : '')
+    + '</div>'
+    + '<div class="team-sub">'
+    + '<span class="team-link" onclick="goToClub(\'' + escAttr(team.club) + '\',' + team.season + ')">'
+    + escHtml(clubDisplayName(team.club)) + '</span>'
+    + (standing && standing.gp ? '' : ' · no standings published')
+    + '</div>'
+    + record
+    + '<div id="team-schedule"><div class="log-loading">Loading games…</div></div>'
+    + '<div id="team-periods"></div>'
+    + '<div id="team-roster"></div>';
+
+  renderTeamRoster(roster);
+
+  loadSeasonGames(team.season).then(function(games) {
+    var rows = teamGames(team.season, team.id, games);
+    renderTeamSchedule(rows, team);
+    renderTeamPeriods(rows, team);
+  }).catch(function(err) {
+    document.getElementById('team-schedule').innerHTML =
+      '<div class="log-loading">Games unavailable (' + escHtml(err.message) + ')</div>';
+  });
+}
+
+function renderTeamSchedule(rows, team) {
+  var host = document.getElementById('team-schedule');
+  if (!rows.length) {
+    host.innerHTML = '<div class="panel"><div class="panel-title">Schedule</div>'
+      + '<p style="color:var(--muted);padding:4px 2px">No games recorded for this team.</p></div>';
+    return;
+  }
+  var played = rows.filter(function(r) { return r.played; });
+  var wins = played.filter(function(r) { return resultOf(r) === 'W'; }).length;
+  var losses = played.filter(function(r) { return resultOf(r) === 'L'; }).length;
+  var ties = played.length - wins - losses;
+
+  var body = rows.map(function(r) {
+    var res = resultOf(r);
+    var cls = res === 'W' ? 'res-w' : res === 'L' ? 'res-l' : 'res-t';
+    var opp = APP.teamByKey[teamKey(team.season, r.opp)];
+    return '<tr class="game-link" onclick="openBoxScore(' + team.season + ',\'' + r.id + '\')">'
+      + '<td class="log-date">' + escHtml(formatGameDate(r.game.date)) + '</td>'
+      + '<td>' + (r.home ? '<span class="log-vs">vs</span> ' : '<span class="log-vs">@</span> ')
+      + escHtml(opp ? teamName(opp) : (r.oppName || 'Unknown')) + '</td>'
+      + '<td class="log-class">' + escHtml(gameClassLabel(r.game['class'])) + '</td>'
+      + '<td class="num">' + (r.played
+          ? '<span class="' + cls + '">' + res + '</span> ' + r.gf + '–' + r.ga
+          : '<span class="sched">' + escHtml(r.game.time || 'scheduled') + '</span>') + '</td>'
+      + '<td class="log-class">' + escHtml(r.game.rink || '') + '</td>'
+      + '</tr>';
+  }).join('');
+
+  host.innerHTML = '<div class="panel"><div class="section-heading" style="margin-bottom:12px">'
+    + '<h2 style="font-size:1rem">Schedule &amp; Results</h2>'
+    + '<span class="badge">' + played.length + ' played'
+    + (played.length ? ' · ' + wins + '-' + losses + (ties ? '-' + ties : '') : '')
+    + (rows.length > played.length ? ' · ' + (rows.length - played.length) + ' upcoming' : '')
+    + '</span></div>'
+    + '<div class="table-wrap"><table><thead><tr>'
+    + '<th>Date</th><th>Opponent</th><th>Type</th>'
+    + '<th style="text-align:right">Result</th><th>Rink</th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
+}
+
+// ── Scoring by period ─────────────────────────────────────────────────────
+// Period scores are recorded for every game, so this is one of the few things
+// in the app with no coverage caveat attached.
+function renderTeamPeriods(rows, team) {
+  var host = document.getElementById('team-periods');
+  var forBy = {}, againstBy = {}, periods = {};
+  var counted = 0;
+  rows.forEach(function(r) {
+    var p = r.game.periods;
+    if (!r.played || !p) return;
+    var mine = p[r.home ? 'home' : 'away'] || {};
+    var theirs = p[r.home ? 'away' : 'home'] || {};
+    var any = false;
+    Object.keys(mine).forEach(function(k) { forBy[k] = (forBy[k] || 0) + mine[k]; periods[k] = true; any = true; });
+    Object.keys(theirs).forEach(function(k) { againstBy[k] = (againstBy[k] || 0) + theirs[k]; periods[k] = true; any = true; });
+    if (any) counted++;
+  });
+
+  var keys = Object.keys(periods).sort(function(a, b) {
+    var na = parseInt(a), nb = parseInt(b);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return String(a).localeCompare(String(b));
+  });
+  if (!keys.length) { host.innerHTML = ''; return; }
+
+  var cells = keys.map(function(k) {
+    var f = forBy[k] || 0, a = againstBy[k] || 0;
+    var diff = f - a;
+    var colour = diff > 0 ? 'var(--green)' : (diff < 0 ? 'var(--red,#e5484d)' : 'var(--text)');
+    return '<div class="period-cell">'
+      + '<div class="pc-lbl">' + escHtml(periodLabel(k)) + '</div>'
+      + '<div class="pc-val" style="color:' + colour + '">' + (diff > 0 ? '+' : '') + diff + '</div>'
+      + '<div class="pc-split">' + f + ' for · ' + a + ' against</div>'
+      + '</div>';
+  }).join('');
+
+  host.innerHTML = '<div class="panel"><div class="section-heading" style="margin-bottom:12px">'
+    + '<h2 style="font-size:1rem">Scoring by Period</h2>'
+    + '<span class="badge">' + counted + ' game' + (counted !== 1 ? 's' : '') + '</span></div>'
+    + '<div class="period-grid">' + cells + '</div></div>';
+}
+
+function periodLabel(p) {
+  return { '1': '1st', '2': '2nd', '3': '3rd', '4': 'OT', 'OT': 'OT', 'SO': 'SO' }[String(p)] || String(p);
+}
+
+function renderTeamRoster(roster) {
+  var host = document.getElementById('team-roster');
+  var skaters = roster.filter(function(e) { return e.type === 'skater'; })
+    .sort(function(a, b) { return entryPts(b) - entryPts(a); });
+  var goalies = roster.filter(function(e) { return e.type === 'goalie'; })
+    .sort(function(a, b) { return entryGAA(a) - entryGAA(b); });
+  if (!skaters.length && !goalies.length) {
+    host.innerHTML = '<div class="panel"><div class="panel-title">Roster</div>'
+      + '<p style="color:var(--muted);padding:4px 2px">No roster recorded — the games'
+      + ' counted filter may be excluding them.</p></div>';
+    return;
+  }
+  var skaterRows = skaters.map(function(e, i) {
+    return '<tr><td class="num">' + (i + 1) + '</td>'
+      + '<td class="player-link" onclick="goToPlayer(' + e.playerId + ')">'
+      + escHtml(e.playerName) + byLabel(e.playerId) + '</td>'
+      + '<td class="jersey">' + escHtml(e.jersey) + '</td>'
+      + '<td class="num">' + (e.GP || 0) + '</td><td class="num">' + (e.G || 0) + '</td>'
+      + '<td class="num">' + (e.A || 0) + '</td><td class="num pts">' + entryPts(e) + '</td>'
+      + '<td class="num">' + (e.PIM || 0) + '</td><td class="num">' + (e.PPG || 0) + '</td>'
+      + '<td class="num">' + (e.SHG || 0) + '</td>'
+      + '<td class="num">' + entryPtsPerGame(e) + '</td></tr>';
+  }).join('');
+  var goalieRows = goalies.map(function(e, i) {
+    return '<tr><td class="num">' + (i + 1) + '</td>'
+      + '<td class="player-link" onclick="goToPlayer(' + e.playerId + ')">'
+      + escHtml(e.playerName) + byLabel(e.playerId) + '</td>'
+      + '<td class="jersey">' + escHtml(e.jersey) + '</td>'
+      + '<td class="num">' + (e.GP || 0) + '</td>'
+      + '<td class="num">' + entryShots(e) + '</td><td class="num">' + entryGA(e) + '</td>'
+      + '<td class="num">' + entryGAADisplay(e) + '</td>'
+      + '<td class="num" style="color:var(--green)">' + (entrySavePct(e) || '—') + '</td>'
+      + '<td class="num">' + (e.SO != null ? e.SO : '') + '</td></tr>';
+  }).join('');
+
+  host.innerHTML = '<div class="panel"><div class="panel-title">Roster</div>'
+    + (skaters.length ? '<div class="table-wrap"><table><thead><tr>'
+        + '<th style="text-align:right">Rk</th><th>Player</th><th>#</th>'
+        + '<th style="text-align:right">GP</th><th style="text-align:right">G</th>'
+        + '<th style="text-align:right">A</th><th style="text-align:right">PTS</th>'
+        + '<th style="text-align:right">PIM</th><th style="text-align:right">PPG</th>'
+        + '<th style="text-align:right">SHG</th><th style="text-align:right">Pts/GP</th>'
+        + '</tr></thead><tbody>' + skaterRows + '</tbody></table></div>' : '')
+    + (goalies.length ? '<div class="panel-title" style="margin-top:18px">Goaltending</div>'
+        + '<div class="table-wrap"><table><thead><tr>'
+        + '<th style="text-align:right">Rk</th><th>Goalie</th><th>#</th>'
+        + '<th style="text-align:right">GP</th><th style="text-align:right">Shots</th>'
+        + '<th style="text-align:right">GA</th><th style="text-align:right">GAA</th>'
+        + '<th style="text-align:right">Save%</th><th style="text-align:right">SO</th>'
+        + '</tr></thead><tbody>' + goalieRows + '</tbody></table></div>' : '')
+    + '</div>';
+}
+
+function goToClub(club, season) {
+  document.querySelectorAll('.view').forEach(function(el) { el.classList.remove('active'); });
+  document.querySelectorAll('.tab-btn').forEach(function(el) { el.classList.remove('active'); });
+  document.getElementById('view-club').classList.add('active');
+  document.querySelectorAll('.tab-btn')[1].classList.add('active');
+  refreshClubOptions();
+  document.getElementById('sel-club').value = club;
+  document.getElementById('sel-club-season').value = season || '';
+  renderClub();
+  history.pushState({ view: 'club', clubName: club, clubSeason: String(season || '') }, '');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+
+// ════════════════════════════════════════
+// Box score
+// ════════════════════════════════════════
+function openBoxScore(season, gameId) {
+  var modal = document.getElementById('box-score');
+  var body = document.getElementById('box-score-body');
+  body.innerHTML = '<div class="log-loading">Loading box score…</div>';
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  loadSeasonGames(season).then(function(games) {
+    var g = games[String(gameId)];
+    if (!g) { body.innerHTML = '<div class="empty"><div class="icon">❌</div>Game not found.</div>'; return; }
+    body.innerHTML = renderBoxScore(season, g);
+  }).catch(function(err) {
+    body.innerHTML = '<div class="log-loading">Box score unavailable (' + escHtml(err.message) + ')</div>';
+  });
+}
+
+function closeBoxScore() {
+  document.getElementById('box-score').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeBoxScore();
+});
+
+function renderBoxScore(season, g) {
+  var home = APP.teamByKey[teamKey(season, g.home)];
+  var away = APP.teamByKey[teamKey(season, g.away)];
+  var homeName = home ? teamName(home) : (g.homeName || 'Home');
+  var awayName = away ? teamName(away) : (g.awayName || 'Away');
+  var played = g.hg != null && g.ag != null;
+
+  var periods = periodKeys(g);
+  var lineScore = '<div class="table-wrap"><table><thead><tr><th>Team</th>'
+    + periods.map(function(p) { return '<th style="text-align:right">' + escHtml(periodLabel(p)) + '</th>'; }).join('')
+    + '<th style="text-align:right">Final</th></tr></thead><tbody>'
+    + [['away', awayName, g.ag], ['home', homeName, g.hg]].map(function(row) {
+        var side = row[0], name = row[1], total = row[2];
+        var scores = (g.periods || {})[side] || {};
+        return '<tr><td class="box-side">' + escHtml(name) + '</td>'
+          + periods.map(function(p) {
+              return '<td class="num">' + (scores[p] != null ? scores[p] : '–') + '</td>';
+            }).join('')
+          + '<td class="num pts">' + (total != null ? total : '–') + '</td></tr>';
+      }).join('')
+    + '</tbody></table></div>';
+
+  var meta = [formatGameDate(g.date), g.time, g.rink, gameClassLabel(g['class']), g.level]
+    .filter(Boolean).map(escHtml).join(' · ');
+
+  return '<div class="box-head">'
+    + '<div class="box-score-line">' + escHtml(awayName) + ' '
+    + (played ? g.ag + ' – ' + g.hg : 'vs') + ' ' + escHtml(homeName) + '</div>'
+    + '</div><div class="box-meta">' + meta
+    + (played ? '' : ' · <span class="sched">not played yet</span>') + '</div>'
+    + (played ? lineScore : '')
+    + renderGoalList(season, g, homeName, awayName)
+    + renderPenaltyList(season, g, homeName, awayName);
+}
+
+function periodKeys(g) {
+  var seen = {};
+  Object.keys(g.periods || {}).forEach(function(side) {
+    Object.keys(g.periods[side] || {}).forEach(function(p) { seen[p] = true; });
+  });
+  var keys = Object.keys(seen);
+  if (!keys.length) return ['1', '2', '3'];
+  return keys.sort(function(a, b) {
+    var na = parseInt(a), nb = parseInt(b);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return String(a).localeCompare(String(b));
+  });
+}
+
+//: Strengths the scoresheet system sets itself when a goal is scored during a
+//: penalty. They are recorded rather than typed, so they are worth showing.
+var STRENGTH_LABELS = {
+  PP: 'Power play', SH: 'Short-handed', EN: 'Empty net',
+  '5/3': '5-on-3', '4/4': '4-on-4', PS: 'Penalty shot'
+};
+
+function strengthTag(code) {
+  if (!code) return '';
+  var label = STRENGTH_LABELS[code] || code;
+  return ' <span class="strength-tag" title="' + escHtml(label) + '">' + escHtml(code) + '</span>';
+}
+
+function playerLink(id, fallback) {
+  var p = id ? APP.playerById[id] : null;
+  if (!p) return escHtml(fallback || 'Unknown');
+  return '<span class="player-link" onclick="closeBoxScore();goToPlayer(' + id + ')">'
+    + escHtml(p.name) + '</span>';
+}
+
+function renderGoalList(season, g, homeName, awayName) {
+  if (!g.goals || !g.goals.length) {
+    return '<div class="box-sect">Scoring</div>'
+      + '<p style="color:var(--muted);font-size:.85rem">No goals recorded.</p>';
+  }
+  var rows = g.goals.slice().sort(function(a, b) {
+    var pa = parseInt(a.per) || 0, pb = parseInt(b.per) || 0;
+    if (pa !== pb) return pa - pb;
+    return (b.sec || 0) - (a.sec || 0);   // clocks count down
+  }).map(function(goal) {
+    var assists = (goal.assists || []).map(function(id) { return playerLink(id); });
+    return '<tr>'
+      + '<td class="log-class">' + escHtml(periodLabel(goal.per)) + '</td>'
+      + '<td class="log-date">' + escHtml(goal.time || '') + '</td>'
+      + '<td class="box-side">' + escHtml(goal.side === 'home' ? homeName : awayName) + '</td>'
+      + '<td>' + playerLink(goal.by, goal.byNo ? '#' + goal.byNo : null) + strengthTag(goal.str)
+      + (assists.length ? '<div class="goal-assists">' + assists.join(', ') + '</div>' : '')
+      + '</td></tr>';
+  }).join('');
+  return '<div class="box-sect">Scoring</div>'
+    + '<div class="table-wrap"><table><tbody>' + rows + '</tbody></table></div>';
+}
+
+function renderPenaltyList(season, g, homeName, awayName) {
+  if (!g.penalties || !g.penalties.length) return '';
+  var rows = g.penalties.slice().sort(function(a, b) {
+    return (parseInt(a.per) || 0) - (parseInt(b.per) || 0);
+  }).map(function(pen) {
+    return '<tr>'
+      + '<td class="log-class">' + escHtml(periodLabel(pen.per)) + '</td>'
+      + '<td class="log-date">' + escHtml(pen.off || pen.start || '') + '</td>'
+      + '<td class="box-side">' + escHtml(pen.side === 'home' ? homeName : awayName) + '</td>'
+      + '<td>' + playerLink(pen.by, pen.byNo ? '#' + pen.byNo : null) + '</td>'
+      + '<td>' + escHtml(pen.inf || '') + '</td>'
+      + '<td class="num">' + (pen.min != null ? pen.min : '') + '</td>'
+      + '</tr>';
+  }).join('');
+  return '<div class="box-sect">Penalties</div>'
+    + '<div class="table-wrap"><table><thead><tr>'
+    + '<th></th><th>Time</th><th>Team</th><th>Player</th><th>Infraction</th>'
+    + '<th style="text-align:right">Min</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+
+// ════════════════════════════════════════
+// Linemates
+// ════════════════════════════════════════
+// Who a player scores with, in both directions: the goals they finished off
+// somebody's pass, and the goals somebody finished off theirs. Only 71% of
+// goals carry an assist at all, so the counts are a floor rather than a
+// complete picture, and the panel says so.
+function renderLinemates(playerId, seasons) {
+  var host = document.getElementById('linemates');
+  if (!host) return;
+  host.innerHTML = '<div class="log-loading">Working out linemates…</div>';
+
+  Promise.all(seasons.map(loadSeasonGames)).then(function(all) {
+    var classes = classFilter();
+    var league = FILTERS.league ? parseInt(FILTERS.league) : null;
+    var fedMe = {}, iFed = {}, myGoals = 0, myAssists = 0, assisted = 0;
+
+    all.forEach(function(games) {
+      Object.keys(games).forEach(function(id) {
+        var g = games[id];
+        if (classes && !classes[g['class']]) return;
+        if (league && g.league !== league) return;
+        (g.goals || []).forEach(function(goal) {
+          var assists = goal.assists || [];
+          if (goal.by === playerId) {
+            myGoals++;
+            if (assists.length) assisted++;
+            assists.forEach(function(a) { fedMe[a] = (fedMe[a] || 0) + 1; });
+          } else if (assists.indexOf(playerId) !== -1) {
+            myAssists++;
+            if (goal.by) iFed[goal.by] = (iFed[goal.by] || 0) + 1;
+          }
+        });
+      });
+    });
+
+    if (!myGoals && !myAssists) {
+      host.innerHTML = '<div class="panel"><div class="panel-title">Linemates</div>'
+        + '<p style="color:var(--muted);font-size:.85rem">No goals or assists in the '
+        + 'games currently counted.</p></div>';
+      return;
+    }
+
+    host.innerHTML = '<div class="panel">'
+      + '<div class="section-heading" style="margin-bottom:12px">'
+      + '<h2 style="font-size:1rem">Linemates</h2>'
+      + '<span class="badge">' + myGoals + ' goals · ' + myAssists + ' assists</span></div>'
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:22px">'
+      + mateColumn('Set up their goals', iFed)
+      + mateColumn('Assisted on their goals', fedMe)
+      + '</div>'
+      + '<div style="color:var(--muted);font-size:.78rem;margin-top:14px">'
+      + (myGoals ? assisted + ' of ' + myGoals + ' of their goals carry a recorded assist. ' : '')
+      + 'Assists are recorded on about 71% of goals overall, so these are a floor.'
+      + '</div></div>';
+  }).catch(function(err) {
+    host.innerHTML = '<div class="log-loading">Linemates unavailable ('
+      + escHtml(err.message) + ')</div>';
+  });
+}
+
+function mateColumn(title, counts) {
+  var list = Object.keys(counts).map(function(id) {
+    return { id: parseInt(id), n: counts[id] };
+  }).sort(function(a, b) { return b.n - a.n; }).slice(0, 10);
+  if (!list.length) {
+    return '<div><div class="panel-title">' + escHtml(title) + '</div>'
+      + '<p style="color:var(--muted);font-size:.85rem">None recorded.</p></div>';
+  }
+  var top = list[0].n;
+  return '<div><div class="panel-title">' + escHtml(title) + '</div>'
+    + list.map(function(m) {
+        var p = APP.playerById[m.id];
+        return '<div class="mate-row">'
+          + '<span class="mate-n">' + m.n + '×</span>'
+          + '<span class="mate-bar" style="width:' + Math.round(70 * m.n / top) + 'px"></span>'
+          + '<span class="player-link" onclick="goToPlayer(' + m.id + ')">'
+          + escHtml(p ? p.name : ('#' + m.id)) + '</span>'
+          + (p ? byLabel(m.id) : '') + '</div>';
+      }).join('')
+    + '</div>';
+}
+
 
 // ════════════════════════════════════════
 // VIEW 4: Player Flow / Migration
