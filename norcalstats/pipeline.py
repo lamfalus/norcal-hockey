@@ -1302,29 +1302,48 @@ def refine_season_years(conn: sqlite3.Connection) -> int:
     which print only "Fri Aug 29". Once any scoresheet in a season has been
     parsed, its dates settle the start year definitively -- so a season whose
     year had to be guessed is corrected as soon as the first game is played.
+
+    The year every game agrees on wins, not the earliest one. Taking the minimum
+    means a single bad date decides the season: nine games carrying a 2010 date,
+    out of 1,647, moved S29 to "Fall 2009" and dragged 797 scheduled games back
+    with it. Since the start year is what birth years are inferred from, that
+    then split real children into two and three people apiece and raised
+    thousands of review questions. A vote cannot be swung by nine rows.
     """
     corrected = 0
     rows = conn.execute("""
         SELECT g.season_id,
-               MIN(g.date_iso) AS earliest,
-               s.start_year    AS start_year
+               s.start_year AS start_year,
+               CASE WHEN CAST(substr(g.date_iso, 6, 2) AS INTEGER) >= ?
+                    THEN CAST(substr(g.date_iso, 1, 4) AS INTEGER)
+                    ELSE CAST(substr(g.date_iso, 1, 4) AS INTEGER) - 1
+               END AS implied,
+               COUNT(*) AS games
           FROM games g JOIN seasons s ON s.season_id = g.season_id
          WHERE g.scoresheet_at IS NOT NULL AND g.date_iso IS NOT NULL
-         GROUP BY g.season_id
-    """).fetchall()
+         GROUP BY g.season_id, implied
+    """, (_SEASON_START_MONTH,)).fetchall()
 
+    votes: dict[int, Counter] = {}
+    stored: dict[int, Optional[int]] = {}
     for row in rows:
-        year, month = int(row["earliest"][:4]), int(row["earliest"][5:7])
-        actual = year if month >= _SEASON_START_MONTH else year - 1
-        if row["start_year"] == actual:
+        votes.setdefault(row["season_id"], Counter())[row["implied"]] = row["games"]
+        stored[row["season_id"]] = row["start_year"]
+
+    for season_id, tally in votes.items():
+        actual, backing = tally.most_common(1)[0]
+        outvoted = sum(tally.values()) - backing
+        if outvoted:
+            log.debug("S%d: %d game(s) disagree with %d", season_id, outvoted, actual)
+        if stored[season_id] == actual:
             continue
-        log.info("S%d actually starts in %d (was %s); correcting",
-                 row["season_id"], actual, row["start_year"])
+        log.info("S%d actually starts in %d (was %s, %d of %d games agree); correcting",
+                 season_id, actual, stored[season_id], backing, sum(tally.values()))
         conn.execute(
             "UPDATE seasons SET start_year = ?, label = ? WHERE season_id = ?",
-            (actual, f"Fall {actual}", row["season_id"]),
+            (actual, f"Fall {actual}", season_id),
         )
-        _recompute_schedule_dates(conn, row["season_id"], actual)
+        _recompute_schedule_dates(conn, season_id, actual)
         corrected += 1
     return corrected
 

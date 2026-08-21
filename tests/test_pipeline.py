@@ -411,6 +411,56 @@ def all_tables_first(html):
     return all_tables(html)[0]
 
 
+class TestSeasonYearFromGameDates(PipelineTestCase):
+    """The year the games agree on decides the season, not the earliest one."""
+
+    _next_id = 1
+
+    def add_games(self, season, dates, *, scoresheet=True):
+        for iso in dates:
+            self.conn.execute(
+                "INSERT INTO games(game_id, season_id, league_id, date_iso,"
+                " status, scoresheet_at) VALUES (?,?,3,?,'final',?)",
+                (TestSeasonYearFromGameDates._next_id, season, iso,
+                 '2026-01-01' if scoresheet else None))
+            TestSeasonYearFromGameDates._next_id += 1
+        self.conn.commit()
+
+    def start_year(self, season):
+        return db.scalar(
+            self.conn, "SELECT start_year FROM seasons WHERE season_id = ?", (season,))
+
+    def test_a_handful_of_bad_dates_cannot_move_the_season(self):
+        # Exactly what happened to S29: nine games carrying a decade-old date,
+        # against sixteen hundred real ones. Taking the minimum moved the season
+        # to Fall 2009, which then mis-inferred every birth year derived from it.
+        self.conn.execute("UPDATE seasons SET start_year = 2023, label = 'Fall 2023'"
+                          " WHERE season_id = 31")
+        self.add_games(31, ["2010-03-06"] * 9 + ["2023-09-15"] * 200 + ["2024-02-01"] * 150)
+        pipeline.refine_season_years(self.conn)
+        self.assertEqual(self.start_year(31), 2023)
+
+    def test_a_genuinely_wrong_year_is_still_corrected(self):
+        # The guard must not stop the correction it exists for.
+        self.add_games(31, ["2022-09-10"] * 40 + ["2023-01-20"] * 30)
+        pipeline.refine_season_years(self.conn)
+        self.assertEqual(self.start_year(31), 2022)
+
+    def test_games_before_the_cutoff_month_belong_to_the_previous_season(self):
+        # A February game belongs to the season that started the previous autumn.
+        self.add_games(31, ["2026-02-14"] * 20)
+        pipeline.refine_season_years(self.conn)
+        self.assertEqual(self.start_year(31), 2025)
+
+    def test_schedule_only_games_do_not_vote(self):
+        # Their dates were guessed from the season year in the first place, so
+        # letting them vote would just confirm whatever was already believed.
+        self.add_games(31, ["2019-09-01"] * 500, scoresheet=False)
+        self.add_games(31, ["2025-09-15"] * 10)
+        pipeline.refine_season_years(self.conn)
+        self.assertEqual(self.start_year(31), 2025)
+
+
 class TestPlaceholderMigration(unittest.TestCase):
     """An existing database must heal itself without refetching."""
 
