@@ -892,18 +892,24 @@ def rebuild_clubs(conn) -> int:
     # A club is a high school only if it has never played anywhere else, so
     # this tracks whether every one of its team-seasons was in one.
     only_hs: dict[str, bool] = {}
-    assigned: list[tuple[str, int, int]] = []
+    assigned: list[tuple[str, str, int, int]] = []
     club_of: dict[tuple[int, int], str] = {}
     for row in rows:
-        club = clubs_mod.canonical_name(row["name"], row["gender"] or "coed")
-        assigned.append((club, row["team_id"], row["season_id"]))
+        # Gender is read again rather than trusted, for the same reason the club
+        # is: it was decided by a rule, and the rule can be wrong. A girls team
+        # in a co-ed division is recognised only by its own name, so widening
+        # that rule has to reach the seasons already stored.
+        gender = N.division_gender(row["division"] or "", row["name"])
+        club = clubs_mod.canonical_name(row["name"], gender)
+        assigned.append((club, gender, row["team_id"], row["season_id"]))
         club_of[(row["team_id"], row["season_id"])] = club
         leagues.setdefault(club, set()).add(row["league_id"])
-        is_hs = clubs_mod.is_high_school_division(row["division"] or "")
-        only_hs[club] = only_hs.get(club, True) and is_hs
+        only_hs[club] = (only_hs.get(club, True)
+                         and clubs_mod.is_high_school_division(row["division"] or ""))
 
     conn.executemany(
-        "UPDATE teams SET club = ? WHERE team_id = ? AND season_id = ?", assigned)
+        "UPDATE teams SET club = ?, gender = ? WHERE team_id = ? AND season_id = ?",
+        assigned)
 
     # club_seq only means anything relative to the club, so recanonicalising the
     # clubs invalidates it: teams that used to sit under three spellings now
