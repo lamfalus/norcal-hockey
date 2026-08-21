@@ -479,8 +479,11 @@ gzipped.
 Opening a player fetches one bucket, around 100 KB gzipped, covering every
 season they played.
 
-**`games/sNN.json`** — goals, penalties and period scores for a season, for box
-scores.
+**`games/sNN.json`** — every game of a season: goals, penalties and period
+scores where it has been played, and the fixture where it has not. Scheduled
+games are carried without a score, so a team page is a schedule as much as a
+record — 5,732 games are scheduled rather than final, including every one of
+the current season's.
 
 Six seasons come to 38 files and 66 MB, about 6 MB gzipped, which GitHub serves
 compressed. Transfer was never the constraint; parse time and memory on a phone
@@ -656,6 +659,21 @@ penalty minutes, and power-play or short-handed marks. One fetch of the
 player's shard covers every season they played.
 
 **Player Flow** — an alluvial diagram of movement between clubs across seasons.
+
+**Team page** — reached by clicking a team anywhere, not from the tab bar,
+since it only means anything once you have picked one. The league's standings
+row, every game played or still to come, the roster, and **scoring by period**
+as goal difference per period. The standings are labelled regular season on
+purpose: the league's table counts that alone while the schedule counts every
+class, so the two game totals differ and one of them has to say which it is.
+
+**Box score** — opens over whatever you were reading, because you always arrive
+from a schedule or a game log and want to go back to it. Line score by period,
+each goal with its time, scorer, assists and strength, and the penalties.
+
+**Linemates** — on a player page, in both directions: goals somebody set up for
+them, and goals they set up for somebody else. Assists are recorded on about
+71% of goals, so the counts are a floor and the panel says so.
 
 Two-way players are shown with both stat lines, and birth years appear as
 badges — which is not decoration: a quarter of players share a display name
