@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Iterable, Optional
 
-from . import identity, names as N, review
+from . import clubs as clubs_mod, identity, names as N, review
 from .config import Config
 from .db import Run, get_meta, now, set_meta, upsert
 from .fetch import Fetcher, FetchError, RequestCeilingReached
@@ -491,8 +491,10 @@ class Pipeline:
         # be told apart in exports.
         seen_clubs: dict[tuple[str, Optional[int]], int] = {}
         for team in teams:
-            club = N.extract_club(team.name)
             division_id = division_ids.get(team.division.name) if team.division else None
+            gender = N.division_gender(
+                team.division.name if team.division else "", team.name)
+            club = clubs_mod.canonical_name(team.name, gender)
             slot = (club, division_id)
             seen_clubs[slot] = seen_clubs.get(slot, 0) + 1
 
@@ -518,8 +520,7 @@ class Pipeline:
                     "club_seq": seen_clubs[slot], "league_id": league_id,
                     # A girls team can sit inside a co-ed division, so the
                     # team's own name matters as much as the division's.
-                    "gender": N.division_gender(
-                        team.division.name if team.division else "", team.name),
+                    "gender": gender,
                     "first_seen_at": now(),
                 },
                 keys=["team_id", "season_id"],
@@ -857,6 +858,8 @@ class Pipeline:
         resolved = resolve_ambiguous_sides(self.conn)
         if resolved:
             log.info("resolved %d ambiguous team side(s) by roster match", resolved)
+        clubs_built = rebuild_clubs(self.conn)
+        log.info("  %d club(s) from team names", clubs_built)
         log.info("resolving player identities")
         result = identity.rebuild(self.conn)
         log.info("  %(players)d players from %(names)d spellings", result)
@@ -871,6 +874,70 @@ class Pipeline:
 
 
 # --------------------------------------------------------------- derivation
+
+
+def rebuild_clubs(conn) -> int:
+    """Recompute every team's club and refill the clubs table.
+
+    Run from ``derive`` rather than at fetch time so that changing a naming
+    rule fixes the whole history without re-fetching anything: the team names
+    are already stored, and the club is only ever a reading of them.
+    """
+    rows = list(conn.execute(
+        "SELECT t.team_id, t.season_id, t.name, t.gender, t.league_id,"
+        "       d.name AS division"
+        "  FROM teams t LEFT JOIN divisions d ON d.division_id = t.division_id"))
+
+    leagues: dict[str, set[int]] = {}
+    # A club is a high school only if it has never played anywhere else, so
+    # this tracks whether every one of its team-seasons was in one.
+    only_hs: dict[str, bool] = {}
+    assigned: list[tuple[str, int, int]] = []
+    club_of: dict[tuple[int, int], str] = {}
+    for row in rows:
+        club = clubs_mod.canonical_name(row["name"], row["gender"] or "coed")
+        assigned.append((club, row["team_id"], row["season_id"]))
+        club_of[(row["team_id"], row["season_id"])] = club
+        leagues.setdefault(club, set()).add(row["league_id"])
+        is_hs = clubs_mod.is_high_school_division(row["division"] or "")
+        only_hs[club] = only_hs.get(club, True) and is_hs
+
+    conn.executemany(
+        "UPDATE teams SET club = ? WHERE team_id = ? AND season_id = ?", assigned)
+
+    # club_seq only means anything relative to the club, so recanonicalising the
+    # clubs invalidates it: teams that used to sit under three spellings now
+    # share one, and each spelling had started counting at one. Renumber by
+    # team id, which is stable across runs.
+    seq_rows = conn.execute(
+        "SELECT team_id, season_id, club, division_id FROM teams"
+        " ORDER BY season_id, club, division_id, team_id")
+    counter: dict[tuple, int] = {}
+    renumbered = []
+    for row in seq_rows:
+        slot = (row["season_id"], row["club"], row["division_id"])
+        counter[slot] = counter.get(slot, 0) + 1
+        renumbered.append((counter[slot], row["team_id"], row["season_id"]))
+    conn.executemany(
+        "UPDATE teams SET club_seq = ? WHERE team_id = ? AND season_id = ?",
+        renumbered)
+
+    # A team id is global, so one team turns up in tournament leagues too.
+    # Every appearance counts towards whether the club is one of ours.
+    for row in conn.execute("SELECT team_id, season_id, league_id FROM team_leagues"):
+        club = club_of.get((row["team_id"], row["season_id"]))
+        if club:
+            leagues[club].add(row["league_id"])
+
+    conn.execute("DELETE FROM clubs")
+    conn.executemany(
+        "INSERT INTO clubs(name, short_name, kind) VALUES (?, ?, ?)",
+        [(name, clubs_mod.short_name(name),
+          clubs_mod.classify(name, seen, only_high_school=only_hs.get(name, False)))
+         for name, seen in sorted(leagues.items())],
+    )
+    conn.commit()
+    return len(leagues)
 
 
 #: A roster match needs this many shared names, and this much of a lead over

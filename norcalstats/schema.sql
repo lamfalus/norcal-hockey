@@ -128,6 +128,19 @@ CREATE TABLE IF NOT EXISTS divisions (
     UNIQUE (season_id, league_id, name)
 );
 
+-- Clubs are derived, never fetched: the site names teams, not clubs, and it
+-- spells them differently between seasons. One row per club, holding the name
+-- everything groups by, the shorter name the app shows, and what the thing
+-- actually is -- a third of the names the site prints are playoff bracket
+-- slots, high schools, or teams from out of the area that only ever appear as
+-- somebody's opponent. All of those keep their names, because schedules and
+-- box scores need them; none belongs in a list of clubs to browse.
+CREATE TABLE IF NOT EXISTS clubs (
+    name       TEXT PRIMARY KEY,           -- canonical, what teams.club holds
+    short_name TEXT NOT NULL,              -- "SJ Jr. Sharks"
+    kind       TEXT NOT NULL DEFAULT 'club'  -- club | visitor | high_school | bracket
+);
+
 CREATE TABLE IF NOT EXISTS teams (
     team_id     INTEGER NOT NULL,          -- site team id
     season_id   INTEGER NOT NULL REFERENCES seasons(season_id),

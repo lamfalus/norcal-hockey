@@ -118,6 +118,30 @@ class TestCoreFile(AppDataTestCase):
         text = (self.out / "core.json").read_text(encoding="utf-8")
         self.assertNotIn("Tripping", text, "penalties belong in the season shards")
 
+    def test_a_two_way_player_is_split_by_role(self):
+        # Kai skates out in the first two games and takes a turn in net in the
+        # third. Folding those together would put the skating games into the
+        # goalie GP, so each role gets its own row.
+        self.conn.execute(
+            "INSERT INTO games(game_id,season_id,league_id,division_id,date_iso,"
+            "home_team_id,away_team_id,home_goals,away_goals,status,game_class) "
+            "VALUES (3,31,3,(SELECT division_id FROM divisions),'2025-10-03',"
+            "58,129,1,2,'final','regular')")
+        self.conn.execute(
+            "INSERT INTO game_rosters(game_id,side,slot,jersey,position,name,role) "
+            "VALUES (3,'home',0,'9','G','Kai Garrett','player')")
+        self.conn.commit()
+        identity.rebuild(self.conn)
+        pipeline.rebuild_player_game_stats(self.conn)
+        self.conn.commit()
+
+        self.write()
+        player = next(p for p in self.core()["players"] if p["name"] == "Kai Garrett")
+        by_role = {s["goalie"]: s for s in player["seasons"]}
+        self.assertEqual(sorted(by_role), [False, True], "expected a row per role")
+        self.assertEqual(by_role[False]["gp"], 2)
+        self.assertEqual(by_role[True]["gp"], 1)
+
 
 class TestShards(AppDataTestCase):
     def test_a_player_log_lands_in_its_own_shard(self):

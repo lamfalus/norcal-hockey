@@ -10,7 +10,7 @@ from typing import Any, Iterable, Optional, Sequence
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 
@@ -106,6 +106,24 @@ def _migrate(conn: sqlite3.Connection, from_version: int) -> None:
         _migrate_v2_league_scoped_divisions(conn)
     if from_version < 3:
         _migrate_v3_relabel_placeholder_rosters(conn)
+    if from_version < 4:
+        _migrate_v4_rebuild_clubs(conn)
+
+
+def _migrate_v4_rebuild_clubs(conn: sqlite3.Connection) -> None:
+    """v3 -> v4: clubs become a table, and their names get canonicalised.
+
+    Every club was previously whatever suffix-stripping made of the first team
+    name that mentioned it, so one club could hold a dozen identities -- 202
+    names for 123 actual clubs. The team names needed to fix that are already
+    stored, so this reads them again rather than re-fetching.
+    """
+    from .pipeline import rebuild_clubs
+
+    try:
+        rebuild_clubs(conn)
+    except sqlite3.Error as err:  # a partially built database: derive will redo it
+        log.warning("could not rebuild clubs during migration: %s", err)
 
 
 def _migrate_v3_relabel_placeholder_rosters(conn: sqlite3.Connection) -> None:

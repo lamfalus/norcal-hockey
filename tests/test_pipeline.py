@@ -435,7 +435,8 @@ class TestPlaceholderMigration(unittest.TestCase):
                     "SELECT name, role FROM game_rosters GROUP BY name, role").fetchall())
                 self.assertEqual(roles["Not Signed In"], "placeholder")
                 self.assertEqual(roles["Sol Orlov"], "player")
-                self.assertEqual(db.get_meta(conn, "schema_version"), "3")
+                self.assertEqual(db.get_meta(conn, "schema_version"),
+                                 str(db.SCHEMA_VERSION))
             finally:
                 conn.close()
 

@@ -312,8 +312,16 @@ def is_placeholder(name: str) -> bool:
 #: or a girls team entered into an otherwise co-ed division ("San Jose Jr
 #: Sharks Girls" in 10U B West, "Stockton Colts Girls 10G-1").
 #: "Lady Blue Devils" and a "10G-1" suffix both mark a girls team.
+#:
+#: The G gets written three ways and only one of them used to match here. Where
+#: a girls team sits in a co-ed division its own name is the only evidence
+#: there is, so a missed spelling files a girls team as co-ed -- which is what
+#: happened to the Los Angeles Lions 10G2 in 2021-22.
 _GIRLS = re.compile(
-    r"\b(girls?|ladies|lady|women|female)\b|\d{1,2}\s*G(-\d+)?\b", re.I)
+    r"\b(girls?|ladies|lady|women|female)\b"
+    r"|\b\d{1,2}\s*G\d*(-[A-Za-z0-9]+)?\b"   # 10G, 10G2, 10G-1, 12G-A
+    r"|\bG\d{1,2}[A-Za-z]{0,3}\b",           # G14AA, G16AAA
+    re.I)
 
 
 def is_girls(*labels: str) -> bool:

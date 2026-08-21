@@ -11,7 +11,7 @@ So the split follows *granularity* instead:
 
 ``logs/p<NN>.json``
     Per-game lines for a player, bucketed by player id. Opening a player fetches
-    one bucket, around 50 KB gzipped.
+    one bucket, around 100 KB gzipped, and it covers every season they played.
 
 ``games/s<SEASON>.json``
     Goals, penalties and period scores, for box scores. Opening a game fetches
@@ -21,9 +21,10 @@ Every drill-down is scoped to a single player, game or team, so no shard ever
 needs a cross-season join -- which is exactly why sharding here costs nothing
 that season-sharding would have cost.
 
-Sizes on five seasons: 25 MB of JSON, about 2.5 MB gzipped, which GitHub Pages
+Sizes on six seasons: 61 MB of JSON, about 5.8 MB gzipped, which GitHub Pages
 serves compressed. Transfer was never the constraint; parse time and memory on a
-phone at a rink is, and that is what loading detail on demand solves.
+phone at a rink is, and that is what loading detail on demand solves -- core.json
+is 7.6 MB of that, and nothing else is read until somebody clicks.
 """
 
 from __future__ import annotations
@@ -77,13 +78,28 @@ def build_core(conn: sqlite3.Connection) -> dict:
             "SELECT division_id, season_id, league_id, name, gender FROM divisions"
             " ORDER BY season_id, league_id, sort_order")
     ]
+    # A team id is only unique within its season -- the table is keyed by both --
+    # so anything reading these keys on (season, id), never on the id alone.
+    # ``seq`` is the club's own numbering, which is the only thing telling two
+    # teams of one club in one division apart when the site does not suffix
+    # their names.
     teams = [
         {"id": r["team_id"], "season": r["season_id"], "name": r["name"],
          "club": r["club"], "division": r["division_id"], "league": r["league_id"],
-         "gender": r["gender"]}
+         "gender": r["gender"], "seq": r["club_seq"]}
         for r in conn.execute(
-            "SELECT team_id, season_id, name, club, division_id, league_id, gender"
+            "SELECT team_id, season_id, name, club, division_id, league_id, gender,"
+            "       club_seq"
             "  FROM teams ORDER BY season_id, name")
+    ]
+    # Clubs carry the name to group by, the shorter one to show, and what the
+    # thing is. Half the names the site prints are bracket slots, high schools
+    # or visiting teams: they still need naming on a schedule, so they are
+    # classified here rather than dropped, and the app shows only ``club``.
+    clubs = [
+        {"name": r["name"], "short": r["short_name"], "kind": r["kind"]}
+        for r in conn.execute(
+            "SELECT name, short_name, kind FROM clubs ORDER BY name")
     ]
     standings = [
         {"season": r["season_id"], "team": r["team_id"], "gp": r["gp"], "w": r["w"],
@@ -99,26 +115,31 @@ def build_core(conn: sqlite3.Connection) -> dict:
 
     # Per-season, per-team, per-game-class summaries: the numbers every list and
     # table in the app is built from.
+    #
+    # Grouped by is_goalie as well, so a player who skates out and also takes a
+    # turn in net gets one row per role. Folding the two together would count
+    # their skating games in the goalie GP -- 618 of 37,009 splits mix the two,
+    # and a two-way player is exactly the one somebody looks up.
     splits: dict[int, list[dict]] = defaultdict(list)
     for r in conn.execute("""
         SELECT s.player_id, s.season_id, s.team_id,
-               COALESCE(g.game_class, 'other') AS class,
+               COALESCE(g.game_class, 'other') AS class, s.is_goalie,
                COUNT(*) AS gp, SUM(s.goals) AS g, SUM(s.assists) AS a,
                SUM(s.points) AS pts, SUM(s.pim) AS pim,
                SUM(s.ppg) AS ppg, SUM(s.shg) AS shg,
-               MAX(s.is_goalie) AS goalie, SUM(s.goals_against) AS ga,
+               SUM(s.goals_against) AS ga,
                MAX(s.jersey) AS jersey
           FROM player_game_stats s
           JOIN games g ON g.game_id = s.game_id
          WHERE s.team_id IS NOT NULL
-         GROUP BY s.player_id, s.season_id, s.team_id, class
+         GROUP BY s.player_id, s.season_id, s.team_id, class, s.is_goalie
     """):
         splits[r["player_id"]].append({
             "season": r["season_id"], "team": r["team_id"], "class": r["class"],
             "jersey": r["jersey"] or "", "gp": r["gp"], "g": r["g"] or 0,
             "a": r["a"] or 0, "pts": r["pts"] or 0, "pim": r["pim"] or 0,
             "ppg": r["ppg"] or 0, "shg": r["shg"] or 0,
-            "goalie": bool(r["goalie"]), "ga": r["ga"],
+            "goalie": bool(r["is_goalie"]), "ga": r["ga"],
         })
 
     # The league's own published season totals, kept alongside so the app can
@@ -181,11 +202,13 @@ def build_core(conn: sqlite3.Connection) -> dict:
             "counts": {
                 "players": len(players), "teams": len(teams),
                 "seasons": len(seasons), "leagues": len(leagues),
+                "clubs": sum(1 for c in clubs if c["kind"] == "club"),
             },
         },
         "seasons": seasons,
         "leagues": leagues,
         "divisions": divisions,
+        "clubs": clubs,
         "teams": teams,
         "standings": standings,
         "players": players,
