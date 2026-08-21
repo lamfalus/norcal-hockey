@@ -45,13 +45,17 @@ class Stats:
     scoresheets: int = 0
     skipped: int = 0
     errors: int = 0
+    #: Scoresheets that fetched fine but contained no roster. A property of
+    #: the data, not a failure of the run.
+    empty_sheets: int = 0
     #: Set when the request ceiling stopped the run before it finished.
     stopped_early: bool = False
 
     def summary(self) -> str:
         return (f"{self.seasons} seasons, {self.teams} teams, "
                 f"{self.games_seen} games ({self.games_new} new), "
-                f"{self.scoresheets} scoresheets, {self.errors} errors")
+                f"{self.scoresheets} scoresheets, {self.errors} errors"
+                + (f", {self.empty_sheets} with no roster" if self.empty_sheets else ""))
 
 
 class Pipeline:
@@ -733,12 +737,17 @@ class Pipeline:
         """Parse one scoresheet and replace all stored detail for that game."""
         sheet = tts.parse_scoresheet(html, game_id)
         if not sheet.is_usable:
+            # Record the attempt, so a sheet that genuinely has no roster is not
+            # refetched every night for the rest of the season. Bumping
+            # PARSE_VERSION is what makes an improved parser try again.
             self.conn.execute(
-                "UPDATE games SET parse_error = ?, scoresheet_sha = ?, updated_at = ? "
+                "UPDATE games SET parse_error = ?, scoresheet_sha = ?, "
+                "scoresheet_at = ?, parse_version = ?, updated_at = ? "
                 "WHERE game_id = ?",
-                ("scoresheet contained no roster", sha, now(), game_id),
+                ("scoresheet contained no roster", sha, now(),
+                 tts.PARSE_VERSION, now(), game_id),
             )
-            self.stats.errors += 1
+            self.stats.empty_sheets += 1
             return
 
         # Detail tables cascade from a single delete, keeping re-parsing clean.

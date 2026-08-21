@@ -270,7 +270,10 @@ def _cmd_crawl(conn, config: Config, args, *, mode: str) -> int:
         _cmd_export(conn, config)
     if args.publish or (config.publish and not args.dry_run):
         _cmd_publish(conn, config, args)
-    return 0 if stats.errors == 0 else 2
+    # Exit non-zero only when the run itself could not complete. Pages that
+    # failed to fetch are reported by `audit`; letting them fail the process
+    # made systemd mark every single night as failed, which hides a real one.
+    return 2 if stats.stopped_early else 0
 
 
 def _cmd_reparse(conn, config: Config, args) -> int:

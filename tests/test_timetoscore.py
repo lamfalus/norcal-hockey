@@ -91,6 +91,27 @@ class TestTeamPage(unittest.TestCase):
         self.assertTrue(game.is_final)
         self.assertEqual((game.away_goals, game.home_goals), (5, 2))
 
+    def test_game_id_comes_from_the_link_not_the_label(self):
+        """SCAHA prints a prefixed label where the id should be.
+
+        The row reads "SCAHA-10000983*" but the game is really 28592. Reading
+        the digits out of the label invented ids, stored 647 games under them,
+        and then fetched scoresheets from URLs that had no roster on them.
+        """
+        page = tts.parse_team_page(load("team_scaha.html"))
+        ids = {g.game_id for g in page.games}
+        self.assertIn(28592, ids, "the id from the scoresheet link")
+        self.assertNotIn(10000983, ids, "not the digits from the printed label")
+        # Nothing implausible should survive: real ids are five digits here.
+        self.assertTrue(all(g.game_id < 1_000_000 for g in page.games),
+                        sorted(ids)[-3:])
+
+    def test_a_row_without_a_link_still_yields_its_id(self):
+        # Games with no scoresheet yet have no link; the label is all there is.
+        page = tts.parse_team_page(load("team27.html"))
+        game = next(g for g in page.games if g.game_id == 26493)
+        self.assertFalse(game.has_scoresheet)
+
     def test_published_stat_tables(self):
         page = tts.parse_team_page(load("team58.html"))
         skaters = [r for r in page.stat_rows if r.kind == "skater"]

@@ -557,7 +557,7 @@ requests.
 python3 -m unittest discover -s tests -t .
 ```
 
-216 tests, no network access — they run against real pages saved in
+219 tests, no network access — they run against real pages saved in
 `tests/fixtures/` from both ends of the backfill range (2021 and 2025), so a
 format change in either direction is caught. The fixtures deliberately include
 the awkward cases: cells opened `<td>` and closed `</th>`, a game with a score

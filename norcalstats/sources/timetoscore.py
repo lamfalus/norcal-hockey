@@ -31,7 +31,7 @@ from ..names import is_placeholder as _is_placeholder
 
 #: Bumped when parsing changes in a way that should trigger a re-parse of
 #: already-archived scoresheets.
-PARSE_VERSION = 1
+PARSE_VERSION = 2
 
 _MONTHS = {
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
@@ -417,15 +417,28 @@ def _parse_game_results(table: Table) -> list[ScheduleGame]:
         if len(row) < 6 or all(c.is_header for c in row.cells):
             continue
         raw_id = row.text(index.get("game", 0))
+        links = row.links
+
+        # The printed id is only a label, and some leagues prefix it:
+        # SCAHA shows "SCAHA-10000983*" for what is really game 28592. The
+        # scoresheet link carries the true id, so it wins wherever present.
+        linked = next(
+            (m.group(1) for m in
+             (re.search(r"game_id=(\d+)", h) for h in links) if m),
+            None,
+        )
         match = re.search(r"\d+", raw_id)
-        if not match:
+        if linked:
+            game_id = int(linked)
+        elif match:
+            game_id = int(match.group())
+        else:
             continue
 
-        links = row.links
         # A trailing '*' on the id, or a scoresheet link, means detail exists.
         has_sheet = "*" in raw_id or any("oss-scoresheet" in h for h in links)
         games.append(ScheduleGame(
-            game_id=int(match.group()),
+            game_id=game_id,
             date_text=row.text(index.get("date", 1)),
             time_text=row.text(index.get("time", 2)),
             rink=row.text(index.get("rink", 3)),
