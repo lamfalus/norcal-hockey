@@ -687,6 +687,33 @@ class Pipeline:
         """
         return [row["game_id"] for row in self.conn.execute(sql, params)]
 
+    def reparsable_scoresheets(self, seasons: Iterable[int]) -> set[int]:
+        """Games that need reprocessing but not re-downloading.
+
+        A ``PARSE_VERSION`` bump marks every stored scoresheet for another look.
+        The page itself has not changed, though, and the archive already holds
+        it -- so these are re-read from disk. Without this, improving the parser
+        would cost thousands of requests to a volunteer-run site for pages we
+        already have.
+        """
+        season_list = list(seasons)
+        if not season_list:
+            return set()
+        placeholders = ",".join("?" for _ in season_list)
+        recent = (datetime.now(timezone.utc)
+                  - timedelta(days=self.config.recheck_days)).date().isoformat()
+        rows = self.conn.execute(f"""
+            SELECT g.game_id FROM games g
+             WHERE g.season_id IN ({placeholders})
+               AND g.status = 'final' AND g.has_scoresheet = 1
+               AND g.scoresheet_at IS NOT NULL
+               AND (g.parse_version IS NULL OR g.parse_version < ?)
+               -- A recently played game may have been corrected since, so it
+               -- is fetched afresh rather than re-read.
+               AND (g.date_iso IS NULL OR g.date_iso < ?)
+        """, [*season_list, tts.PARSE_VERSION, recent]).fetchall()
+        return {row["game_id"] for row in rows}
+
     def fetch_scoresheets(
         self, game_ids: Iterable[int], *, use_cache: bool = False, limit: Optional[int] = None
     ) -> None:
@@ -1309,8 +1336,19 @@ def run(
                 )
 
         pending = pipeline.pending_scoresheets(targets, force=force_scoresheets)
-        log.info("%d scoresheet(s) pending", len(pending))
-        pipeline.fetch_scoresheets(pending, use_cache=use_cache or offline, limit=limit)
+        # Split those that only need re-parsing from those that need fetching,
+        # so an improved parser costs no requests for pages already archived.
+        from_archive = (set() if (use_cache or offline or force_scoresheets)
+                        else pipeline.reparsable_scoresheets(targets))
+        to_fetch = [g for g in pending if g not in from_archive]
+        ordered = [g for g in pending if g in from_archive]
+
+        if ordered:
+            log.info("%d scoresheet(s) re-parsed from the archive (no requests)",
+                     len(ordered))
+            pipeline.fetch_scoresheets(ordered, use_cache=True, limit=limit)
+        log.info("%d scoresheet(s) to fetch", len(to_fetch))
+        pipeline.fetch_scoresheets(to_fetch, use_cache=use_cache or offline, limit=limit)
 
         pipeline.derive()
 
