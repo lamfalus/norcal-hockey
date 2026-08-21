@@ -427,12 +427,16 @@ def _parse_game_results(table: Table) -> list[ScheduleGame]:
              (re.search(r"game_id=(\d+)", h) for h in links) if m),
             None,
         )
-        match = re.search(r"\d+", raw_id)
+        label = raw_id.strip().rstrip("*").strip()
         if linked:
             game_id = int(linked)
-        elif match:
-            game_id = int(match.group())
+        elif label.isdigit():
+            # No link, but the label is a bare number -- the ordinary case.
+            game_id = int(label)
         else:
+            # A prefixed label and nothing to resolve it against. These are
+            # unplayed games, so there is no result to lose, and inventing an
+            # id from the digits risks colliding with a real game elsewhere.
             continue
 
         # A trailing '*' on the id, or a scoresheet link, means detail exists.
