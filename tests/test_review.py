@@ -233,6 +233,12 @@ class TestDoubleRostering(unittest.TestCase):
         return identity.build_clusters(observations, **kwargs)
 
     def test_girls_and_coed_same_season_is_one_player(self):
+        """The expected arrangement: one child, two teams, no question asked.
+
+        A girls team alongside a co-ed one at the same age is normal. On five
+        seasons of real data it was 383 of 423 double-roster questions, every
+        one of them routine, which buried the 40 that were not.
+        """
         items = []
         clusters = self.build(
             many(12, "Maya Chen", 31, team=57, division="10U B West",
@@ -242,8 +248,32 @@ class TestDoubleRostering(unittest.TestCase):
             review_items=items,
         )
         self.assertEqual(len(clusters), 1)
+        self.assertEqual(items, [], "routine double-rostering is not a question")
+        # The stats are still separated by team -- that is what matters.
+        self.assertEqual(clusters[0].team_seasons, {(31, 57), (31, 58)})
+
+    def test_two_real_rosters_in_one_gender_track_is_still_flagged(self):
+        # Two girls teams a division apart, both played properly: unusual.
+        items = []
+        self.build(
+            many(12, "Maya Chen", 31, team=57, division="Girls 12AAA",
+                 team_name="Jr Sharks Girls")
+            + many(12, "Maya Chen", 31, team=59, division="Girls 14AA",
+                   team_name="Jr Sharks Girls 14"),
+            review_items=items,
+        )
         self.assertEqual([i.kind for i in items], ["double_roster"])
-        self.assertIn("separate stats", items[0].applied)
+
+    def test_a_girls_team_one_step_up_is_not_flagged(self):
+        # 14U co-ed plus Girls 16AA -- playing up one step on the girls side.
+        items = []
+        self.build(
+            many(12, "Maya Chen", 31, team=58, division="14U A")
+            + many(12, "Maya Chen", 31, team=57, division="Girls 16AA",
+                   team_name="Jr Sharks Girls"),
+            review_items=items,
+        )
+        self.assertEqual(items, [])
 
     def test_twelve_to_sixteen_is_still_too_far_even_for_girls(self):
         # A 12U player on a 16U team is a four-year jump: it does not happen at

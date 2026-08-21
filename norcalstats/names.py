@@ -330,13 +330,35 @@ def division_gender(division: str, team: str = "") -> str:
     return "girls" if is_girls(division, team) else "coed"
 
 
+#: Plausible youth age groups. Numbers outside this are team suffixes
+#: ("10U B-2") rather than ages.
+_AGE_RANGE = range(4, 20)
+
+
 def division_age(division: str) -> Optional[int]:
     """Age group implied by a division name: ``"10U A"`` -> ``10``.
 
-    Also handles ``"Girls 16-U"`` and bare ``"12U"``.
+    The girls leagues drop the "U" entirely -- PGHL runs ``Girls 12AAA`` and
+    ``Girls 16/19AA`` -- so a bare number counts too. Without that, every girls
+    division had no age at all, leaving birth-year inference and the same-name
+    split blind across the whole of PGHL.
+
+    Combined bands take the upper figure, since that is the eligibility
+    ceiling: ``"Girls 16/19AA"`` -> ``19``.
     """
-    match = re.search(r"(\d{1,2})\s*-?\s*U\b", division or "", re.I)
-    return int(match.group(1)) if match else None
+    text = division or ""
+    marked = re.search(r"(\d{1,2})\s*-?\s*U\b", text, re.I)
+    if marked and int(marked.group(1)) in _AGE_RANGE:
+        candidates = {
+            int(n) for n in re.findall(r"(\d{1,2})\s*-?\s*U\b", text, re.I)
+            if int(n) in _AGE_RANGE
+        }
+        return max(candidates)
+
+    candidates = {
+        int(n) for n in re.findall(r"\d{1,2}", text) if int(n) in _AGE_RANGE
+    }
+    return max(candidates) if candidates else None
 
 
 def birth_year_window(division: str, start_year: int) -> Optional[tuple[int, int]]:

@@ -113,6 +113,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_leagues.add_argument("--exclude", type=int, action="append", default=[],
                            metavar="ID", help="stop collecting this league")
 
+    p_multi = sub.add_parser(
+        "double-rostered",
+        help="players who played for more than one team in a season")
+    p_multi.add_argument("--season", type=int, help="only this season")
+    p_multi.add_argument("--girls", action="store_true",
+                         help="only girls-team + co-ed-team pairings")
+    p_multi.add_argument("--limit", type=int, default=40)
+
     p_audit = sub.add_parser("audit", help="show data-quality findings")
     p_audit.add_argument("--kind", help="only this anomaly kind")
     p_audit.add_argument("--limit", type=int, default=20)
@@ -194,6 +202,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return _cmd_review(conn, config, args)
         if command == "leagues":
             return _cmd_leagues(conn, config, args)
+        if command == "double-rostered":
+            return _cmd_double_rostered(conn, args)
     finally:
         conn.close()
     return 1
@@ -459,6 +469,58 @@ def _cmd_leagues(conn, config: Config, args) -> int:
         print(f"\n{skipped} league(s) not collected (tournaments, high school, "
               "unclassified). Show them with --all.")
     print("Change one with:  norcalstats leagues --include <id> | --exclude <id>")
+    return 0
+
+
+def _cmd_double_rostered(conn, args) -> int:
+    """Players with more than one team in a season, and their split stats.
+
+    Mostly girls who play a girls team alongside a co-ed one. That is normal,
+    so it is no longer raised for review -- but it is worth being able to look
+    at, which is what this is for.
+    """
+    where, params = ["s.team_id IS NOT NULL"], []
+    if args.season:
+        where.append("s.season_id = ?")
+        params.append(args.season)
+
+    rows = conn.execute(f"""
+        SELECT p.display_name AS name, s.season_id AS season,
+               COUNT(DISTINCT s.team_id) AS teams,
+               COUNT(DISTINCT t.gender)  AS genders,
+               GROUP_CONCAT(DISTINCT t.gender) AS mix
+          FROM player_game_stats s
+          JOIN players p ON p.player_id = s.player_id
+          JOIN teams   t ON t.team_id = s.team_id AND t.season_id = s.season_id
+         WHERE {' AND '.join(where)}
+         GROUP BY s.player_id, s.season_id
+        HAVING teams > 1 {'AND genders > 1' if args.girls else ''}
+         ORDER BY teams DESC, name
+         LIMIT ?
+    """, [*params, args.limit]).fetchall()
+
+    if not rows:
+        print("no double-rostered players found")
+        return 0
+
+    for row in rows:
+        print(f"\n{row['name']}  (S{row['season']}, {row['teams']} teams)")
+        for line in conn.execute("""
+            SELECT t.name AS team, COALESCE(t.gender,'?') AS gender,
+                   COALESCE(d.name,'?') AS division, COALESCE(l.name,'?') AS league,
+                   COUNT(*) AS gp, SUM(s.goals) AS g, SUM(s.assists) AS a
+              FROM player_game_stats s
+              JOIN teams t ON t.team_id = s.team_id AND t.season_id = s.season_id
+              LEFT JOIN divisions d ON d.division_id = t.division_id
+              LEFT JOIN leagues   l ON l.league_id = t.league_id
+             WHERE s.player_id = (SELECT player_id FROM players WHERE display_name = ?)
+               AND s.season_id = ?
+             GROUP BY s.team_id ORDER BY gp DESC
+        """, (row["name"], row["season"])):
+            print(f"   {line['division']:<16} {line['gender']:<6} {line['league']:<10} "
+                  f"{line['gp']:>3}gp {line['g']:>3}g {line['a']:>3}a   {line['team']}")
+
+    print(f"\n{len(rows)} shown. Filters: --season N, --girls, --limit N")
     return 0
 
 

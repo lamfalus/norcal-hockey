@@ -74,6 +74,25 @@ class TestBirthYear(unittest.TestCase):
         self.assertEqual(N.division_age("12U AA"), 12)
         self.assertIsNone(N.division_age("Mite B"))
 
+    def test_girls_divisions_without_a_U(self):
+        """PGHL names its divisions "Girls 12AAA", with no U at all.
+
+        Requiring the U left every girls division with no age, so birth-year
+        inference and the same-name split were blind across the league.
+        """
+        self.assertEqual(N.division_age("Girls 12AAA"), 12)
+        self.assertEqual(N.division_age("Girls 14AA"), 14)
+        self.assertEqual(N.division_age("12AAA-1"), 12)
+
+    def test_combined_bands_take_the_ceiling(self):
+        self.assertEqual(N.division_age("Girls 16/19AA"), 19)
+        self.assertEqual(N.division_age("Girls 14U/15U"), 15)
+
+    def test_team_suffixes_are_not_ages(self):
+        # "-2" is which team, not an age group.
+        self.assertEqual(N.division_age("10U B-2"), 10)
+        self.assertEqual(N.division_age("14U B Flight I"), 14)
+
     def test_window_matches_the_viewer_convention(self):
         # 10U in a season starting 2022 => born 2012 or 2013.
         self.assertEqual(N.birth_year_window("10U A", 2022), (2012, 2013))

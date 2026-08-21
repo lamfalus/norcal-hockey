@@ -414,20 +414,22 @@ def _maybe_flag_double_roster(
         if len(divisions) < 2:
             continue
         ages = {a for a in (N.division_age(d) for d, _ in divisions) if a}
-        genders = {g for _, g in divisions}
-        # Divisions the player played a real part of, rather than visiting.
-        regular_ages = {
-            a for a in (
-                N.division_age(division)
-                for division, gender in divisions
-                if counts[(division, gender)] >= MIN_SPLIT_APPEARANCES
-            ) if a
-        }
+
+        # Ages the player properly played, per gender track. A girls team
+        # alongside a co-ed one is the expected arrangement, not a curiosity --
+        # on five seasons it accounted for 383 of 423 questions, every one of
+        # them normal. What is worth seeing is two real rosters *within* one
+        # track, which no longer has an innocent explanation.
+        track_ages: dict[str, set[int]] = defaultdict(set)
+        for division, gender in divisions:
+            if counts[(division, gender)] >= MIN_SPLIT_APPEARANCES:
+                age = N.division_age(division)
+                if age:
+                    track_ages[gender].add(age)
 
         if (
-            len(genders) > 1                          # girls and co-ed
-            or (ages and max(ages) - min(ages) > 2)   # more than one step apart
-            or len(regular_ages) > 1                  # a genuine dual roster
+            (ages and max(ages) - min(ages) > 2)      # more than one step apart
+            or any(len(v) > 1 for v in track_ages.values())   # two real rosters
         ):
             interesting[season] = divisions
 
