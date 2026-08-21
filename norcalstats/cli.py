@@ -91,6 +91,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_export.add_argument("--out", type=Path, help="output directory")
     p_export.add_argument("--game-logs", action="store_true",
                           help="include per-game logs in the rich export")
+    p_export.add_argument("--app", type=Path, metavar="DIR",
+                          help="also write the web app dataset (core + shards)")
 
     p_publish = sub.add_parser("publish", help="commit and push the exports")
     p_publish.add_argument("--repo", type=Path, help="repository path (default: export dir)")
@@ -191,6 +193,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"{result['players']} players from {result['names']} spellings")
             return 0
         if command == "export":
+            if getattr(args, "app", None):
+                config._app_dir = args.app
             return _cmd_export(conn, config, game_logs=args.game_logs)
         if command == "publish":
             return _cmd_publish(conn, config, args)
@@ -311,6 +315,15 @@ def _cmd_export(conn, config: Config, *, game_logs: bool = False) -> int:
     )
     for name, size in written.items():
         print(f"  {name}: {export_mod._human(size)}")
+
+    app_dir = getattr(config, "_app_dir", None)
+    if app_dir:
+        from . import appdata
+        files = appdata.write_app(conn, app_dir)
+        total = sum(files.values())
+        print(f"  app dataset -> {app_dir}: {len(files)} files, "
+              f"{export_mod._human(total)}"
+              f" (core {export_mod._human(files['core.json'])})")
 
     fresh = export_mod.player_count(Path(config.export_dir) / config.legacy_json)
     if live and fresh is not None:
