@@ -164,10 +164,17 @@ def build_core(conn: sqlite3.Connection) -> dict:
             "savePct": data.get("Save %"), "so": _int(data.get("SO")),
         }
 
+    # Splitting one spelling into several people creates a player row apiece,
+    # and undoing the split leaves the spares behind: 4,193 of them after one
+    # bad season year was corrected. They keep a display name but have no
+    # spelling and no stat line, so they are unreachable by search and empty
+    # when opened -- and they would pad the roster the app offers by a third.
     players = []
     for r in conn.execute(
         "SELECT player_id, display_name, birth_year, birth_year_min, birth_year_max"
-        "  FROM players ORDER BY display_name"
+        "  FROM players p"
+        " WHERE EXISTS (SELECT 1 FROM player_names n WHERE n.player_id = p.player_id)"
+        " ORDER BY display_name"
     ):
         pid = r["player_id"]
         entry: dict[str, Any] = {

@@ -92,6 +92,18 @@ class TestCoreFile(AppDataTestCase):
         self.assertTrue(all("club" in t for t in core["teams"]))
         self.assertTrue(all("season" in t for t in core["teams"]))
 
+    def test_a_player_with_no_spelling_is_not_exported(self):
+        # Undoing a split leaves the spare player rows behind, carrying a
+        # display name but no spelling and no stat line. They are unreachable
+        # by search and empty when opened.
+        self.conn.execute(
+            "INSERT INTO players(player_id, display_name) VALUES (999999, 'Ghost Player')")
+        self.conn.commit()
+        self.write()
+        names = [p["name"] for p in self.core()["players"]]
+        self.assertNotIn("Ghost Player", names)
+        self.assertTrue(names, "real players must still be exported")
+
     def test_players_carry_per_season_summaries(self):
         self.write()
         player = next(p for p in self.core()["players"] if p["seasons"])
