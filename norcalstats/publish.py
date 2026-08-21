@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Iterable, Optional, Sequence
 
@@ -29,13 +31,15 @@ class PublishError(RuntimeError):
     pass
 
 
-def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+def _git(repo: Path, *args: str, check: bool = True,
+         env: Optional[dict[str, str]] = None) -> subprocess.CompletedProcess:
     result = subprocess.run(
         ["git", *args],
         cwd=str(repo),
         capture_output=True,
         text=True,
         timeout=180,
+        env={**os.environ, **env} if env else None,
     )
     if check and result.returncode != 0:
         raise PublishError(
@@ -188,6 +192,70 @@ def publish(
     if push:
         _git(repo, "push", remote, f"HEAD:{branch}")
         log.info("pushed to %s/%s", remote, branch)
+    return sha
+
+
+def publish_app_dataset(
+    repo: Path,
+    app_dir: Path,
+    *,
+    message: str,
+    remote: str = "origin",
+    branch: str = "data",
+    push: bool = True,
+    dry_run: bool = False,
+) -> Optional[str]:
+    """Force-push the app dataset to a branch holding nothing else.
+
+    The dataset is 38 files rebuilt every night, so it gets a branch of its own
+    carrying a single parentless commit that is replaced each time. Committing
+    it beside the code would add megabytes to the history nightly and never
+    give any of it back; a branch with no history has nothing to grow.
+
+    Written entirely with plumbing against a temporary index, so the working
+    tree, the current index and the checked-out branch are never touched. The
+    nightly run can publish while somebody is midway through an edit.
+
+    Returns the commit sha, or ``None`` when the dataset is already published
+    unchanged.
+    """
+    repo = Path(repo).resolve()
+    app_dir = Path(app_dir).resolve()
+    if not is_repo(repo):
+        raise PublishError(f"not a git repository: {repo}")
+    if not app_dir.is_dir():
+        raise PublishError(f"app dataset directory missing: {app_dir}")
+    core = app_dir / "core.json"
+    if not core.exists():
+        raise PublishError(f"app dataset has no core.json: {app_dir}")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        index = str(Path(tmp) / "index")
+        env = {"GIT_INDEX_FILE": index}
+        # An empty temporary index, filled from the dataset directory alone, so
+        # nothing else in the repository can be swept in.
+        _git(repo, "--work-tree", str(app_dir), "add", "--all", "--", str(app_dir),
+             env=env)
+        tree = _git(repo, "write-tree", env=env).stdout.strip()
+
+    published = _git(repo, "rev-parse", "--verify", "--quiet",
+                     f"refs/remotes/{remote}/{branch}^{{tree}}", check=False)
+    if published.returncode == 0 and published.stdout.strip() == tree:
+        log.info("app dataset unchanged; nothing to publish")
+        return None
+
+    if dry_run:
+        log.info("[dry run] would publish tree %s to %s/%s", tree[:8], remote, branch)
+        return None
+
+    # Parentless: each publish replaces the last rather than adding to it.
+    sha = _git(repo, "commit-tree", tree, "-m", message).stdout.strip()
+    log.info("app dataset commit %s (tree %s)", sha[:8], tree[:8])
+
+    if push:
+        _git(repo, "push", "--force", remote, f"{sha}:refs/heads/{branch}")
+        log.info("force-pushed app dataset to %s/%s", remote, branch)
+        _git(repo, "update-ref", f"refs/remotes/{remote}/{branch}", sha, check=False)
     return sha
 
 

@@ -282,7 +282,8 @@ def _cmd_crawl(conn, config: Config, args, *, mode: str) -> int:
 
     if not args.no_export:
         _cmd_export(conn, config)
-    if args.publish or (config.publish and not args.dry_run):
+    wants_publish = config.publish or config.publish_app
+    if args.publish or (wants_publish and not args.dry_run):
         _cmd_publish(conn, config, args)
     # Exit non-zero only when the run itself could not complete. Pages that
     # failed to fetch are reported by `audit`; letting them fail the process
@@ -304,19 +305,22 @@ def _cmd_reparse(conn, config: Config, args) -> int:
 
 def _cmd_export(conn, config: Config, *, game_logs: bool = False) -> int:
     # What the viewer is serving now, so the new file can be put next to it.
-    live = _live_player_count(config)
+    live = _live_player_count(config) if config.legacy_exports else None
 
-    written = export_mod.export_all(
-        conn,
-        export_dir=config.export_dir,
-        legacy_name=config.legacy_json,
-        rich_name=config.rich_json,
-        include_game_logs=game_logs,
-    )
-    for name, size in written.items():
-        print(f"  {name}: {export_mod._human(size)}")
+    if config.legacy_exports:
+        written = export_mod.export_all(
+            conn,
+            export_dir=config.export_dir,
+            legacy_name=config.legacy_json,
+            rich_name=config.rich_json,
+            include_game_logs=game_logs,
+        )
+        for name, size in written.items():
+            print(f"  {name}: {export_mod._human(size)}")
 
-    app_dir = getattr(config, "_app_dir", None)
+    # An explicit --app wins; otherwise the configured directory is used, so a
+    # nightly run keeps the app dataset current without being told to.
+    app_dir = getattr(config, "_app_dir", None) or config.app_dir
     if app_dir:
         from . import appdata
         files = appdata.write_app(conn, app_dir)
@@ -324,6 +328,9 @@ def _cmd_export(conn, config: Config, *, game_logs: bool = False) -> int:
         print(f"  app dataset -> {app_dir}: {len(files)} files, "
               f"{export_mod._human(total)}"
               f" (core {export_mod._human(files['core.json'])})")
+
+    if not config.legacy_exports:
+        return 0
 
     fresh = export_mod.player_count(Path(config.export_dir) / config.legacy_json)
     if live and fresh is not None:
@@ -349,23 +356,50 @@ def _cmd_publish(conn, config: Config, args) -> int:
     repo = getattr(args, "repo", None) or config.export_dir
     counts = db.counts(conn)
     message = config.commit_message.format(summary=publish_mod.summarize(counts))
-    try:
-        sha = publish_mod.publish(
-            Path(repo),
-            [n for n in (config.legacy_json, config.rich_json) if n],
-            message=message,
-            remote=config.git_remote,
-            branch=config.git_branch,
-            push=not getattr(args, "no_push", False),
-            force=getattr(args, "force", False),
-            dry_run=getattr(args, "dry_run", False),
-        )
-    except publish_mod.PublishError as exc:
-        log.error("publish failed: %s", exc)
-        return 3
-    if sha:
-        print(f"published {sha[:8]}")
-    else:
+    push = not getattr(args, "no_push", False)
+    dry_run = getattr(args, "dry_run", False)
+    published = False
+
+    if config.legacy_exports:
+        try:
+            sha = publish_mod.publish(
+                Path(repo),
+                [n for n in (config.legacy_json, config.rich_json) if n],
+                message=message,
+                remote=config.git_remote,
+                branch=config.git_branch,
+                push=push,
+                force=getattr(args, "force", False),
+                dry_run=dry_run,
+            )
+        except publish_mod.PublishError as exc:
+            log.error("publish failed: %s", exc)
+            return 3
+        if sha:
+            print(f"published {sha[:8]}")
+            published = True
+
+    # The app dataset goes to a branch of its own, so it neither needs nor
+    # disturbs the working tree the legacy exports are committed from.
+    if config.publish_app and config.app_dir:
+        try:
+            sha = publish_mod.publish_app_dataset(
+                Path(repo),
+                Path(config.app_dir),
+                message=message,
+                remote=config.git_remote,
+                branch=config.app_branch,
+                push=push,
+                dry_run=dry_run,
+            )
+        except publish_mod.PublishError as exc:
+            log.error("publishing the app dataset failed: %s", exc)
+            return 3
+        if sha:
+            print(f"published app dataset {sha[:8]} to {config.app_branch}")
+            published = True
+
+    if not published:
         print("nothing to publish")
     return 0
 

@@ -346,7 +346,7 @@ window.onerror = function(msg,src,line,col,err) {
 // be argued with.
 
 var APP = {
-  base: 'data/app/',
+  base: null,              // settled on first fetch, see APP_DATA_SOURCES
   core: null,
   seasons: [],            // season ids, oldest first
   seasonById: {},
@@ -371,8 +371,29 @@ var APP = {
 function teamKey(season, id) { return season + ':' + id; }
 function teamFor(season, id) { return APP.teamByKey[teamKey(season, id)] || null; }
 
+// The dataset is published to a branch of its own, but a working copy has it
+// under data/app. Try the local one first so a checkout needs no editing, and
+// fall back to the published branch so the single file works from anywhere.
+// Whichever answers first is remembered, so this costs one request, not two.
+var APP_DATA_SOURCES = [
+  'data/app/',
+  'https://raw.githubusercontent.com/lamfalus/norcal-hockey/data/'
+];
+
 function loadJSON(path) {
-  return fetch(APP.base + path).then(function(res) {
+  if (APP.base) return fetchJSON(APP.base + path, path);
+  return APP_DATA_SOURCES.reduce(function(chain, source) {
+    return chain.catch(function() {
+      return fetchJSON(source + path, path).then(function(payload) {
+        APP.base = source;
+        return payload;
+      });
+    });
+  }, Promise.reject());
+}
+
+function fetchJSON(url, path) {
+  return fetch(url).then(function(res) {
     if (!res.ok) throw new Error(path + ' → HTTP ' + res.status);
     return res.json();
   });
@@ -1689,7 +1710,8 @@ function boot() {
     status.textContent = '✗ ' + err.message;
     document.getElementById('browse-content').innerHTML =
       '<div class="empty"><div class="icon">⚠️</div>Could not load the dataset from <code>'
-      + escHtml(APP.base) + '</code>.<div style="margin-top:8px;font-size:.85rem">'
+      + escHtml(APP.base || APP_DATA_SOURCES.join(' or ')) + '</code>.'
+      + '<div style="margin-top:8px;font-size:.85rem">'
       + escHtml(err.message) + '</div></div>';
   });
 }

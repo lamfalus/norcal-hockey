@@ -79,10 +79,24 @@ class Config:
     export_dir: Path = Path(".")
     legacy_json: str = "norcal_hockey_players_s27-s31.json"
     rich_json: str = "norcal_hockey_stats.json"
+    #: The two name-keyed JSON files the first viewer read. They land in the
+    #: repository itself, so every nightly run leaves a tracked file modified.
+    #: Turn this off once nothing reads them.
+    legacy_exports: bool = True
+    #: Where the web app's dataset is written. Under ``data_dir`` by default,
+    #: which is ignored by git, so refreshing it nightly changes nothing the
+    #: repository can see. ``None`` disables it.
+    app_dir: Optional[Path] = None
     publish: bool = False
     git_remote: str = "origin"
     git_branch: str = "main"
     commit_message: str = "Update stats database ({summary})"
+    #: The app dataset is 38 files rebuilt every night, so it is published to a
+    #: branch of its own holding nothing else, reset to a single parentless
+    #: commit each time. Committing it alongside the code would grow the history
+    #: by megabytes a night and never give any of it back.
+    publish_app: bool = False
+    app_branch: str = "data"
 
     # -- logging --------------------------------------------------------
     log_level: str = "INFO"
@@ -100,6 +114,9 @@ class Config:
             self.db_path = self.data_dir / "norcal.sqlite3"
         if self.raw_dir is None:
             self.raw_dir = self.data_dir / "raw"
+        if self.app_dir is None:
+            self.app_dir = self.data_dir / "app"
+        self.app_dir = Path(self.app_dir)
         self.db_path = Path(self.db_path)
         self.raw_dir = Path(self.raw_dir)
         if self.log_file is not None:
