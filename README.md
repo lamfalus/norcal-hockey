@@ -114,7 +114,10 @@ all of them count toward the exported totals. The league publishes season totals
 for the **regular season only**, which is all the old scraper could see; the
 game-level data covers the rest.
 
-Each exported stat line therefore carries a `byClass` breakdown:
+Every stat line is therefore tagged with the class of game it came from. In
+the app dataset each season split carries its own `class`, which is what the
+viewer's **Games counted** filter switches on; the legacy export folds the
+same thing into a `byClass` breakdown:
 
 ```json
 { "season": 31, "team": "San Jose Jr Sharks", "GP": "28", "G": "24",
@@ -124,8 +127,10 @@ Each exported stat line therefore carries a `byClass` breakdown:
                "playoff":   {"GP": 5, "G": 4} } }
 ```
 
-`byClass.regular` is what the league itself publishes, so the old numbers remain
-available for comparison.
+The `regular` class is what the league itself publishes, so the old numbers
+remain available for comparison. This matters more than it sounds: preseason
+and exhibition games are a third of all stat lines, so a total that silently
+includes them is not the number anyone expects.
 
 One safeguard: derived totals are used only when they are **at least as complete
 as the published regular-season line**. Half-way through a backfill the parsed
@@ -194,8 +199,8 @@ or recent enough that a scorekeeper might still correct them.
 | `backfill` | One-time historical crawl (`--from-season`, `--to-season`) |
 | `reparse` | Re-parse the archived pages offline, no network at all |
 | `derive` | Rebuild player identities and stat lines from stored rows |
-| `export` | Write the JSON exports (`--game-logs` for per-game detail) |
-| `publish` | Commit and push the exports |
+| `export` | Write the app dataset, and the legacy exports if enabled |
+| `publish` | Push the app dataset, and commit the legacy exports if enabled |
 | `status` | What is in the database |
 | `seasons` | Seasons the site currently lists |
 | `leagues` | Leagues carrying games, per season (`--discover` to probe) |
@@ -422,7 +427,15 @@ Scraped as recorded: `seasons`, `divisions`, `teams`, `standings`, `games`,
 `shot_marks`, `team_stat_rows`.
 
 Derived and rebuildable: `players`, `player_names`, `player_team_seasons`,
-`player_game_stats`.
+`player_game_stats`, `clubs`.
+
+`clubs` is worth a note. The site names *teams*, not clubs, and spells them
+differently between seasons, so a club is a reading of the team names rather
+than anything fetched. Each row carries the canonical name everything groups
+by, the shorter name the app shows, and a `kind` — `club`, `visitor`,
+`high_school` or `bracket`. Half the names the site prints are not clubs at
+all; they all keep their names, because schedules need them, but only real
+clubs are offered as somewhere to browse.
 
 Bookkeeping: `fetch_log`, `runs`, `anomalies`, `player_overrides`.
 
@@ -447,18 +460,49 @@ SELECT period, COUNT(*) FROM goals
 
 ## Exports
 
-`export` writes two files:
+### The app dataset
 
-**`norcal_hockey_players_s27-s31.json`** — the legacy format, byte-for-byte the
-shape the existing viewer expects (same keys, same order), so the site keeps
-working untouched. It now also carries real divisions and real PIM, which the
-old scraper left blank. *The filename keeps its historical name because the
-viewer fetches that exact URL; it contains every season in the database,
-including S32 onward.*
+What the viewer reads. Written to `data/app` — configurable as `app_dir`, and
+under `data/` by default, which git ignores, so refreshing it nightly changes
+nothing the repository can see.
 
-**`norcal_hockey_stats.json`** — the richer export: standings, per-season splits
-by game class, career aggregates, and every game. Pass `--game-logs` to include
-per-player game logs (much larger).
+It is split by **granularity, not by season**. The obvious split — one file per
+season — would break the two views that exist to span seasons: the club player
+flow, and a club's teams across the years.
+
+**`core.json`** — everything cross-season and aggregate: players with their
+per-season splits, teams, divisions, clubs, leagues, standings. Loaded once,
+and enough on its own for every list and table in the app. 8.8 MB, about 900 KB
+gzipped.
+
+**`logs/pNN.json`** — per-game lines for a player, bucketed by player id.
+Opening a player fetches one bucket, around 100 KB gzipped, covering every
+season they played.
+
+**`games/sNN.json`** — goals, penalties and period scores for a season, for box
+scores.
+
+Six seasons come to 38 files and 66 MB, about 6 MB gzipped, which GitHub serves
+compressed. Transfer was never the constraint; parse time and memory on a phone
+at a rink is, and that is what loading detail on demand solves.
+
+### The legacy exports
+
+Off when `"legacy_exports": false`. They predate the app dataset and land in
+the repository itself, so every run leaves a tracked file modified — turn them
+off once nothing reads them.
+
+**`norcal_hockey_players_s27-s31.json`** — the name-keyed format the first
+viewer expected, byte-for-byte (same keys, same order). *The filename keeps its
+historical name because that viewer fetches that exact URL; it contains every
+season in the database.*
+
+**`norcal_hockey_stats.json`** — the richer non-app export: standings,
+per-season splits by game class, career aggregates, and every game. Pass
+`--game-logs` to include per-player game logs (much larger).
+
+`caha_players_s27-s31.json` is a v1 scraper artifact, still committed but no
+longer written by anything.
 
 ---
 
@@ -492,9 +536,10 @@ python3 -m norcalstats.cli backfill --from-season 27
 
 ### Checking a run before it goes live
 
-Crawl commands write the exports automatically, and the legacy export lands on
-top of the file the viewer serves. Pass `--no-export` while a backfill is still
-running, then inspect deliberately:
+Crawl commands write the exports automatically. The app dataset lands under
+`data/`, where git is not looking, but the legacy exports land in the
+repository itself. Pass `--no-export` while a backfill is still running, then
+inspect deliberately:
 
 ```bash
 python3 -m norcalstats.cli status              # what the database holds
@@ -526,15 +571,29 @@ do. `--force` overrides the check when a drop really is intended.
 
 ### Publishing to GitHub
 
-Publishing is **off by default**. To enable it, set `"publish": true` in
-`norcalstats.json` and configure git authentication on the Pi — an SSH deploy
-key with write access is the usual choice.
+Both switches are **off by default**, and both need git authentication on the
+Pi — an SSH deploy key with write access is the usual choice. Pin GitHub's host
+key in `known_hosts` while you are there: the systemd unit runs with
+`ProtectHome=read-only`, so ssh cannot write one itself and an unattended push
+would fail on an unknown host.
 
-The collector never handles credentials: it shells out to `git`, which uses
-whatever authentication you have already configured. It also stages **only the
-export files**, never `git add -A`, refuses to run if unrelated changes are
-staged, and creates no commit when the exports haven't changed — so a quiet
-night produces no noise.
+The collector never handles credentials. It shells out to `git`, which uses
+whatever authentication is already configured.
+
+**`"publish_app": true`** sends the app dataset to a branch of its own
+(`app_branch`, default `data`) as a single **parentless commit, force-pushed**,
+replacing what was there. 38 files rebuilt nightly would otherwise add
+megabytes to the history every night and never give any of it back; a branch
+with no history has nothing to grow. It is written with git plumbing against a
+temporary index, so the working tree, the index and the checked-out branch are
+never touched — the nightly run can publish while you are midway through an
+edit — and it stages only the dataset directory, so nothing else can be swept
+in. Unchanged data publishes nothing.
+
+**`"publish": true`** commits the legacy exports to `git_branch` in the normal
+way. It stages **only the export files**, never `git add -A`, refuses to run
+if unrelated changes are staged, has a shrink guard that rejects an export that
+lost most of its players, and creates no commit when nothing changed.
 
 Try it safely first:
 
@@ -557,7 +616,7 @@ requests.
 python3 -m unittest discover -s tests -t .
 ```
 
-234 tests, no network access — they run against real pages saved in
+268 tests, no network access — they run against real pages saved in
 `tests/fixtures/` from both ends of the backfill range (2021 and 2025), so a
 format change in either direction is caught. The fixtures deliberately include
 the awkward cases: cells opened `<td>` and closed `</th>`, a game with a score
@@ -568,23 +627,68 @@ with leading zeros.
 
 ## The viewer
 
-`norcal_hockey_viewer.html` is unchanged and still self-contained: all HTML,
-CSS and JavaScript in one file, fetching its JSON from GitHub's raw CDN on load.
+`norcal_hockey_viewer.html` is one self-contained file — all HTML, CSS and
+JavaScript, no build step.
 
-It has four views — **Browse by Season**, **Club View**, **Player Lookup**, and
-**Player Flow** (an alluvial diagram of player movement between clubs across
-seasons). Player names are clickable throughout, birth years appear as badges,
-and two-way players (skater *and* goalie in one season) are detected and shown
-with both stat lines.
+It reads the [app dataset](#the-app-dataset). On load it tries `data/app/`
+first, so a checkout needs no editing, and falls back to the published `data`
+branch, so the same file works from anywhere:
 
-To test it locally:
-
-```bash
-npx serve . -l 8080
+```
+https://raw.githubusercontent.com/lamfalus/norcal-hockey/data/
 ```
 
-Then open `http://localhost:8080/norcal_hockey_viewer.html`. It still fetches
-the JSON from GitHub, since the URL is absolute.
+Whichever answers first is remembered, so that costs one request, not two.
+
+### The views
+
+**Browse by Season** — every skater and goalie in a season, narrowed by club
+and division, sortable on any column.
+
+**Club View** — a club's teams season by season, with rosters. Teams are
+grouped by identity, never by name: in the older seasons the site gives every
+one of a club's teams the same name, and eighteen different squads are all
+called "Anaheim Jr Ducks" in 2021.
+
+**Player Lookup** — a career, one section per season, each with a collapsible
+**game log**: date, opponent, home or away, result, goals, assists, points,
+penalty minutes, and power-play or short-handed marks. One fetch of the
+player's shard covers every season they played.
+
+**Player Flow** — an alluvial diagram of movement between clubs across seasons.
+
+Two-way players are shown with both stat lines, and birth years appear as
+badges — which is not decoration: a quarter of players share a display name
+with somebody else, so the year is how you tell two children apart.
+
+### Filters
+
+Two pickers sit above the tabs, because both change what counts as a game in
+every view below.
+
+**League** — one of the nine, or all of them.
+
+**Games counted** — regular plus playoffs by default. Preseason and exhibition
+games are a third of all stat lines, so folding them into a season total
+quietly inflates it. The filter makes that a decision rather than an accident.
+
+### What it deliberately does not do
+
+Identity is settled by the collector, never in the browser. Players and teams
+are addressed by id — a display name is a search term, not a handle, and a team
+id is only unique within its season. Clubs arrive already canonicalised, each
+with a short name to show and a kind, so only real clubs reach the pickers
+while bracket slots, high schools and visiting teams keep their names for
+schedules.
+
+To serve it locally:
+
+```bash
+python3 -m http.server 8777
+```
+
+Then open `http://localhost:8777/norcal_hockey_viewer.html`. With `data/app`
+present it reads that; without it, the published branch.
 
 ---
 
@@ -597,12 +701,14 @@ norcalstats/            the collector
   db.py, schema.sql     database
   fetch.py              polite HTTP + page archive
   htmltable.py          tolerant table parser
-  names.py              name/club/birth-year handling
+  names.py              name and birth-year handling
+  clubs.py              club identity: canonical name, short name, kind
   identity.py           player identity resolution
   pipeline.py           crawl orchestration
-  export.py             JSON exports
+  export.py             the legacy JSON exports
+  appdata.py            the app dataset the viewer reads
   review.py             the review queue and its decisions
-  publish.py            git commit/push
+  publish.py            git commit/push, and the app dataset branch
   sources/timetoscore.py  page parsers
 deploy/                 systemd units and installer
 tests/                  test suite and HTML fixtures
