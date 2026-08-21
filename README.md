@@ -475,9 +475,10 @@ per-season splits, teams, divisions, clubs, leagues, standings. Loaded once,
 and enough on its own for every list and table in the app. 8.8 MB, about 900 KB
 gzipped.
 
-**`logs/pNN.json`** — per-game lines for a player, bucketed by player id.
-Opening a player fetches one bucket, around 100 KB gzipped, covering every
-season they played.
+**`logs/pNN.json`** — per-game lines for a player, in 32 buckets chosen by
+`player_id % 32`. The app works out which file to fetch by arithmetic, so there
+is no index to load and keep in step. Opening a player costs one bucket, around
+100 KB gzipped, covering every season they played.
 
 **`games/sNN.json`** — every game of a season: goals, penalties and period
 scores where it has been played, and the fixture where it has not. Scheduled
@@ -485,9 +486,15 @@ games are carried without a score, so a team page is a schedule as much as a
 record — 5,732 games are scheduled rather than final, including every one of
 the current season's.
 
-Six seasons come to 38 files and 66 MB, about 6 MB gzipped, which GitHub serves
-compressed. Transfer was never the constraint; parse time and memory on a phone
-at a rink is, and that is what loading detail on demand solves.
+Six seasons come to 39 files and 68 MB, about 6.9 MB gzipped, which GitHub
+serves compressed. Transfer was never the constraint; parse time and memory on
+a phone at a rink is, and that is what loading detail on demand solves. In
+practice a cold load fetches only `core.json` — 899 KB gzipped, about 230 ms —
+and nothing else until somebody clicks.
+
+Note that this is the **export** being split, not the database. The collector
+keeps one SQLite file (94 MB on the Pi) and shards only on the way out, because
+the shape that suits a query is not the shape that suits a phone.
 
 ### The legacy exports
 
