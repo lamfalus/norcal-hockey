@@ -27,6 +27,10 @@
   .global-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;padding-bottom:18px;margin-bottom:22px;border-bottom:1px solid var(--border);}
   .global-filters select{min-width:170px;}
   .filter-note{font-size:.78rem;color:var(--muted);margin-left:auto;align-self:center;}
+  /* The browse filters collapse on a small screen; on a desktop the summary is
+     redundant, so it is hidden and the panel is simply always open. */
+  .filter-panel > summary{display:none;}
+  .filter-panel[open] > summary{display:none;}
   .derived{border-bottom:1px dotted var(--muted);cursor:help;}
   .alias-note{font-size:.82rem;color:var(--muted);margin:-6px 0 16px;}
   .log-details{margin:10px 0 4px;}
@@ -171,6 +175,26 @@
     /* Layout */
     main{padding:12px 10px;}
     .panel{padding:12px;}
+    /* The filter panel becomes a tappable summary line saying what is set. */
+    .filter-panel > summary{
+      display:block;list-style:none;cursor:pointer;
+      background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius);
+      padding:11px 34px 11px 13px;margin-bottom:14px;
+      font-size:.85rem;color:var(--text);position:relative;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    }
+    .filter-panel > summary::-webkit-details-marker{display:none;}
+    .filter-panel > summary::after{
+      content:'▾';position:absolute;right:13px;top:50%;
+      transform:translateY(-50%);color:var(--muted);font-size:.8rem;
+    }
+    .filter-panel[open] > summary{
+      display:block;margin-bottom:10px;border-radius:var(--radius) var(--radius) 0 0;
+    }
+    .filter-panel[open] > summary::after{content:'▴';}
+    .filter-panel[open] .controls{margin-bottom:16px;}
+
     /* Controls — two per row. Stacked full-width, five dropdowns ate 337px of
        an 835px screen, and with the header and the filter bar that left barely
        a fifth of the phone for the data it was all filtering. */
@@ -305,6 +329,12 @@
 
 <!-- VIEW 1: Browse by Season -->
 <div class="view active" id="view-browse">
+  <!-- Five dropdowns are 175px of a phone's screen even two to a row, and most
+       of the time they are showing what you already chose. Collapsed on a small
+       screen, with the summary saying what is set; always open on a desktop,
+       where the room is there anyway. -->
+  <details class="filter-panel" id="browse-filters" open>
+    <summary id="browse-filter-summary">Filters</summary>
   <div class="controls">
     <label>Season
       <select id="sel-season" onchange="onSeasonChange()">
@@ -343,6 +373,7 @@
       </select>
     </label>
   </div>
+  </details>
   <div id="browse-content">
     <div class="empty"><div class="icon">🏒</div>Select a season above to begin.</div>
   </div>
@@ -900,7 +931,29 @@ function onClubBrowseChange(){
   }
   onBrowseRender();
 }
+// What the collapsed filter panel says it is showing. Only the season is
+// always named; the rest appear when they are actually narrowing something, so
+// the line stays short enough to read on a phone.
+function updateBrowseSummary(){
+  const el=document.getElementById('browse-filter-summary');
+  if(!el)return;
+  const season=document.getElementById('sel-season').value;
+  const club=document.getElementById('sel-club-browse').value;
+  const div=document.getElementById('sel-div-browse').value;
+  const type=document.getElementById('sel-type').value;
+  const minGP=parseInt(document.getElementById('sel-min-gp').value)||1;
+  if(!season){el.textContent='Choose a season';return;}
+  const parts=[SEASON_LABELS[parseInt(season)]||season];
+  parts.push(club?clubDisplayName(club):'all clubs');
+  if(div)parts.push(div);
+  if(type==='skater')parts.push('skaters');
+  else if(type==='goalie')parts.push('goalies');
+  if(minGP>1)parts.push(minGP+'+ GP');
+  el.textContent=parts.join(' · ');
+}
+
 function onBrowseRender(){
+  updateBrowseSummary();
   const season=parseInt(document.getElementById('sel-season').value);
   const club=document.getElementById('sel-club-browse').value;
   const div=document.getElementById('sel-div-browse').value;
@@ -1824,6 +1877,13 @@ function boot() {
     initBrowse();
     initClub();
     initMigration();
+    // Open in the markup so the panel still works without this, and closed here
+    // only where the screen is small enough to need it. Once at boot: after
+    // that it is the reader's to open and leave open.
+    var filters = document.getElementById('browse-filters');
+    if (filters && window.matchMedia('(max-width:600px)').matches) {
+      filters.open = false;
+    }
     status.textContent = '✓ ' + core.metadata.counts.players.toLocaleString() + ' players · '
       + SEASONS.length + ' seasons · ' + core.metadata.counts.teams.toLocaleString() + ' teams';
     history.replaceState(captureAppState(), '');
