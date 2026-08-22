@@ -87,10 +87,13 @@
   .section-heading h2{font-size:1.3rem;font-weight:700;}
   .badge{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:2px 10px;font-size:.78rem;color:var(--muted);}
   .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}
-  /* A table that outgrows its column widths scrolls inside this, rather than
-     pushing the whole page sideways. */
-  .table-wrap{border-radius:var(--radius);border:1px solid var(--border);
-              overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  /* No overflow here on a wide screen, deliberately. Any overflow other than
+     visible makes this a scroll container, and a scroll container becomes the
+     containing block for the sticky header inside it -- which then stops
+     pinning to the viewport and scrolls away with the rows. The narrow-screen
+     rules below turn it into a scroll box on purpose, and move the header's
+     anchor with it. */
+  .table-wrap{border-radius:var(--radius);border:1px solid var(--border);}
   table{width:100%;border-collapse:collapse;font-size:.88rem;}
   thead th{background:var(--surface2);color:var(--muted);padding:10px 14px;text-align:left;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap;position:sticky;top:var(--header-h,57px);z-index:10;}
   thead th:hover{color:var(--text);}
@@ -213,27 +216,31 @@
 
     /* Tables — let the columns take the width they need and scroll sideways,
        rather than squeezing thirteen of them into 350px and giving a player's
-       name 68 of them. */
+       name 68 of them.
+
+       The columns a phone does not need at a glance are dropped instead (see
+       MOBILE_ONLY_COLUMNS), so the table fits and needs no scroll container.
+       That matters more than it sounds: any scrolling ancestor becomes the
+       anchor for the sticky header inside it, so a scroll box here would stop
+       the header pinning below the title bar and leave it stranded among the
+       rows. */
     main{-webkit-overflow-scrolling:touch;}
     .table-wrap table{table-layout:auto !important;width:auto !important;
                       min-width:100%;}
-    thead th{padding:8px 9px;font-size:.66rem;}
-    tbody td{padding:9px 9px;font-size:.82rem;}
+    /* Only the tables that still will not fit get a scroll container, and only
+       those lose the pinned header -- they are the short ones, where it matters
+       least. The long lists fit, and keep it. */
+    .table-wrap.scrolls{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    thead th{padding:8px 7px;font-size:.66rem;}
+    tbody td{padding:9px 7px;font-size:.8rem;}
     .table-wrap colgroup{display:none;}
+    /* Names and teams wrap rather than forcing the table wider than the screen;
+       the numbers, which are short, stay on one line. */
+    tbody td:not(.num):not(.jersey){white-space:normal;}
+    thead th{white-space:normal;}
 
-    /* A stats table is wider than a phone however it is cut, so the name stays
-       put while the numbers scroll under it -- otherwise you scroll right to
-       find the points and no longer know whose they are. The rank goes: it is
-       the row order, which is still visible. */
+    /* The rank goes: it is the row order, which is still visible. */
     .ranked th:first-child,.ranked td:first-child{display:none;}
-    .ranked th:nth-child(2),.ranked td:nth-child(2){
-      position:sticky;left:0;z-index:6;
-      background:var(--surface);
-      box-shadow:1px 0 0 var(--border);
-      max-width:42vw;overflow:hidden;text-overflow:ellipsis;
-    }
-    .ranked thead th:nth-child(2){background:var(--surface2);z-index:11;}
-    .ranked tbody tr:nth-child(even) td:nth-child(2){background:var(--surface);}
     /* Player lookup */
     .player-history-header h2{font-size:1.2rem;}
     .stat-summary{grid-template-columns:repeat(3,1fr);}
@@ -1794,6 +1801,73 @@ function escAttr(s){return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'
 
 
 
+// ── Narrow screens ────────────────────────────────────────────────────────
+// Columns worth dropping on a phone, named rather than numbered because the
+// tables here have six different shapes and a column index means something
+// different in each. Everything dropped is a detail the player's or the game's
+// own page carries anyway; what is left is who, where, and how they did.
+//
+// Dropping them is what lets the table fit without a scroll container, and the
+// header depends on that: a sticky header pins to its nearest scrolling
+// ancestor, so wrapping the table in one would unpin it from the title bar.
+var MOBILE_DROP_COLUMNS = {
+  '#': 1, 'Division': 1, 'PIM': 1, 'PPG': 1, 'SHG': 1, 'Pts/GP': 1,
+  'Type': 1, 'Rink': 1, 'Shots': 1, 'SO': 1
+};
+
+function isNarrow() {
+  return window.matchMedia('(max-width:600px)').matches;
+}
+
+function applyMobileColumns(root) {
+  var narrow = isNarrow();
+  (root || document).querySelectorAll('table').forEach(function(table) {
+    var heads = table.querySelectorAll('thead th');
+    if (!heads.length) return;
+    var drop = {};
+    heads.forEach(function(th, i) {
+      var name = (th.textContent || '').trim();
+      if (MOBILE_DROP_COLUMNS[name]) drop[i] = true;
+      th.style.display = (narrow && drop[i]) ? 'none' : '';
+    });
+    if (Object.keys(drop).length) {
+      table.querySelectorAll('tr').forEach(function(tr) {
+        if (tr.parentNode.tagName === 'THEAD') return;
+        // A row spanning the table (a section divider) has no columns to drop.
+        if (tr.children.length !== heads.length) return;
+        for (var i = 0; i < tr.children.length; i++) {
+          tr.children[i].style.display = (narrow && drop[i]) ? 'none' : '';
+        }
+      });
+    }
+
+    // Whatever still will not fit scrolls, and only that gives up its pinned
+    // header. Measured rather than assumed: which tables overflow depends on
+    // the names in them, and those change with the filters.
+    var wrap = table.closest('.table-wrap');
+    if (wrap) {
+      wrap.classList.toggle(
+        'scrolls', narrow && table.scrollWidth > wrap.clientWidth + 1);
+    }
+  });
+}
+
+// Tables are rebuilt constantly -- every filter change, sort and drill-down --
+// so this watches for them rather than being called from each render.
+function watchForTables() {
+  var pending = null;
+  var run = function() { pending = null; applyMobileColumns(document); };
+  // A timer rather than an animation frame: frames do not fire while the tab is
+  // in the background, so a table rendered there would keep its full width
+  // until something else happened to redraw it.
+  new MutationObserver(function() {
+    if (pending) return;
+    pending = setTimeout(run, 0);
+  }).observe(document.body, { childList: true, subtree: true });
+  window.addEventListener('resize', run);
+  run();
+}
+
 // ── Birth year labels ─────────────────────────────────────────────────────
 // 2,592 players share a display name with somebody else, so the birth year is
 // not decoration -- it is how you tell two children apart. Only a third have
@@ -1881,9 +1955,10 @@ function boot() {
     // only where the screen is small enough to need it. Once at boot: after
     // that it is the reader's to open and leave open.
     var filters = document.getElementById('browse-filters');
-    if (filters && window.matchMedia('(max-width:600px)').matches) {
+    if (filters && isNarrow()) {
       filters.open = false;
     }
+    watchForTables();
     status.textContent = '✓ ' + core.metadata.counts.players.toLocaleString() + ' players · '
       + SEASONS.length + ' seasons · ' + core.metadata.counts.teams.toLocaleString() + ' teams';
     history.replaceState(captureAppState(), '');
