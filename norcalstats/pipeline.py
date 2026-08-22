@@ -764,6 +764,34 @@ class Pipeline:
     def store_scoresheet(self, game_id: int, html: str, sha: str) -> None:
         """Parse one scoresheet and replace all stored detail for that game."""
         sheet = tts.parse_scoresheet(html, game_id)
+
+        # A sheet whose date is not the fixture's date is not the fixture's
+        # sheet. That happens when the game id was wrong: asking for game 1
+        # returns the site's real game 1, played in 2010, whose roster then
+        # lands on a 2024 tournament fixture -- 87 players who never existed
+        # here, and a season year dragged back fourteen years by the date.
+        # Rejecting it leaves the fixture intact and unparsed, which is what an
+        # unreadable sheet should look like.
+        if sheet.is_usable and sheet.date_iso:
+            scheduled = self.conn.execute(
+                "SELECT date_text FROM games WHERE game_id = ?", (game_id,)
+            ).fetchone()
+            expected = tts.schedule_day_month(scheduled["date_text"]) if scheduled else None
+            if expected and expected != (int(sheet.date_iso[5:7]), int(sheet.date_iso[8:10])):
+                log.warning(
+                    "game %s: scoresheet is dated %s but the schedule says %r; "
+                    "refusing it as another game's sheet",
+                    game_id, sheet.date_iso, scheduled["date_text"])
+                self.conn.execute(
+                    "UPDATE games SET parse_error = ?, scoresheet_sha = ?, "
+                    "scoresheet_at = ?, parse_version = ?, updated_at = ? "
+                    "WHERE game_id = ?",
+                    (f"scoresheet dated {sheet.date_iso} does not match the schedule",
+                     sha, now(), tts.PARSE_VERSION, now(), game_id),
+                )
+                self.stats.empty_sheets += 1
+                return
+
         if not sheet.is_usable:
             # Record the attempt, so a sheet that genuinely has no roster is not
             # refetched every night for the rest of the season. Bumping

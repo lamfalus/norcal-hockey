@@ -10,7 +10,7 @@ from typing import Any, Iterable, Optional, Sequence
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 
@@ -108,6 +108,49 @@ def _migrate(conn: sqlite3.Connection, from_version: int) -> None:
         _migrate_v3_relabel_placeholder_rosters(conn)
     if from_version < 4:
         _migrate_v4_rebuild_clubs(conn)
+    if from_version < 5:
+        _migrate_v5_drop_foreign_scoresheets(conn)
+
+
+def _migrate_v5_drop_foreign_scoresheets(conn: sqlite3.Connection) -> None:
+    """v4 -> v5: remove games carrying another game's scoresheet.
+
+    An earlier parser invented a game id when it could not read one. Asking the
+    site for game 1 returns the site's real game 1 -- played in 2010, different
+    teams, different children -- and that roster was then stored against a 2024
+    tournament fixture. Thirteen games, 87 players who never played here, and a
+    season year dragged back fourteen years because the dates came with them.
+
+    The tell is that the scoresheet's date is not the date the schedule printed
+    for that fixture. Nothing else in 8,490 games trips it.
+    """
+    from .sources.timetoscore import schedule_day_month
+
+    try:
+        rows = conn.execute(
+            "SELECT game_id, date_text, date_iso FROM games"
+            " WHERE has_scoresheet = 1 AND date_text IS NOT NULL AND date_iso IS NOT NULL"
+        ).fetchall()
+    except sqlite3.Error:
+        return
+
+    doomed = []
+    for row in rows:
+        expected = schedule_day_month(row["date_text"])
+        if not expected:
+            continue
+        if expected != (int(row["date_iso"][5:7]), int(row["date_iso"][8:10])):
+            doomed.append(row["game_id"])
+    if not doomed:
+        return
+
+    log.info("dropping %d game(s) carrying another game's scoresheet", len(doomed))
+    conn.execute("PRAGMA foreign_keys = ON")
+    marks = ",".join("?" for _ in doomed)
+    conn.execute(f"DELETE FROM games WHERE game_id IN ({marks})", doomed)
+    # The players those sheets invented are left parentless; identity.rebuild
+    # on the next derive clears them out of the way.
+    conn.commit()
 
 
 def _migrate_v4_rebuild_clubs(conn: sqlite3.Connection) -> None:

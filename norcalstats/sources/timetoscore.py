@@ -922,6 +922,19 @@ def _parse_sheet_date(text: str) -> Optional[str]:
         return None
 
 
+def schedule_day_month(text: str) -> Optional[tuple[int, int]]:
+    """``"Fri Aug 29"`` -> ``(8, 29)``. The year is not on the schedule page.
+
+    Enough to tell whether a scoresheet belongs to the fixture it was fetched
+    for, which the year alone cannot do.
+    """
+    match = re.search(r"([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2})", text or "")
+    if not match:
+        return None
+    month = _MONTHS.get(match.group(1).lower())
+    return (month, int(match.group(2))) if month else None
+
+
 def schedule_date_to_iso(text: str, start_year: Optional[int]) -> Optional[str]:
     """``"Fri Aug 29"`` + season start year -> ISO date.
 

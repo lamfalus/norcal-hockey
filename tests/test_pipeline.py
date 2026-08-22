@@ -411,6 +411,46 @@ def all_tables_first(html):
     return all_tables(html)[0]
 
 
+class TestForeignScoresheets(PipelineTestCase):
+    """A sheet dated differently from the fixture is another game's sheet."""
+
+    def test_a_sheet_for_a_different_date_is_refused(self):
+        # Asking for game 1 returns the site's real game 1, from 2010. Its
+        # roster must not land on a 2025 fixture.
+        self.seed_season_and_team()
+        row = self.conn.execute(
+            "SELECT game_id, date_text FROM games WHERE date_text IS NOT NULL"
+            " AND has_scoresheet = 1 LIMIT 1").fetchone()
+        game_id = row["game_id"]
+        html = load("game.html").replace("08-29-25", "03-06-10")
+
+        self.pipeline.store_scoresheet(game_id, html, "sha-foreign")
+        self.conn.commit()
+
+        stored = self.conn.execute(
+            "SELECT date_iso, parse_error FROM games WHERE game_id = ?", (game_id,)
+        ).fetchone()
+        self.assertNotIn("2010", stored["date_iso"] or "",
+                         "the foreign date must not overwrite the fixture's")
+        self.assertIn("does not match", stored["parse_error"] or "")
+        self.assertEqual(
+            db.scalar(self.conn,
+                      "SELECT COUNT(*) FROM game_rosters WHERE game_id = ?", (game_id,)),
+            0, "no roster from another game's sheet")
+
+    def test_the_matching_sheet_is_still_accepted(self):
+        # The guard must not reject the sheets it exists to protect.
+        self.seed_season_and_team()
+        self.pipeline.store_scoresheet(50647, load("game.html"), "sha-ok")
+        self.conn.commit()
+        self.assertEqual(
+            db.scalar(self.conn, "SELECT date_iso FROM games WHERE game_id = 50647"),
+            "2025-08-29")
+        self.assertTrue(
+            db.scalar(self.conn,
+                      "SELECT COUNT(*) FROM game_rosters WHERE game_id = 50647") > 0)
+
+
 class TestSeasonYearFromGameDates(PipelineTestCase):
     """The year the games agree on decides the season, not the earliest one."""
 
