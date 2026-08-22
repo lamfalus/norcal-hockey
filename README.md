@@ -410,6 +410,21 @@ Two things worth knowing about the source data:
 - **The shot grid is unreliable.** Scorekeepers routinely leave it half-filled —
   one 19-goal game in the fixtures has two goals marked. It is recorded and
   flagged `reliable = 0`, and is never used as a stats source.
+- **A scoresheet is checked against the fixture it was fetched for.** Game ids
+  come from the link, never from the printed label, but an earlier parser
+  invented one when it could not read it — and asking the site for game 1
+  returns the site's real game 1, played in 2010. Its roster then lands on a
+  fixture a decade later. A sheet whose date is not the date the schedule
+  printed is refused, which catches it: thirteen games in one database, and
+  nothing else in 8,490.
+
+That last one earns its paragraph because of how far the damage travelled. The
+foreign dates decided the season's start year, the start year is what birth
+years are inferred from, and a birth year fourteen years out reads as two
+children sharing a name — so the resolver split real players apart and raised
+thousands of questions about it. A season's year is now settled by the year its
+games agree on rather than by its earliest one, so no handful of rows can move
+it again.
 
 Reconciliation was verified against the league's own numbers: for two fully
 parsed teams, all 28 players matched the published GP, goals and assists
