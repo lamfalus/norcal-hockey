@@ -83,7 +83,10 @@
   .section-heading h2{font-size:1.3rem;font-weight:700;}
   .badge{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:2px 10px;font-size:.78rem;color:var(--muted);}
   .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}
-  .table-wrap{border-radius:var(--radius);border:1px solid var(--border);}
+  /* A table that outgrows its column widths scrolls inside this, rather than
+     pushing the whole page sideways. */
+  .table-wrap{border-radius:var(--radius);border:1px solid var(--border);
+              overflow-x:auto;-webkit-overflow-scrolling:touch;}
   table{width:100%;border-collapse:collapse;font-size:.88rem;}
   thead th{background:var(--surface2);color:var(--muted);padding:10px 14px;text-align:left;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap;position:sticky;top:var(--header-h,57px);z-index:10;}
   thead th:hover{color:var(--text);}
@@ -155,23 +158,58 @@
   .load-btn:hover{color:var(--text);border-color:var(--accent);}
   .load-status{font-size:.75rem;margin-left:4px;display:none;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   @media(max-width:600px){
-    /* Header */
-    header{flex-wrap:wrap;padding:10px 14px;gap:10px;}
-    header h1{font-size:1rem;}
-    .tab-bar{margin-left:0;width:100%;}
-    .tab-btn{flex:1;text-align:center;padding:9px 4px;font-size:.78rem;}
+    /* Header — the title and the tabs share a line rather than stacking, and
+       the subtitle goes: on a phone the tabs are the navigation, the wordmark
+       is decoration. */
+    header{flex-wrap:wrap;padding:7px 12px;gap:6px;}
+    header h1{font-size:.95rem;}
+    header h1 span{display:none;}
+    .load-status{display:none !important;}
+    .tab-bar{margin-left:0;width:100%;gap:2px;}
+    .tab-btn{flex:1;text-align:center;padding:8px 2px;font-size:.72rem;
+             border-radius:5px;}
     /* Layout */
-    main{padding:14px 12px;}
-    .panel{padding:14px;}
-    /* Controls — stack dropdowns full-width */
-    .controls{flex-direction:column;gap:8px;}
-    .controls label{width:100%;}
-    select,input[type=text]{min-width:unset;width:100%;font-size:1rem;}
+    main{padding:12px 10px;}
+    .panel{padding:12px;}
+    /* Controls — two per row. Stacked full-width, five dropdowns ate 337px of
+       an 835px screen, and with the header and the filter bar that left barely
+       a fifth of the phone for the data it was all filtering. */
+    .controls{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;
+              margin-bottom:16px;}
+    .controls label{width:auto;min-width:0;font-size:.72rem;gap:3px;}
+    .global-filters{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;
+                    padding-bottom:12px;margin-bottom:14px;}
+    .global-filters label{font-size:.72rem;gap:3px;}
+    .filter-note{grid-column:1 / -1;margin-left:0;font-size:.72rem;}
+    select,input[type=text]{min-width:0;width:100%;font-size:16px;padding:7px 9px;}
     .search-wrap{width:100%;}
-    /* Tables — tighter cells, smooth touch scroll */
+    /* A label long enough to wrap would push its row taller than its neighbour. */
+    .controls label,.global-filters label{white-space:nowrap;overflow:hidden;
+                                          text-overflow:ellipsis;}
+
+    /* Tables — let the columns take the width they need and scroll sideways,
+       rather than squeezing thirteen of them into 350px and giving a player's
+       name 68 of them. */
     main{-webkit-overflow-scrolling:touch;}
-    thead th{padding:8px 10px;font-size:.68rem;}
-    tbody td{padding:8px 10px;font-size:.82rem;}
+    .table-wrap table{table-layout:auto !important;width:auto !important;
+                      min-width:100%;}
+    thead th{padding:8px 9px;font-size:.66rem;}
+    tbody td{padding:9px 9px;font-size:.82rem;}
+    .table-wrap colgroup{display:none;}
+
+    /* A stats table is wider than a phone however it is cut, so the name stays
+       put while the numbers scroll under it -- otherwise you scroll right to
+       find the points and no longer know whose they are. The rank goes: it is
+       the row order, which is still visible. */
+    .ranked th:first-child,.ranked td:first-child{display:none;}
+    .ranked th:nth-child(2),.ranked td:nth-child(2){
+      position:sticky;left:0;z-index:6;
+      background:var(--surface);
+      box-shadow:1px 0 0 var(--border);
+      max-width:42vw;overflow:hidden;text-overflow:ellipsis;
+    }
+    .ranked thead th:nth-child(2){background:var(--surface2);z-index:11;}
+    .ranked tbody tr:nth-child(even) td:nth-child(2){background:var(--surface);}
     /* Player lookup */
     .player-history-header h2{font-size:1.2rem;}
     .stat-summary{grid-template-columns:repeat(3,1fr);}
@@ -183,9 +221,24 @@
     .ctb-item{min-width:50%;}
     .ctb-val{font-size:1.4rem;}
     .club-team-grid{grid-template-columns:1fr;}
+    /* Team page */
+    .team-head h2{font-size:1.1rem;}
+    .period-grid{grid-template-columns:repeat(3,1fr);gap:6px;}
+    .period-cell{padding:8px 4px;}
+    .period-cell .pc-split{font-size:.65rem;}
+    /* Box score — the headline is two team names and a score, which is three
+       wrapped lines at the desktop size. */
+    .modal{padding:10px 8px;}
+    .modal-card{padding:16px 12px;}
+    .box-score-line{font-size:1.05rem;line-height:1.35;}
+    .box-meta{font-size:.75rem;}
+    /* The flow chart is drawn at a fixed 500px minimum and scrolls; letting it
+       shrink to fit rendered its labels at 7.6px. */
+    #migration-content{overflow-x:auto;-webkit-overflow-scrolling:touch;}
     /* Misc */
     .empty{padding:40px 16px;}
     .section-heading h2{font-size:1.1rem;}
+    .stat-summary{gap:6px;}
   }
   /* Player popup for flow view */
   #mig-player-popup{
@@ -910,7 +963,7 @@ function renderSkaterTable(entries,showTeamDiv,tableId){
   const hdrs=cols.map((c,i)=>{const r=i>=(showTeamDiv?5:3)?' style="text-align:right"':'';return '<th data-col="'+c+'"'+r+'>'+c+'</th>';}).join('');
   const cg=showTeamDiv?'<colgroup>'+BROWSE_SHARED_COLS+'<col style="width:6%"><col style="width:6%"><col style="width:7%"><col style="width:6%"><col style="width:5%"><col style="width:5%"><col style="width:8%"></colgroup>':'';
   const tableStyle=showTeamDiv?' style="table-layout:fixed;width:100%"':'';
-  return '<div class="table-wrap"><table id="'+(tableId||'t')+'"'+tableStyle+'>'+cg+'<thead><tr>'+hdrs+'</tr></thead><tbody>'+entries.map(makeRow).join('')+'</tbody></table></div>';
+  return '<div class="table-wrap"><table class="ranked" id="'+(tableId||'t')+'"'+tableStyle+'>'+cg+'<thead><tr>'+hdrs+'</tr></thead><tbody>'+entries.map(makeRow).join('')+'</tbody></table></div>';
 }
 function attachSortHandlers(tableId,entries,showTeamDiv){
   const table=document.getElementById(tableId);
@@ -961,7 +1014,7 @@ function renderGoalieTable(entries,showTeamDiv,tableId){
   const hdrs=cols.map((c,i)=>{const r=i>=rightStart?' style="text-align:right"':'';return '<th data-col="'+c+'"'+r+'>'+c+'</th>';}).join('');
   const cg=showTeamDiv?'<colgroup>'+BROWSE_SHARED_COLS+'<col style="width:8%"><col style="width:7%"><col style="width:8%"><col style="width:10%"><col style="width:7%"></colgroup>':'';
   const tableStyle=showTeamDiv?' style="table-layout:fixed;width:100%"':'';
-  return '<div class="table-wrap"><table id="'+(tableId||'gt')+'"'+tableStyle+'>'+cg+'<thead><tr>'+hdrs+'</tr></thead><tbody>'+entries.map(makeRow).join('')+'</tbody></table></div>';
+  return '<div class="table-wrap"><table class="ranked" id="'+(tableId||'gt')+'"'+tableStyle+'>'+cg+'<thead><tr>'+hdrs+'</tr></thead><tbody>'+entries.map(makeRow).join('')+'</tbody></table></div>';
 }
 function attachGoalieSortHandlers(tableId,entries,showTeamDiv){
   const table=document.getElementById(tableId);
@@ -1247,7 +1300,7 @@ function showTeamRoster(key) {
       <div class="panel-title">${escHtml(title)} · Roster</div>
       ${(skaters.length || goalies.length) ? `
       <div class="table-wrap">
-        <table id="club-roster-table">
+        <table class="ranked" id="club-roster-table">
           ${skaters.length ? `
           <thead><tr>
             <th data-col="Rk" style="text-align:right">Rk</th>
@@ -2010,7 +2063,7 @@ function renderTeamRoster(roster) {
   }).join('');
 
   host.innerHTML = '<div class="panel"><div class="panel-title">Roster</div>'
-    + (skaters.length ? '<div class="table-wrap"><table><thead><tr>'
+    + (skaters.length ? '<div class="table-wrap"><table class="ranked"><thead><tr>'
         + '<th style="text-align:right">Rk</th><th>Player</th><th>#</th>'
         + '<th style="text-align:right">GP</th><th style="text-align:right">G</th>'
         + '<th style="text-align:right">A</th><th style="text-align:right">PTS</th>'
@@ -2018,7 +2071,7 @@ function renderTeamRoster(roster) {
         + '<th style="text-align:right">SHG</th><th style="text-align:right">Pts/GP</th>'
         + '</tr></thead><tbody>' + skaterRows + '</tbody></table></div>' : '')
     + (goalies.length ? '<div class="panel-title" style="margin-top:18px">Goaltending</div>'
-        + '<div class="table-wrap"><table><thead><tr>'
+        + '<div class="table-wrap"><table class="ranked"><thead><tr>'
         + '<th style="text-align:right">Rk</th><th>Goalie</th><th>#</th>'
         + '<th style="text-align:right">GP</th><th style="text-align:right">Shots</th>'
         + '<th style="text-align:right">GA</th><th style="text-align:right">GAA</th>'
@@ -2784,7 +2837,7 @@ function _drawMigrationSVG(container, legendEl) {
     });
   });
 
-  container.innerHTML = '<svg data-last-season="'+lastSeason+'" data-no-data="'+escAttr(NO_DATA)+'" data-primary-season="'+primarySeason+'" width="'+W+'" height="'+H+'" style="display:block;max-width:100%;">'
+  container.innerHTML = '<svg data-last-season="'+lastSeason+'" data-no-data="'+escAttr(NO_DATA)+'" data-primary-season="'+primarySeason+'" width="'+W+'" height="'+H+'" style="display:block;">'
                       + flowSVG + labelSVG + blockSVG + totalSVG + '</svg>';
 
   // ── 5b. Click interactivity ────────────────────────────────────────
