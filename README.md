@@ -12,6 +12,46 @@ Two pieces:
 
 ---
 
+## Where it stands
+
+Running unattended and publishing itself. A Raspberry Pi collects every night at
+03:30, writes the app dataset, and force-pushes it to the `data` branch with a
+repo-scoped deploy key. GitHub Pages serves the viewer from `main`, the viewer
+reads the dataset from `data`, and neither needs a hand.
+
+| | |
+|---|---|
+| Seasons | Fall 2021 – Fall 2026 (S27–S31, S33 — the site has no S32) |
+| Leagues | 9 — Norcal, SCAHA, the CAHA family, PGHL, Pacific District, Nationals |
+| Games | 14,196, of which 8,444 have a parsed scoresheet |
+| Stat lines | 252,381 across 65,680 goals and 52,374 penalties |
+| Teams / clubs | 2,441 team-seasons resolving to 63 clubs |
+| Players | 11,616 in the published dataset |
+| Open review questions | 178 |
+| Schema | v5 |
+
+Counts are a snapshot taken 2026-08-22; the collector adds to them nightly.
+
+The viewer has six things on it: browse by season, club pages, player pages with
+per-game logs and linemates, team pages with schedule, standings and scoring by
+period, box scores, and the club-to-club player flow chart. It works on a phone
+— that took measuring rather than guessing, and the notes are in
+[The viewer](#the-viewer).
+
+**What is left**, in the order it is worth doing:
+
+- **`ambiguous_team`, 40 questions.** Same-club-versus-same-club games where
+  neither side could be identified, so **5,261 stat lines belong to no team** and
+  are missing from team totals. The only open category that costs data.
+- The other 138 questions are correct as auto-applied: genuine second children
+  sharing a name, and call-ups playing two age groups.
+- `caha_players_s27-s31.json` is a v1 artifact nothing has written since v1, and
+  the legacy exports are switched off. Both can go once nothing points at them.
+- 4,330 orphan player rows — the leftovers of splits that were later undone.
+  Excluded from the export, still in the database.
+
+---
+
 ## What changed in v2
 
 The original scraper was a browser-console script that copied the league's
@@ -596,18 +636,23 @@ do. `--force` overrides the check when a drop really is intended.
 
 ### Publishing to GitHub
 
-Both switches are **off by default**, and both need git authentication on the
-Pi — an SSH deploy key with write access is the usual choice. Pin GitHub's host
-key in `known_hosts` while you are there: the systemd unit runs with
-`ProtectHome=read-only`, so ssh cannot write one itself and an unattended push
-would fail on an unknown host.
+Both switches are **off by default**. This installation runs with
+`"publish_app": true` and `"legacy_exports": false`, so the nightly run
+publishes the app dataset and writes nothing into the repository itself.
+
+Both need git authentication on the Pi. Here that is an ed25519 **deploy key**,
+scoped to this repository, with write access, and `IdentitiesOnly yes` so ssh
+offers nothing else. GitHub's host key is **pre-seeded in `known_hosts`**: the
+systemd unit runs with `ProtectHome=read-only`, so ssh cannot write one itself
+and the first unattended push would fail on an unknown host rather than on
+anything to do with the key.
 
 The collector never handles credentials. It shells out to `git`, which uses
 whatever authentication is already configured.
 
 **`"publish_app": true`** sends the app dataset to a branch of its own
 (`app_branch`, default `data`) as a single **parentless commit, force-pushed**,
-replacing what was there. 38 files rebuilt nightly would otherwise add
+replacing what was there. 39 files rebuilt nightly would otherwise add
 megabytes to the history every night and never give any of it back; a branch
 with no history has nothing to grow. It is written with git plumbing against a
 temporary index, so the working tree, the index and the checked-out branch are
@@ -641,7 +686,7 @@ requests.
 python3 -m unittest discover -s tests -t .
 ```
 
-268 tests, no network access — they run against real pages saved in
+276 tests, no network access — they run against real pages saved in
 `tests/fixtures/` from both ends of the backfill range (2021 and 2025), so a
 format change in either direction is caught. The fixtures deliberately include
 the awkward cases: cells opened `<td>` and closed `</th>`, a game with a score
@@ -720,6 +765,33 @@ id is only unique within its season. Clubs arrive already canonicalised, each
 with a short name to show and a kind, so only real clubs reach the pickers
 while bracket slots, high schools and visiting teams keep their names for
 schedules.
+
+### On a phone
+
+Most of the reading happens at a rink, so this was measured rather than
+guessed. Three quarters of a 375px screen was chrome before a single row of
+data: header, filter bar, and five dropdowns stacked one per line. It is 28%
+now, and thirteen rows of data are visible where two were.
+
+- The browse filters collapse behind a line naming what is set —
+  `'25-'26 · TV Blue Devils · goalies · 5+ GP` — and open on a tap. Open in the
+  markup, so it works with no script; closed at boot only where the screen is
+  small enough to want it.
+- Columns a phone does not need at a glance are dropped: number, division, PIM,
+  PPG, SHG, points per game, type, rink. All of them details the player's or the
+  game's own page carries. They are named rather than numbered, because the
+  tables here have six shapes and index 3 means something different in each.
+- **The table is made to fit rather than made to scroll**, and that is not a
+  style choice. Any scrolling ancestor becomes the anchor for a `position:
+  sticky` header inside it, so wrapping a table in a scroll box unpins its
+  header from the title bar and strands it among the rows. Setting `overflow-x`
+  alone is enough to do it: the browser computes the other axis to `auto` as
+  soon as one of them is not `visible`. Whatever still will not fit gets a
+  scroll box and gives up its header, which is measured per table rather than
+  assumed — today two short ones.
+
+Everything above `600px` is unaffected: thirteen columns, nothing dropped,
+nothing scrolling.
 
 To serve it locally:
 
