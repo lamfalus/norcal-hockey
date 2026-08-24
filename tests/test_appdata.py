@@ -398,5 +398,51 @@ class TestTheLeagueRollUp(AppDataTestCase):
         self.assertIsNone(game["stage"])
 
 
+class TestTheDivisionOfAnUnmatchedSide(AppDataTestCase):
+    """A side with no team row still states a division in its printed name."""
+
+    def _unmatched_game(self, away_name):
+        division = db.scalar(self.conn, "SELECT division_id FROM divisions")
+        self.conn.execute(
+            "INSERT INTO games(game_id,season_id,league_id,division_id,date_iso,"
+            "home_team_id,away_name,home_goals,away_goals,status,game_class) "
+            "VALUES (70,31,3,?,'2025-11-08',58,?,3,2,'final','regular')",
+            (division, away_name))
+        self.conn.commit()
+
+    def rows(self):
+        payload = json.loads((self.out / "schedule.json").read_text(encoding="utf-8"))
+        col = {name: i for i, name in enumerate(payload["columns"])}
+        return [{name: row[i] for name, i in col.items()} for row in payload["games"]]
+
+    def test_the_name_supplies_the_division(self):
+        self._unmatched_game("Bakersfield Jr Condors 14A")
+        self.write()
+        game = next(r for r in self.rows() if r["id"] == 70)
+        self.assertIsNone(game["away"], "the side must be unmatched for this to apply")
+        self.assertEqual(game["awayDiv"], "14U A")
+
+    def test_a_matched_side_is_given_none(self):
+        # It has a team, and the team has a division: a guess from the name
+        # would only be a worse copy of it.
+        self._unmatched_game("Bakersfield Jr Condors 14A")
+        self.write()
+        game = next(r for r in self.rows() if r["id"] == 70)
+        self.assertIsNone(game["homeDiv"])
+
+    def test_a_name_stating_nothing_gives_nothing(self):
+        self._unmatched_game("Santa Rosa Flyers")
+        self.write()
+        game = next(r for r in self.rows() if r["id"] == 70)
+        self.assertIsNone(game["awayDiv"])
+
+    def test_it_reaches_the_game_detail_too(self):
+        self._unmatched_game("San Jose Jr Sharks Girls 16AAA")
+        self.write()
+        detail = json.loads((self.out / "games/s31.json").read_text(encoding="utf-8"))
+        self.assertEqual(detail["games"]["70"]["awayDiv"], "Girls 16AAA")
+        self.assertNotIn("homeDiv", detail["games"]["70"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1004,7 +1004,7 @@ function showView(v, btn) {
 //: date, so there is one thing to change when this file changes rather than two
 //: that can quietly disagree. There is no build step to derive it from -- that
 //: is a deliberate property of this file, not an oversight.
-var VIEWER_VERSION = '2026.08.23';
+var VIEWER_VERSION = '2026.08.24';
 
 var SCHEDULE = { rows: null, loading: null, partial: null };
 
@@ -1060,7 +1060,8 @@ function loadSchedule() {
         home: r[col.home], away: r[col.away], hg: r[col.hg], ag: r[col.ag],
         rink: r[col.rink], level: r[col.level], cls: r[col['class']],
         homeName: r[col.homeName], awayName: r[col.awayName],
-        stage: r[col.stage]
+        stage: r[col.stage],
+        homeDiv: r[col.homeDiv], awayDiv: r[col.awayDiv]
       };
     });
     return SCHEDULE.rows;
@@ -1091,7 +1092,8 @@ function scheduleFromSeasonFile() {
         home: g.home, away: g.away,
         hg: g.hg == null ? null : g.hg, ag: g.ag == null ? null : g.ag,
         rink: g.rink, level: g.level, cls: g['class'],
-        homeName: g.homeName, awayName: g.awayName, stage: g.stage
+        homeName: g.homeName, awayName: g.awayName, stage: g.stage,
+        homeDiv: g.homeDiv, awayDiv: g.awayDiv
       };
     }).sort(function(a, b) {
       return (a.date || '').localeCompare(b.date || '')
@@ -1146,19 +1148,40 @@ function coreDivision(name) {
   return name;
 }
 
-// What a game counts as, for the division filter: the division each side's
-// team belongs to, with any sub-section removed. Not the game's own level --
-// that is the section the league filed it under, which for cross-tier play is
-// neither team's division.
+// What a game counts as, for the division filter: the division each side is
+// in, with any sub-section removed. Not the game's own level -- that is the
+// section the league filed it under, which for cross-tier play is neither
+// team's division.
+//
+// Three answers in order of how much they are worth, because 503 sides never
+// resolved to a team:
+//
+//   1. the team's own division, where there is a team;
+//   2. the division its printed name states, worked out by the collector --
+//      "San Jose Jr Sharks Girls 16AAA" is a Girls 16AAA side whether or not
+//      anybody matched it to a row. Covers 37% of the rest, and every label it
+//      produces names a division the dataset actually has;
+//   3. the division the game itself was filed in. Last because it describes
+//      the fixture rather than the side, and in cross-tier play it is nobody's
+//      division -- but for the 92 games where a club plays itself and the site
+//      prints one name twice, it is right 91 times out of 92.
 function schedDivisionsOf(g) {
   var out = [];
+  var add = function(name) {
+    name = coreDivision(name);
+    if (name && out.indexOf(name) < 0) out.push(name);
+  };
   ['home', 'away'].forEach(function(side) {
     var id = side === 'home' ? g.home : g.away;
-    if (id == null) return;
-    var team = APP.teamByKey[teamKey(g.season, id)];
-    var div = team ? APP.divisionById[team.division] : null;
-    var name = div ? coreDivision(div.name) : '';
-    if (name && out.indexOf(name) < 0) out.push(name);
+    if (id != null) {
+      var team = APP.teamByKey[teamKey(g.season, id)];
+      var div = team ? APP.divisionById[team.division] : null;
+      if (div) { add(div.name); return; }
+    }
+    var stated = side === 'home' ? g.homeDiv : g.awayDiv;
+    if (stated) { add(stated); return; }
+    var filed = APP.divisionById[g.division];
+    if (filed) add(filed.name);
   });
   return out;
 }

@@ -111,6 +111,60 @@ def obs(name, season, team, jersey="", division="10U A", goalie=False):
                        jersey=jersey, division=division, is_goalie=goalie)
 
 
+class TestDivisionFromTeamName(unittest.TestCase):
+    """Reading a division off a team name, for sides that matched no team row.
+
+    503 schedule sides never resolved. The printed name is all that is left,
+    and a third of the time it states the division outright.
+    """
+
+    def test_it_reads_the_age_and_the_tier(self):
+        for name, expected in (
+            ("Bakersfield Jr Condors 14A", "14U A"),
+            ("Ventura Mariners 12BB", "12U BB"),
+            ("Anaheim Jr Ducks 11AAA", "11U AAA"),
+            ("Tri Valley Blue Devils 16A", "16U A"),
+            ("Anaheim Jr Ducks-1 10UA HI", "10U A"),
+            ("OC Hockey 10UBB-1 HI-1", "10U BB"),
+            ("Los Angeles Jr Kings 12AAA-2", "12U AAA"),
+        ):
+            self.assertEqual(N.division_from_team_name(name), expected, name)
+
+    def test_a_girls_team_is_spelled_the_way_the_site_spells_it(self):
+        # The girls divisions drop the U and close up: "Girls 14AA", not
+        # "Girls 14U AA". The result has to be comparable with the real ones.
+        for name, expected in (
+            ("San Jose Jr Sharks Girls 14AA", "Girls 14AA"),
+            ("San Jose Jr Sharks Girls 16AAA", "Girls 16AAA"),
+            ("Tri Valley Lady Blue Devils 19AA", "Girls 19AA"),
+        ):
+            self.assertEqual(N.division_from_team_name(name), expected, name)
+
+    def test_an_age_without_a_tier_says_nothing(self):
+        # "10-5" is the club's own numbering, not a tier. Answering "10U" would
+        # file the side in a bucket it does not belong to; saying nothing is
+        # the honest answer, and these are recoverable only by resolving the
+        # team properly.
+        for name in ("San Jose Jr Sharks 10-5", "Anaheim Jr Ducks",
+                     "Santa Rosa Flyers", "Santa Clara Blackhawks",
+                     "Orange County Hockey Club", ""):
+            self.assertIsNone(N.division_from_team_name(name), name)
+
+    def test_the_longest_tier_wins(self):
+        # AAA must not read as AA, and BB must not read as B.
+        self.assertEqual(N.division_tier("Bears 12AAA"), "AAA")
+        self.assertEqual(N.division_tier("Bears 12AA"), "AA")
+        self.assertEqual(N.division_tier("Bears 12BB"), "BB")
+        self.assertEqual(N.division_tier("Bears 12B"), "B")
+        self.assertEqual(N.division_tier("Bears"), None)
+
+    def test_a_club_carrying_its_own_number_does_not_confuse_it(self):
+        # "Anaheim Jr Ducks-1 10UA": the tier belongs to the age nearest the
+        # end, not to the club's numbering.
+        self.assertEqual(N.division_from_team_name("Anaheim Jr Ducks-1 10UA HI"), "10U A")
+        self.assertEqual(N.division_from_team_name("San Diego Gulls 10UBB HI-2"), "10U BB")
+
+
 class TestIdentityResolution(unittest.TestCase):
     def _players(self, observations, **kwargs):
         return {

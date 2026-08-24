@@ -369,6 +369,49 @@ def division_age(division: str) -> Optional[int]:
     return max(candidates) if candidates else None
 
 
+#: The tier, written against the age with or without the U: "10UA", "12 AA",
+#: "16AAA", "10UBB-1". Longest first, so AAA is not read as AA and BB is not
+#: read as B.
+_DIVISION_TIER = re.compile(r"\b(\d{1,2})\s*U?\s*(AAA|AA|BB|A|B)\b", re.I)
+
+
+def division_tier(text: str) -> Optional[str]:
+    """The tier a name states: ``"Cougars 12AA"`` -> ``"AA"``.
+
+    The last one wins, because the tier trails the club and a club can carry a
+    number of its own ("SDIA 10UBB", "OC Hockey 10UBB-1").
+    """
+    matches = _DIVISION_TIER.findall(text or "")
+    return matches[-1][1].upper() if matches else None
+
+
+def division_from_team_name(team_name: str) -> Optional[str]:
+    """The division a team name says it plays in, or None.
+
+    A schedule row names both sides, and 503 of them name a side the collector
+    could not pin to a team row. The name is then the only thing left, and 37%
+    of the time it states the division outright -- "San Jose Jr Sharks Girls
+    14AA", "Bakersfield Jr Condors 14A".
+
+    **Both an age and a tier are required.** "San Jose Jr Sharks 10-5" gives an
+    age and no tier, and answering "10U" would file it in a bucket alongside
+    nothing it belongs with; saying nothing is the honest answer. Names with
+    neither -- a bare "Anaheim Jr Ducks", which is most of the rest -- were
+    never going to be recoverable this way.
+
+    The spelling follows the divisions the site itself publishes, so the result
+    can be compared with them directly: girls divisions drop the U and close up
+    ("Girls 14AA"), and the others do not ("14U AA").
+    """
+    age = division_age(team_name)
+    tier = division_tier(team_name)
+    if age is None or tier is None:
+        return None
+    if is_girls(team_name):
+        return f"Girls {age}{tier}"
+    return f"{age}U {tier}"
+
+
 def birth_year_window(division: str, start_year: int) -> Optional[tuple[int, int]]:
     """The two-year birth window implied by playing ``division`` in a season.
 

@@ -42,6 +42,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Optional
 
+from . import names as N
 from .export import _human, _now, write_json
 
 log = logging.getLogger(__name__)
@@ -340,6 +341,14 @@ def build_game_detail(conn: sqlite3.Connection) -> dict[int, dict]:
         stage = stage_of.get(r["league_id"])
         if stage:
             entry["stage"] = stage
+        # Only for a side with no team behind it: for any other, the team's own
+        # division is already the better answer.
+        for side, team_id, name in (("homeDiv", r["home_team_id"], r["home_name"]),
+                                    ("awayDiv", r["away_team_id"], r["away_name"])):
+            if team_id is None:
+                division = N.division_from_team_name(name)
+                if division:
+                    entry[side] = division
         if r["status"] == "final":
             entry["hg"] = r["home_goals"]
             entry["ag"] = r["away_goals"]
@@ -417,7 +426,7 @@ def build_game_detail(conn: sqlite3.Connection) -> dict[int, dict]:
 SCHEDULE_COLUMNS = (
     "season", "id", "date", "time", "league", "division",
     "home", "away", "hg", "ag", "rink", "level", "class",
-    "homeName", "awayName", "stage",
+    "homeName", "awayName", "stage", "homeDiv", "awayDiv",
 )
 
 
@@ -459,7 +468,10 @@ def build_schedule(conn: sqlite3.Connection) -> dict:
     real fixtures, so they are listed and marked, not dropped.
 
     A side that could not be identified has a null id; only then is its printed
-    name carried, which is 503 games rather than all of them.
+    name carried, which is 503 games rather than all of them -- and with it the
+    division that name states, where it states one. That is 37% of them, and it
+    is the only division such a side will ever have: a team it could not be
+    matched to cannot supply one.
     """
     parent_of, stage_of = league_rollup(conn)
     rows = []
@@ -481,6 +493,10 @@ def build_schedule(conn: sqlite3.Connection) -> dict:
             r["home_name"] if r["home_team_id"] is None else None,
             r["away_name"] if r["away_team_id"] is None else None,
             stage_of.get(r["league_id"]),
+            N.division_from_team_name(r["home_name"])
+            if r["home_team_id"] is None else None,
+            N.division_from_team_name(r["away_name"])
+            if r["away_team_id"] is None else None,
         ])
 
     rows.sort(key=lambda row: (row[2] or "", _minute_of_day(row[3]), row[1]))
