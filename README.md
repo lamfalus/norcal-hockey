@@ -928,6 +928,15 @@ each goal with its time, scorer, assists and strength, and the penalties.
 them, and goals they set up for somebody else. Assists are recorded on about
 71% of goals, so the counts are a floor and the panel says so.
 
+Tallied **a season at a time**, defaulting to the most recent, because a
+linemate is a property of a roster and a roster lasts one season. A career
+total ranks the boy somebody fed twenty times in one year level with the one
+they shared a bench with twice a year for five, and reads as though both were
+linemates. The season chips carry an *All seasons* option, since who a player
+keeps ending up with across teams is worth seeing — it is just a different
+question, and one worth asking on purpose. The chips are hidden altogether
+where a player has only one season, which is its own career total.
+
 Two-way players are shown with both stat lines, and birth years appear as
 badges — which is not decoration: a quarter of players share a display name
 with somebody else, so the year is how you tell two children apart.

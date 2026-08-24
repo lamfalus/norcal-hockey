@@ -111,6 +111,12 @@
   .mate-row{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:.88rem;}
   .mate-bar{height:7px;background:var(--accent);border-radius:3px;min-width:2px;}
   .mate-n{color:var(--muted);font-size:.8rem;min-width:46px;}
+  .mate-seasons{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;}
+  .mate-season{background:var(--surface2);border:1px solid var(--border);color:var(--muted);
+               border-radius:20px;padding:3px 11px;font-size:.78rem;font-weight:600;
+               cursor:pointer;transition:all .15s;}
+  .mate-season:hover{color:var(--text);border-color:var(--accent);}
+  .mate-season.active{background:var(--accent);border-color:var(--accent);color:#fff;}
   label{display:flex;flex-direction:column;gap:5px;font-size:.82rem;color:var(--muted);}
   select,input[type=text]{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:.92rem;min-width:180px;outline:none;transition:border-color .15s;}
   select:focus,input[type=text]:focus{border-color:var(--accent);}
@@ -2955,58 +2961,116 @@ function renderPenaltyList(season, g, homeName, awayName) {
 // somebody's pass, and the goals somebody finished off theirs. Only 71% of
 // goals carry an assist at all, so the counts are a floor rather than a
 // complete picture, and the panel says so.
+//
+// Tallied a season at a time, because a linemate is a property of a roster and
+// a roster lasts one season. A career total ranks the boy somebody fed twenty
+// times in one year level with the one they happened to share a bench with
+// twice a year for five, and reads as though both were linemates. "All
+// seasons" is still one click away, since who a player keeps ending up with
+// across teams is worth seeing — it is just a different question.
+var LINEMATES = null;
+
+// A season's worth of scoring is often a single goal, where a career's
+// never was, so the counts have to read as English either way.
+function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+
 function renderLinemates(playerId, seasons) {
   var host = document.getElementById('linemates');
   if (!host) return;
   host.innerHTML = '<div class="log-loading">Working out linemates…</div>';
 
   Promise.all(seasons.map(loadSeasonGames)).then(function(all) {
+    // The reader may have moved to another player while the season files were
+    // loading; that page has its own #linemates and this one is detached.
+    if (document.getElementById('linemates') !== host) return;
+
     var classes = classFilter();
     var league = FILTERS.league ? parseInt(FILTERS.league) : null;
-    var fedMe = {}, iFed = {}, myGoals = 0, myAssists = 0, assisted = 0;
 
-    all.forEach(function(games) {
+    function blank() { return { fedMe: {}, iFed: {}, goals: 0, assists: 0, assisted: 0 }; }
+
+    function tally(into, game) {
+      (game.goals || []).forEach(function(goal) {
+        var assists = goal.assists || [];
+        if (goal.by === playerId) {
+          into.goals++;
+          if (assists.length) into.assisted++;
+          assists.forEach(function(a) { into.fedMe[a] = (into.fedMe[a] || 0) + 1; });
+        } else if (assists.indexOf(playerId) !== -1) {
+          into.assists++;
+          if (goal.by) into.iFed[goal.by] = (into.iFed[goal.by] || 0) + 1;
+        }
+      });
+    }
+
+    var bySeason = {}, everything = blank();
+    all.forEach(function(games, i) {
+      var here = blank();
       Object.keys(games).forEach(function(id) {
         var g = games[id];
         if (classes && !classes[g['class']]) return;
         if (league && g.league !== league) return;
-        (g.goals || []).forEach(function(goal) {
-          var assists = goal.assists || [];
-          if (goal.by === playerId) {
-            myGoals++;
-            if (assists.length) assisted++;
-            assists.forEach(function(a) { fedMe[a] = (fedMe[a] || 0) + 1; });
-          } else if (assists.indexOf(playerId) !== -1) {
-            myAssists++;
-            if (goal.by) iFed[goal.by] = (iFed[goal.by] || 0) + 1;
-          }
-        });
+        tally(here, g);
+        tally(everything, g);
       });
+      if (here.goals || here.assists) bySeason[seasons[i]] = here;
     });
 
-    if (!myGoals && !myAssists) {
+    if (!everything.goals && !everything.assists) {
       host.innerHTML = '<div class="panel"><div class="panel-title">Linemates</div>'
         + '<p style="color:var(--muted);font-size:.85rem">No goals or assists in the '
         + 'games currently counted.</p></div>';
       return;
     }
 
-    host.innerHTML = '<div class="panel">'
-      + '<div class="section-heading" style="margin-bottom:12px">'
-      + '<h2 style="font-size:1rem">Linemates</h2>'
-      + '<span class="badge">' + myGoals + ' goals · ' + myAssists + ' assists</span></div>'
-      + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:22px">'
-      + mateColumn('Set up their goals', iFed)
-      + mateColumn('Assisted on their goals', fedMe)
-      + '</div>'
-      + '<div style="color:var(--muted);font-size:.78rem;margin-top:14px">'
-      + (myGoals ? assisted + ' of ' + myGoals + ' of their goals carry a recorded assist. ' : '')
-      + 'Assists are recorded on about 71% of goals overall, so these are a floor.'
-      + '</div></div>';
+    var played = seasons.filter(function(s) { return bySeason[s]; })
+                        .sort(function(a, b) { return b - a; });
+    LINEMATES = { host: host, bySeason: bySeason, all: everything, seasons: played };
+    // Newest first: a player page is usually being read about the season the
+    // player is in now, not the one they started in.
+    pickLinemateSeason(played[0]);
   }).catch(function(err) {
     host.innerHTML = '<div class="log-loading">Linemates unavailable ('
       + escHtml(err.message) + ')</div>';
   });
+}
+
+function pickLinemateSeason(key) {
+  if (!LINEMATES || !LINEMATES.host.isConnected) return;
+  var picked = key === 'all' ? LINEMATES.all : LINEMATES.bySeason[key];
+  if (!picked) return;
+
+  // Only worth a switcher when there is something to switch between; one
+  // season is its own career total and a control that does nothing is worse
+  // than no control.
+  var chips = '';
+  if (LINEMATES.seasons.length > 1) {
+    chips = '<div class="mate-seasons">'
+      + LINEMATES.seasons.map(function(s) {
+          return '<button class="mate-season' + (key === s ? ' active' : '') + '" '
+            + 'onclick="pickLinemateSeason(' + s + ')">'
+            + escHtml(SEASON_LABELS[s]) + '</button>';
+        }).join('')
+      + '<button class="mate-season' + (key === 'all' ? ' active' : '') + '" '
+      + 'onclick="pickLinemateSeason(\'all\')">All seasons</button></div>';
+  }
+
+  LINEMATES.host.innerHTML = '<div class="panel">'
+    + '<div class="section-heading" style="margin-bottom:12px">'
+    + '<h2 style="font-size:1rem">Linemates</h2>'
+    + '<span class="badge">' + plural(picked.goals, 'goal') + ' · '
+    + plural(picked.assists, 'assist')
+    + (key === 'all' ? '' : ' in ' + escHtml(SEASON_LABELS[key])) + '</span></div>'
+    + chips
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:22px">'
+    + mateColumn('Set up their goals', picked.iFed)
+    + mateColumn('Assisted on their goals', picked.fedMe)
+    + '</div>'
+    + '<div style="color:var(--muted);font-size:.78rem;margin-top:14px">'
+    + (picked.goals ? picked.assisted + ' of ' + plural(picked.goals, 'goal')
+        + (picked.goals === 1 ? ' carries' : ' carry') + ' a recorded assist. ' : '')
+    + 'Assists are recorded on about 71% of goals overall, so these are a floor.'
+    + '</div></div>';
 }
 
 function mateColumn(title, counts) {
