@@ -10,7 +10,7 @@ from typing import Any, Iterable, Optional, Sequence
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 
@@ -57,6 +57,8 @@ ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("leagues", "kind", "TEXT NOT NULL DEFAULT 'unknown'"),
     ("leagues", "span_days", "INTEGER"),
     ("leagues", "note", "TEXT"),
+    ("leagues", "parent_id", "INTEGER"),
+    ("leagues", "stage", "TEXT"),
 ]
 
 
@@ -110,6 +112,176 @@ def _migrate(conn: sqlite3.Connection, from_version: int) -> None:
         _migrate_v4_rebuild_clubs(conn)
     if from_version < 5:
         _migrate_v5_drop_foreign_scoresheets(conn)
+    if from_version < 6:
+        _migrate_v6_drop_out_of_state_championships(conn)
+
+
+#: Leagues dropped in v6, and why. Both are end-of-season championships drawn
+#: from a national field: 47 of the clubs playing in them are Alaska, Boston,
+#: Buffalo, Chicago, Cleveland, Colorado and the like. A California team turning
+#: up in one is incidental, and there is no season-long record to keep.
+DROPPED_LEAGUES = (37, 38)
+
+
+def purge_leagues(conn: sqlite3.Connection, league_ids: Sequence[int]) -> dict[str, int]:
+    """Remove every trace of a league. Returns what went, by table.
+
+    Deleting the games is the easy half: rosters, goals, penalties, period
+    scores, goalie stints, shot marks and per-game stats all cascade from
+    ``games``. Four things do not, and are the reason this is a function rather
+    than one DELETE:
+
+    ``teams``
+        A team that also plays a real season keeps its row and is re-pointed at
+        the best league it has left. Only a team whose entire record here was
+        the purged competition is removed, along with its standings row and the
+        site's published stat rows, neither of which cascades.
+
+    ``player_team_seasons``
+        Keyed on team, not on game, so it survives the cascade.
+
+    ``players``
+        Nothing else in this codebase ever deletes a player, which is why the
+        database still carries orphans from earlier work. Leaving 1,258 more
+        would be the same mistake, so the players who were only ever here for
+        this competition go too -- identified before the delete, then confirmed
+        to have nothing left after it. A player named in a hand-made override
+        or split is kept regardless: that decision is not ours to discard.
+
+    ``review_items``
+        Left alone. They are keyed by an opaque fingerprint and represent
+        questions that were genuinely asked; a stale one is answerable, an
+        auto-deleted one is not.
+    """
+    if not league_ids:
+        return {}
+    conn.execute("PRAGMA foreign_keys = ON")
+    marks = ",".join("?" for _ in league_ids)
+    ids = tuple(league_ids)
+    gone: dict[str, int] = {}
+
+    # Everyone attached to this competition, asked before any of it disappears.
+    #
+    # Three ways in, and the third is not optional: a player whose games were
+    # never scoresheeted has no stat line and no roster row, and is tied to the
+    # league only by the team they were listed on.
+    candidates = {
+        r[0] for r in conn.execute(f"""
+            SELECT DISTINCT s.player_id
+              FROM player_game_stats s JOIN games g ON g.game_id = s.game_id
+             WHERE g.league_id IN ({marks})
+             UNION
+            SELECT DISTINCT r.player_id
+              FROM game_rosters r JOIN games g ON g.game_id = r.game_id
+             WHERE g.league_id IN ({marks}) AND r.player_id IS NOT NULL
+             UNION
+            SELECT DISTINCT pts.player_id
+              FROM player_team_seasons pts
+              JOIN teams t ON t.team_id = pts.team_id
+                          AND t.season_id = pts.season_id
+             WHERE t.league_id IN ({marks})
+        """, ids + ids + ids)
+    }
+
+    gone["games"] = conn.execute(
+        f"SELECT count(*) FROM games WHERE league_id IN ({marks})", ids).fetchone()[0]
+    conn.execute(f"DELETE FROM games WHERE league_id IN ({marks})", ids)
+
+    # Teams: re-point the ones with a season elsewhere, remove the rest.
+    removed_teams = 0
+    for row in conn.execute(
+            f"SELECT team_id, season_id FROM teams WHERE league_id IN ({marks})",
+            ids).fetchall():
+        keep = conn.execute(f"""
+            SELECT tl.league_id, tl.division_id, tl.name
+              FROM team_leagues tl JOIN leagues l ON l.league_id = tl.league_id
+             WHERE tl.team_id = ? AND tl.season_id = ?
+               AND tl.league_id NOT IN ({marks}) AND l.kind = 'season'
+             ORDER BY l.priority LIMIT 1
+        """, (row["team_id"], row["season_id"], *ids)).fetchone()
+        if keep:
+            conn.execute(
+                "UPDATE teams SET league_id = ?, division_id = ?, name = ?"
+                " WHERE team_id = ? AND season_id = ?",
+                (keep["league_id"], keep["division_id"], keep["name"],
+                 row["team_id"], row["season_id"]))
+            continue
+        for table in ("standings", "team_stat_rows", "player_team_seasons", "teams"):
+            conn.execute(
+                f"DELETE FROM {table} WHERE team_id = ? AND season_id = ?",
+                (row["team_id"], row["season_id"]))
+        removed_teams += 1
+    gone["teams"] = removed_teams
+
+    for table in ("team_leagues", "league_seasons", "divisions"):
+        gone[table] = conn.execute(
+            f"SELECT count(*) FROM {table} WHERE league_id IN ({marks})", ids).fetchone()[0]
+        conn.execute(f"DELETE FROM {table} WHERE league_id IN ({marks})", ids)
+
+    # Players with nothing left anywhere, and no hand-made decision naming them.
+    protected = {
+        r[0] for r in conn.execute(
+            "SELECT player_id FROM player_overrides WHERE player_id IS NOT NULL"
+            " UNION SELECT p.player_id FROM players p"
+            "   JOIN player_splits s ON s.name = p.canonical_name")
+    }
+    removed_players = 0
+    for player_id in candidates:
+        if player_id is None or player_id in protected:
+            continue
+        still_here = conn.execute("""
+            SELECT EXISTS(SELECT 1 FROM player_game_stats WHERE player_id = ?)
+                OR EXISTS(SELECT 1 FROM player_team_seasons WHERE player_id = ?)
+                OR EXISTS(SELECT 1 FROM game_rosters WHERE player_id = ?)
+        """, (player_id, player_id, player_id)).fetchone()[0]
+        if still_here:
+            continue
+        conn.execute("DELETE FROM player_name_map WHERE player_id = ?", (player_id,))
+        conn.execute("DELETE FROM player_names WHERE player_id = ?", (player_id,))
+        conn.execute("DELETE FROM players WHERE player_id = ?", (player_id,))
+        removed_players += 1
+    gone["players"] = removed_players
+
+    conn.commit()
+    return gone
+
+
+def _migrate_v6_drop_out_of_state_championships(conn: sqlite3.Connection) -> None:
+    """v5 -> v6: remove Pacific District and USAH Nationals, and roll CAHA up.
+
+    Two unrelated corrections that both live in the leagues table.
+
+    The championships go entirely. They are the playoff progression for tier
+    teams, which is why they were collected, but the field is drawn from the
+    whole country -- 47 of the clubs in them are Alaska, Boston, Buffalo,
+    Chicago, Cleveland, Colorado and the like -- so a California team reaching
+    one is incidental and there is no season-long record here to keep. Since
+    they will not be collected again, the rows they left behind are not history
+    worth carrying: ``purge_leagues`` takes them out completely, players and
+    all.
+
+    The CAHA roll-up changes nothing about what is collected. The site runs the
+    tier competition under four ids and they stay four ids here, because that is
+    how the pages are fetched -- but the three rounds now point at the main
+    league, so a reader picking a league picks CAHA once, and which round a game
+    belonged to rides on the game as a label.
+    """
+    for league_id, stage in ((16, "Preseason"), (17, "Weekends"), (24, "Playoffs")):
+        conn.execute(
+            "UPDATE leagues SET parent_id = 5, stage = ? WHERE league_id = ?",
+            (stage, league_id))
+
+    marks = ",".join("?" for _ in DROPPED_LEAGUES)
+    conn.execute(
+        f"UPDATE leagues SET kind = 'excluded', priority = 207 + league_id - 37"
+        f" WHERE league_id IN ({marks})", DROPPED_LEAGUES)
+    conn.commit()
+
+    gone = purge_leagues(conn, DROPPED_LEAGUES)
+    if gone.get("games"):
+        log.info("dropped leagues %s: %s",
+                 ", ".join(str(l) for l in DROPPED_LEAGUES),
+                 ", ".join(f"{n} {table}" for table, n in gone.items() if n))
 
 
 def _migrate_v5_drop_foreign_scoresheets(conn: sqlite3.Connection) -> None:

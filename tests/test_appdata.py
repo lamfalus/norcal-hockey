@@ -218,5 +218,185 @@ class TestShards(AppDataTestCase):
         self.assertEqual(len(logs), appdata.SHARD_COUNT)
 
 
+class TestScheduleIndex(AppDataTestCase):
+    """One file listing every game, which is what the app opens on.
+
+    The date order it is read in runs across leagues and across seasons, so no
+    per-season file can answer it.
+    """
+
+    def schedule(self):
+        return json.loads((self.out / "schedule.json").read_text(encoding="utf-8"))
+
+    def rows(self):
+        payload = self.schedule()
+        col = {name: i for i, name in enumerate(payload["columns"])}
+        return [{name: row[i] for name, i in col.items()} for row in payload["games"]]
+
+    def test_every_game_is_listed(self):
+        self.write()
+        payload = self.schedule()
+        self.assertEqual(payload["metadata"]["games"], 2)
+        self.assertEqual(len(payload["games"]), 2)
+        self.assertEqual(payload["columns"], list(appdata.SCHEDULE_COLUMNS))
+
+    def test_a_row_is_a_header_and_nothing_more(self):
+        # The whole point of the file: the events stay in the season shard, so
+        # a list of ten thousand games does not carry ten thousand box scores.
+        self.write()
+        for row in self.schedule()["games"]:
+            self.assertEqual(len(row), len(appdata.SCHEDULE_COLUMNS))
+        blob = (self.out / "schedule.json").read_text(encoding="utf-8")
+        for leaked in ("goals", "penalties", "periods", "Tripping"):
+            self.assertNotIn(leaked, blob)
+
+    def test_it_carries_what_a_list_prints(self):
+        self.write()
+        game = next(r for r in self.rows() if r["id"] == 1)
+        self.assertEqual(game["season"], 31)
+        self.assertEqual(game["date"], "2025-10-01")
+        self.assertEqual(game["league"], 3)
+        self.assertEqual((game["home"], game["away"]), (58, 129))
+        self.assertEqual((game["hg"], game["ag"]), (3, 1))
+        self.assertEqual(game["class"], "regular")
+
+    def test_an_unplayed_game_carries_no_score(self):
+        # Nil-nil and "not played" are different things, and 5,613 of 14,196
+        # games are the second one.
+        self.conn.execute(
+            "INSERT INTO games(game_id,season_id,league_id,division_id,date_iso,"
+            "home_team_id,away_team_id,status,game_class) "
+            "VALUES (9,31,3,(SELECT division_id FROM divisions),'2026-01-15',"
+            "58,129,'scheduled','regular')")
+        self.conn.commit()
+        self.write()
+        game = next(r for r in self.rows() if r["id"] == 9)
+        self.assertIsNone(game["hg"])
+        self.assertIsNone(game["ag"])
+        self.assertEqual(self.schedule()["metadata"]["played"], 2)
+
+    def test_only_an_unidentified_side_carries_its_printed_name(self):
+        # 503 games have a side the collector could not pin to a team row. The
+        # name is all the app has for those, and dead weight for the rest.
+        self.conn.execute(
+            "INSERT INTO games(game_id,season_id,league_id,division_id,date_iso,"
+            "home_team_id,home_name,away_name,status,game_class) "
+            "VALUES (9,31,3,(SELECT division_id FROM divisions),'2026-01-15',"
+            "58,'Jr Sharks','Some Visiting Team','final','regular')")
+        self.conn.commit()
+        self.write()
+        unknown = next(r for r in self.rows() if r["id"] == 9)
+        self.assertIsNone(unknown["away"])
+        self.assertEqual(unknown["awayName"], "Some Visiting Team")
+        self.assertIsNone(unknown["homeName"], "an identified side needs no name")
+
+    def test_games_are_ordered_by_date_then_by_time_of_day(self):
+        # The app shows a day as a block and never sorts: the order in the file
+        # is the order on the screen.
+        div = db.scalar(self.conn, "SELECT division_id FROM divisions")
+        for game_id, time_text in ((11, "7:15 PM"), (12, "8:00 AM"), (13, "12 Noon")):
+            self.conn.execute(
+                "INSERT INTO games(game_id,season_id,league_id,division_id,date_iso,"
+                "time_text,home_team_id,away_team_id,status,game_class) "
+                "VALUES (?,31,3,?,'2026-01-15',?,58,129,'scheduled','regular')",
+                (game_id, div, time_text))
+        self.conn.commit()
+        self.write()
+        same_day = [r for r in self.rows() if r["date"] == "2026-01-15"]
+        self.assertEqual([r["time"] for r in same_day],
+                         ["8:00 AM", "12 Noon", "7:15 PM"])
+        dates = [r["date"] for r in self.rows()]
+        self.assertEqual(dates, sorted(dates))
+
+    def test_an_unreadable_time_sorts_to_the_end_of_its_day(self):
+        # Rather than to the start, where a new spelling would silently look
+        # like a game at midnight.
+        self.assertEqual(appdata._minute_of_day("8:00 AM"), 480)
+        self.assertEqual(appdata._minute_of_day("12 Noon"), 720)
+        self.assertEqual(appdata._minute_of_day("12:30 AM"), 30)
+        self.assertEqual(appdata._minute_of_day("12:30 PM"), 750)
+        self.assertEqual(appdata._minute_of_day("half past four"), 1440)
+        self.assertEqual(appdata._minute_of_day(None), 1440)
+
+    def test_the_file_is_written_alongside_the_rest(self):
+        written = self.write()
+        self.assertIn("schedule.json", written)
+
+
+class TestTheLeagueRollUp(AppDataTestCase):
+    """One competition, one entry in the league picker, the round on the game.
+
+    The site runs CAHA under four ids and collection follows it, so the export
+    is the layer that has to put them back together.
+    """
+
+    def _caha_game(self, game_id, league_id, date="2025-11-02"):
+        division = db.scalar(self.conn, "SELECT division_id FROM divisions")
+        self.conn.execute(
+            "INSERT INTO games(game_id,season_id,league_id,division_id,date_iso,"
+            "home_team_id,away_team_id,home_goals,away_goals,status,game_class) "
+            "VALUES (?,31,?,?,?,58,129,4,2,'final','regular')",
+            (game_id, league_id, division, date))
+        self.conn.commit()
+
+    def schedule_rows(self):
+        payload = json.loads(
+            (self.out / "schedule.json").read_text(encoding="utf-8"))
+        col = {name: i for i, name in enumerate(payload["columns"])}
+        return [{name: row[i] for name, i in col.items()} for row in payload["games"]]
+
+    def test_only_the_leagues_a_reader_picks_are_listed(self):
+        self.write()
+        listed = {l["id"] for l in self.core()["leagues"]}
+        self.assertIn(5, listed, "CAHA itself is a league")
+        for round_id in (16, 17, 24):
+            self.assertNotIn(round_id, listed,
+                             "a round of CAHA is not a league of its own")
+        for dropped in db.DROPPED_LEAGUES:
+            self.assertNotIn(dropped, listed)
+
+    def test_a_round_s_game_is_reported_under_the_parent(self):
+        self._caha_game(40, 24)
+        self.write()
+        game = next(r for r in self.schedule_rows() if r["id"] == 40)
+        self.assertEqual(game["league"], 5, "a playoff round game is a CAHA game")
+
+    def test_the_round_survives_as_a_label(self):
+        self._caha_game(41, 16)
+        self._caha_game(42, 17)
+        self._caha_game(43, 5)
+        self.write()
+        by_id = {r["id"]: r for r in self.schedule_rows()}
+        self.assertEqual(by_id[41]["stage"], "Preseason")
+        self.assertEqual(by_id[42]["stage"], "Weekends")
+        self.assertIsNone(by_id[43]["stage"],
+                          "the main league is not a round of anything")
+
+    def test_the_label_reaches_the_game_detail_too(self):
+        self._caha_game(44, 24)
+        self.write()
+        detail = json.loads(
+            (self.out / "games/s31.json").read_text(encoding="utf-8"))
+        self.assertEqual(detail["games"]["44"]["stage"], "Playoffs")
+        self.assertEqual(detail["games"]["44"]["league"], 5)
+
+    def test_a_team_and_its_division_roll_up_as_well(self):
+        # Otherwise a league filter would keep games the picker cannot reach.
+        self.conn.execute("UPDATE teams SET league_id = 24 WHERE team_id = 58")
+        self.conn.execute("UPDATE divisions SET league_id = 24")
+        self.conn.commit()
+        self.write()
+        core = self.core()
+        team = next(t for t in core["teams"] if t["id"] == 58)
+        self.assertEqual(team["league"], 5)
+        self.assertTrue(all(d["league"] == 5 for d in core["divisions"]))
+
+    def test_a_standalone_league_is_left_alone(self):
+        self.write()
+        game = next(r for r in self.schedule_rows() if r["id"] == 1)
+        self.assertEqual(game["league"], 3, "Norcal is not part of a family")
+        self.assertIsNone(game["stage"])
+
+
 if __name__ == "__main__":
     unittest.main()

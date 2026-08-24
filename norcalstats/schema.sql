@@ -45,6 +45,15 @@ CREATE TABLE IF NOT EXISTS leagues (
     --   excluded deliberately not wanted                -> skipped
     --   unknown  newly discovered                       -> skipped, and asked about
     kind         TEXT NOT NULL DEFAULT 'unknown',
+    --: The competition this league is a round of, where it is one. CAHA runs
+    --: four ids on the site -- the main league (5), preseason (16), weekends
+    --: (17) and playoffs (24) -- which are one competition to everybody at the
+    --: rink. The children point at the parent, and everywhere a reader picks a
+    --: league they see the parent alone.
+    parent_id    INTEGER REFERENCES leagues(league_id),
+    --: What to call this round once its games are shown under the parent. This
+    --: is the part the roll-up would otherwise lose, so it rides on the game.
+    stage        TEXT,
     --: Longest gap in days between a league's games, used to tell a season
     --: from a weekend event when classifying automatically.
     span_days    INTEGER,
@@ -81,7 +90,6 @@ INSERT OR IGNORE INTO leagues (league_id, name, priority, kind, note) VALUES
     (16, 'CAHA Preseason',   10, 'season',   'tier competition, preseason round'),
     (17, 'CAHA Weekends',    11, 'season',   'tier competition, weekend round'),
     (24, 'CAHA Playoffs',    12, 'season',   'tier competition, playoffs'),
-    (37, 'Pacific District', 13, 'season',   'tier 1 playoffs'),
     (34, 'PGHL',              3, 'season',   'Pacific Girls: Girls 12/14/16/19 AA and AAA'),
     -- High school leagues: not wanted.
     (15, 'ADHSHL',          200, 'excluded', 'Anaheim Ducks high school league'),
@@ -90,6 +98,13 @@ INSERT OR IGNORE INTO leagues (league_id, name, priority, kind, note) VALUES
     (28, 'High School Exhibition', 203, 'excluded', 'high school'),
     (23, 'ACHA',            204, 'excluded', 'college hockey, not youth'),
     (36, 'ACHA MD2',        206, 'excluded', 'college hockey, not youth'),
+    -- National and regional championships. They are the playoff progression
+    -- for tier teams, but the field is drawn from the whole country: 47 of the
+    -- clubs in them are Alaska, Boston, Buffalo, Chicago, Cleveland, Colorado
+    -- and the like. A California team reaching one is incidental, so there is
+    -- no season-long record here worth keeping.
+    (37, 'Pacific District', 207, 'excluded', 'regional championship, out-of-state field'),
+    (38, 'USAH Nationals',   208, 'excluded', 'national championship, out-of-state field'),
     -- A catch-all bucket for games played at out-of-area tournaments. It runs
     -- all season, so its date span looks like a league's, but every game in it
     -- is labelled "Tournament".
@@ -111,10 +126,12 @@ INSERT OR IGNORE INTO leagues (league_id, name, priority, kind, note) VALUES
     -- Its "Championship" and "Consolation" games are the tournament's own
     -- bracket, not a league playoff.
     (40, 'MLK Weekend Tournament', 223, 'event', 'mid-season holiday tournament');
--- Deliberately not seeded: end-of-season championships such as Pacific District
--- and USAH Nationals. They are short like a tournament but are the playoff
--- progression for tier teams, so they are classified on discovery and raised
--- for review rather than decided here.
+-- The CAHA family is four ids for one competition. Set after the insert
+-- rather than in it, so the roll-up can be corrected on a database that was
+-- seeded before it existed without touching the rows themselves.
+UPDATE leagues SET parent_id = 5, stage = 'Preseason' WHERE league_id = 16;
+UPDATE leagues SET parent_id = 5, stage = 'Weekends'  WHERE league_id = 17;
+UPDATE leagues SET parent_id = 5, stage = 'Playoffs'  WHERE league_id = 24;
 
 CREATE TABLE IF NOT EXISTS divisions (
     division_id INTEGER PRIMARY KEY AUTOINCREMENT,

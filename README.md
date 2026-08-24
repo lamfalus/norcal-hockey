@@ -22,21 +22,22 @@ reads the dataset from `data`, and neither needs a hand.
 | | |
 |---|---|
 | Seasons | Fall 2021 – Fall 2026 (S27–S31, S33 — the site has no S32) |
-| Leagues | 9 — Norcal, SCAHA, the CAHA family, PGHL, Pacific District, Nationals |
-| Games | 14,196, of which 8,444 have a parsed scoresheet |
+| Leagues | 4 — Norcal, CAHA, SCAHA, PGHL |
+| Games | 13,846, of which 8,113 have a result |
 | Stat lines | 252,381 across 65,680 goals and 52,374 penalties |
-| Teams / clubs | 2,441 team-seasons resolving to 63 clubs |
-| Players | 11,616 in the published dataset |
+| Teams / clubs | 2,344 team-seasons resolving to 63 clubs |
+| Players | 10,358 in the published dataset |
 | Open review questions | 178 |
-| Schema | v5 |
+| Schema | v6 |
 
 Counts are a snapshot taken 2026-08-22; the collector adds to them nightly.
 
-The viewer has six things on it: browse by season, club pages, player pages with
-per-game logs and linemates, team pages with schedule, standings and scoring by
-period, box scores, and the club-to-club player flow chart. It works on a phone
-— that took measuring rather than guessing, and the notes are in
-[The viewer](#the-viewer).
+The viewer opens on the **schedule**: what is on next and what just happened,
+across every league and division at once. Behind that are browse by season, club
+pages, player pages with per-game logs and linemates, team pages with schedule,
+standings and scoring by period, box scores, and the club-to-club player flow
+chart. It works on a phone — that took measuring rather than guessing, and the
+notes are in [The viewer](#the-viewer).
 
 **What is left**, in the order it is worth doing:
 
@@ -87,13 +88,31 @@ These are collected:
 
 | id | League | id | League |
 |---|---|---|---|
-| 3 | **Norcal** — travel A / B / BB | 16 | **CAHA Preseason** |
-| 5 | **CAHA** — tier 1 / tier 2, AA & AAA | 17 | **CAHA Weekends** |
-| 4 | **SCAHA** — Southern California | 24 | **CAHA Playoffs** |
-| 34 | **PGHL** — Pacific Girls, 12/14/16/19 AA & AAA | 37 | **Pacific District** — tier 1 playoffs |
+| 3 | **Norcal** — travel A / B / BB | 16 | CAHA Preseason ↴ |
+| 5 | **CAHA** — tier 1 / tier 2, AA & AAA | 17 | CAHA Weekends ↴ |
+| 4 | **SCAHA** — Southern California | 24 | CAHA Playoffs ↴ |
+| 34 | **PGHL** — Pacific Girls, 12/14/16/19 AA & AAA | | |
+
+The three marked ↴ are rounds of the CAHA tier competition, not leagues in
+their own right. They are still crawled separately, because the site publishes
+them separately — but they **roll up to CAHA (5)** everywhere a reader picks a
+league, and the round each game belonged to is kept as a label on the game.
+That is the only place the distinction still lives, and it has to be a label
+rather than a league because the two do not agree: the id named "CAHA
+Preseason" holds 819 games the schedule types as *Regular*. `leagues.parent_id`
+records the roll-up and `leagues.stage` names the round.
 
 These are not, because they carry no season-long record:
 
+- **Pacific District (37) and USAH Nationals (38)** — end-of-season
+  championships. They *are* the playoff progression for tier teams, which is
+  why they were collected at first, but the field is drawn from the whole
+  country: 47 of the clubs in them are Alaska, Boston, Buffalo, Chicago,
+  Cleveland, Colorado and the like, and a California team reaching one is
+  incidental. Removed in v6 — and *removed*, not merely stopped: since they
+  will not be collected again, the rows are not history worth carrying. 350
+  games, the 97 teams that existed here for no other reason, and the 1,258
+  players who came with them. See [Purging a league](#purging-a-league).
 - **High school** — SHSHL, ADHSHL, LA Kings High School
 - **College** — ACHA and ACHA MD2 (Stanford, Grand Canyon, Berkeley)
 - **Weekend tournaments** — Silver Stick, Wine Country Face Off, One Hockey,
@@ -111,10 +130,17 @@ current season is re-probed every run — that is what catches a league switchin
 on mid-season. A league nobody has classified yet is **not** collected; it is
 measured and raised for review instead. The classifier uses, in order:
 
-1. a name that looks like a playoff or championship round → collect;
-2. games labelled `Tournament` on the schedule → skip, however long the league
+1. a name naming a championship *above* the league — district, regional,
+   national → **skip and ask**. This is the rule that was missing: Pacific
+   District and USAH Nationals both read as playoffs, which is exactly how they
+   were collected in the first place. Such a league is measured and filed as a
+   `new_league` question at low confidence, and stays uncollected until somebody
+   answers with `--include` or `--exclude`;
+2. a name that looks like the end of a league's own season — playoff, final →
+   collect. That is what CAHA Playoffs is, and it is wanted;
+3. games labelled `Tournament` on the schedule → skip, however long the league
    runs (league 19 spans 105 days but is entirely one-off events);
-3. games spanning 30+ days → collect; otherwise skip.
+4. games spanning 30+ days → collect; otherwise skip.
 
 Several teams are sampled, not one: the Pacific Girls league looked like a
 two-day tournament judged on its first team alone, which would have quietly
@@ -133,6 +159,38 @@ global**: one team appears in several leagues at once, and the highest-priority
 league owns its name and division. Season-long leagues rank above preseason and
 playoff ids, so a team is labelled by the league it actually plays in. Every
 appearance is still recorded in `team_leagues`.
+
+### Purging a league
+
+Excluding a league stops it being collected; it does not remove what is already
+there. `db.purge_leagues()` does, and the v6 migration runs it for the two
+championships. Deleting the games is the easy half — rosters, goals, penalties,
+period scores, goalie stints, shot marks and per-game stats all cascade from
+`games`. Four things do not:
+
+- **`teams`** — a team that also plays a real season keeps its row and is
+  re-pointed at the best league it has left; only a team whose whole record here
+  was the purged competition goes, taking its `standings` and `team_stat_rows`
+  with it. Neither of those cascades.
+- **`player_team_seasons`** — keyed on team rather than on game, so it survives
+  the cascade untouched.
+- **`players`** — nothing else in this codebase has ever deleted a player, which
+  is why the database still carries orphans from undone splits. The players who
+  were only ever here for the purged competition go too. They are identified
+  three ways before the delete — a stat line, a roster row, or *only* a team
+  membership, which is the one that matters for a team whose games were never
+  scoresheeted — and each is then confirmed to have nothing left anywhere. A
+  player named in a hand-made override or split is kept regardless: that
+  decision is not the purge's to discard. Pre-existing orphans are not swept up
+  either; they are a separate question.
+- **`review_items`** — left alone. They are keyed by an opaque fingerprint and
+  record questions that were genuinely asked; a stale one can be answered, a
+  deleted one cannot.
+
+The archived pages under `data/raw` are not touched, and do not need to be: the
+crawl only walks leagues marked `season`, and a purged game leaves no scoresheet
+pending, so `reparse` cannot bring one back. They are a re-fetchable cache. To
+reclaim the space anyway, delete the ones no game points at.
 
 ### How far back
 
@@ -527,8 +585,16 @@ flow, and a club's teams across the years.
 
 **`core.json`** — everything cross-season and aggregate: players with their
 per-season splits, teams, divisions, clubs, leagues, standings. Loaded once,
-and enough on its own for every list and table in the app. 8.8 MB, about 900 KB
+and enough on its own for every list and table in the app. 9.1 MB, about 872 KB
 gzipped.
+
+**`schedule.json`** — every game there has ever been, header only: when,
+where, who, and the score where there is one. One file rather than six because
+the date order the app opens on runs across seasons as well as across leagues,
+so no per-season file can answer it. Sorted by date and then time of day, which
+the app relies on — it shows a day as a block and never sorts. Rows are arrays
+rather than objects, since the same fifteen keys repeated 14,196 times cost
+more than the data does: 3.4 MB as objects, 1.5 MB as arrays, 223 KB gzipped.
 
 **`logs/pNN.json`** — per-game lines for a player, in 32 buckets chosen by
 `player_id % 32`. The app works out which file to fetch by arithmetic, so there
@@ -541,11 +607,11 @@ games are carried without a score, so a team page is a schedule as much as a
 record — 5,732 games are scheduled rather than final, including every one of
 the current season's.
 
-Six seasons come to 39 files and 68 MB, about 6.9 MB gzipped, which GitHub
+Six seasons come to 40 files and 72 MB, about 7.5 MB gzipped, which GitHub
 serves compressed. Transfer was never the constraint; parse time and memory on
 a phone at a rink is, and that is what loading detail on demand solves. In
-practice a cold load fetches only `core.json` — 899 KB gzipped, about 230 ms —
-and nothing else until somebody clicks.
+practice a cold load fetches `core.json` and `schedule.json` — 1.1 MB gzipped
+between them — and nothing else until somebody clicks.
 
 Note that this is the **export** being split, not the database. The collector
 keeps one SQLite file (94 MB on the Pi) and shards only on the way out, because
@@ -712,6 +778,39 @@ Whichever answers first is remembered, so that costs one request, not two.
 
 ### The views
 
+**Schedule** — the landing view, and the only one that reads across leagues,
+divisions and seasons at once; everything else in the app starts from a season,
+a club or a name, and this starts from a date. Two bands split at today: **Next
+up** reads forward from there, **Recent results** reads back. Each day is a
+block with its own heading and count, games within it in time order, and any
+row opens its box score.
+
+Three things about it are decisions rather than defaults:
+
+- **Games with no result are listed and marked, not dropped.** 5,375 of 14,196
+  past games were scheduled and never given a score. They were real fixtures
+  with both teams named, so hiding them would make the day counts lie about
+  what was played. That includes the 92 `ambiguous_team` games — same club
+  against itself, neither side resolved to a team row, but named on both sides
+  and 32 of them carrying a full box score.
+- **Empty bracket slots are the one thing dropped.** 238 games where a side is
+  a seed placeholder rather than a team — "14AAA Seed 1" against "14AAA Seed
+  4", all of them CAHA playoff draws printed before the field was known. Not
+  one was ever given a result or a real opponent, so none can appear on
+  anybody's schedule. Excluded by the club's `kind`, not by a missing team id.
+  A seed slot is not a team — it is the shape of one the draw does not know
+  yet — but the collector still writes it a row, so its `team_id` is not null.
+  The games that genuinely have no `team_id` are the `ambiguous_team` ones
+  above, which are worth keeping, so filtering on the missing id would have
+  dropped exactly the wrong 92 games and kept all 238 of these.
+- **It has its own Type filter, and the global "Games counted" one is hidden
+  while it is showing.** A fixture list is not a stat total. On the day the
+  2026 season opens, 117 of its 120 games are preseason or exhibition, so the
+  global default — regular plus playoffs — would have shown three.
+- **Both bands page rather than render.** 8,463 played games is more than any
+  list wants to hold, and a phone least of all, so each band shows 60 and says
+  how many it is holding back.
+
 **Browse by Season** — every skater and goalie in a season, narrowed by club
 and division, sortable on any column.
 
@@ -751,11 +850,22 @@ with somebody else, so the year is how you tell two children apart.
 Two pickers sit above the tabs, because both change what counts as a game in
 every view below.
 
-**League** — one of the nine, or all of them.
+**League** — one of the four, or all of them. Four rather than nine: the CAHA
+rounds roll up into CAHA, and the two out-of-state championships are gone. A
+game that came from a round carries its name as a label instead, shown in the
+Type column beside the game's own class — "Regular · Weekends" — and collapsed
+to one word where the two would say the same thing.
 
 **Games counted** — regular plus playoffs by default. Preseason and exhibition
 games are a third of all stat lines, so folding them into a season total
 quietly inflates it. The filter makes that a decision rather than an accident.
+It is hidden on the Schedule view, along with the note beside it that counts
+player seasons: neither means anything above a fixture list, and a control that
+visibly does nothing is worse than no control. League still applies there.
+
+The Schedule view adds two of its own: **Level** — `12U AA` rather than a
+division, because a division id means nothing outside its own season and this
+list spans six — and **Club**.
 
 ### What it deliberately does not do
 

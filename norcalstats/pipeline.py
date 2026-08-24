@@ -175,7 +175,14 @@ class Pipeline:
         name = row["name"] or f"league {league_id}"
         span, labels = self._probe_schedule(league_id, season_id, teams)
 
-        if _PLAYOFF_NAMES.search(name):
+        if _CHAMPIONSHIP_NAMES.search(name):
+            # Left 'unknown', which means skipped: the collector will not decide
+            # this one on its own. It is re-measured and re-asked every run
+            # until somebody answers with --include or --exclude.
+            kind, why = "unknown", (
+                "name reads as a championship above the league, whose field is "
+                "drawn from outside California -- not collected without a decision")
+        elif _PLAYOFF_NAMES.search(name):
             kind, why = "season", "name looks like a playoff or championship round"
         elif labels and labels.most_common(1)[0][0].lower() == "tournament":
             # The schedule labels each game with its competition. A league whose
@@ -210,8 +217,16 @@ class Pipeline:
                 "leave as is, or change with: norcalstats leagues "
                 f"--{'exclude' if kind == 'season' else 'include'} {league_id}"
             ),
-            applied=f"kind = {kind} ({'collected' if kind == 'season' else 'skipped'})",
-            confidence=0.5,
+            applied=(
+                f"kind = {kind} "
+                + ("(collected)" if kind == "season"
+                   else "(skipped, awaiting a decision)" if kind == "unknown"
+                   else "(skipped)")
+            ),
+            # An undecided championship is the one case the collector is openly
+            # unsure about, so it is not filed at the same confidence as a guess
+            # it is prepared to act on.
+            confidence=0.2 if kind == "unknown" else 0.5,
             parts=(str(league_id),),
         )])
 
@@ -1287,6 +1302,17 @@ SEASON_SPAN_DAYS = 30
 #: out along with the weekend invitationals. Matched against the league name.
 _PLAYOFF_NAMES = re.compile(
     r"\b(playoff|championship|final|district|regional|national|state)s?\b", re.I)
+
+#: The subset of those names that describes a championship *above* the league
+#: rather than the end of one. Pacific District and USAH Nationals both read as
+#: playoffs and were collected on that basis, and both turned out to be drawn
+#: from a national field -- 47 out-of-state clubs between them, with California
+#: teams appearing by chance. So a new league naming itself this way is not
+#: collected on the strength of its name; it is measured, skipped, and asked
+#: about. "Playoff" and "final" are deliberately not here: those are how a
+#: league ends its own season, which is wanted.
+_CHAMPIONSHIP_NAMES = re.compile(
+    r"\b(district|regional|national)s?\b", re.I)
 
 #: Any year works for measuring a span -- only the difference between two dates
 #: matters, and a schedule never crosses more than one new year.

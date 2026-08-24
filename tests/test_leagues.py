@@ -127,7 +127,13 @@ class TestWhichLeaguesAreCollected(LeagueDbTestCase):
         17: "CAHA weekends",
         24: "CAHA playoffs",
         34: "PGHL, the girls tier league",
-        37: "Pacific District, tier 1 playoffs",
+    }
+
+    #: Dropped in v6. Both are end-of-season championships whose field is drawn
+    #: from the whole country, so a California team in one is incidental.
+    UNWANTED = {
+        37: "Pacific District",
+        38: "USAH Nationals",
     }
 
     def test_the_wanted_leagues_are_collected(self):
@@ -137,13 +143,30 @@ class TestWhichLeaguesAreCollected(LeagueDbTestCase):
         # The four season-long leagues rank above the preseason and playoff
         # rounds, so a team is named and placed by the league it plays in.
         self.assertEqual(collected[:4], [3, 5, 4, 34])
-        self.assertEqual(collected[4:], [16, 17, 24, 37])
+        self.assertEqual(collected[4:], [16, 17, 24])
 
     def test_every_wanted_league_is_seeded_not_guessed(self):
         for league_id, what in self.WANTED.items():
             kind = db.scalar(
                 self.conn, "SELECT kind FROM leagues WHERE league_id = ?", (league_id,))
             self.assertEqual(kind, "season", f"{league_id} ({what})")
+
+    def test_the_out_of_state_championships_are_not_collected(self):
+        # Excluded by id, not by the classifier: both names still read as
+        # playoffs, which is how they were collected in the first place.
+        self._present(*self.UNWANTED)
+        self.assertEqual(self.pipeline.leagues_for(31), [])
+        for league_id, name in self.UNWANTED.items():
+            kind = db.scalar(
+                self.conn, "SELECT kind FROM leagues WHERE league_id = ?", (league_id,))
+            self.assertEqual(kind, "excluded", f"{league_id} ({name})")
+            self.assertIsNotNone(pipeline._PLAYOFF_NAMES.search(name))
+
+    def test_rolling_the_caha_family_up_does_not_change_what_is_collected(self):
+        # The roll-up is a presentation decision. All four ids are still
+        # crawled, because the site publishes them separately.
+        self._present(5, 16, 17, 24)
+        self.assertEqual(set(self.pipeline.leagues_for(31)), {5, 16, 17, 24})
 
     def test_playoffs_are_collected(self):
         self._present(24)
@@ -194,11 +217,270 @@ class TestWhichLeaguesAreCollected(LeagueDbTestCase):
         self.assertEqual(self.pipeline.leagues_for(31), [8])
 
 
+class TestTheCahaFamilyRollsUp(LeagueDbTestCase):
+    """Four ids on the site, one competition to a reader.
+
+    They stay four ids in the database, because that is how the pages are
+    fetched. What changes is that three of them point at the fourth, so a
+    league picker offers CAHA once, and the round is kept as a label.
+    """
+
+    ROUNDS = {16: "Preseason", 17: "Weekends", 24: "Playoffs"}
+
+    def test_each_round_points_at_the_main_league(self):
+        for league_id, stage in self.ROUNDS.items():
+            row = self.conn.execute(
+                "SELECT parent_id, stage FROM leagues WHERE league_id = ?",
+                (league_id,)).fetchone()
+            self.assertEqual(row["parent_id"], 5, league_id)
+            self.assertEqual(row["stage"], stage)
+
+    def test_the_main_league_is_nobody_s_child(self):
+        for league_id in (3, 4, 5, 34):
+            row = self.conn.execute(
+                "SELECT parent_id FROM leagues WHERE league_id = ?",
+                (league_id,)).fetchone()
+            self.assertIsNone(row["parent_id"], league_id)
+
+
+class TestDroppingTheChampionships(LeagueDbTestCase):
+    """The v6 purge, on a database that already holds the leagues it removes."""
+
+    def _seed_championship(self):
+        conn = self.conn
+        conn.execute("INSERT OR IGNORE INTO seasons(season_id,label,start_year,"
+                     "first_seen_at) VALUES (31,'Fall 2025',2025,'x')")
+        conn.execute("INSERT INTO divisions(season_id,league_id,name) "
+                     "VALUES (31,37,'16U Tier I NHL')")
+        district = db.scalar(conn, "SELECT division_id FROM divisions"
+                                   " WHERE league_id = 37")
+        conn.execute("INSERT INTO divisions(season_id,league_id,name) "
+                     "VALUES (31,3,'16U AA')")
+        norcal = db.scalar(conn, "SELECT division_id FROM divisions"
+                                 " WHERE league_id = 3")
+
+        # 700 only ever played the championship; 701 also plays a real season.
+        for team_id, league_id, division_id in ((700, 37, district),
+                                                (701, 37, district)):
+            conn.execute(
+                "INSERT INTO teams(team_id,season_id,name,club,division_id,"
+                "league_id) VALUES (?,31,'Buffalo Regals','Buffalo Regals',?,?)",
+                (team_id, division_id, league_id))
+            conn.execute(
+                "INSERT INTO team_leagues(team_id,season_id,league_id,"
+                "division_id,name) VALUES (?,31,37,?,'Buffalo Regals')",
+                (team_id, division_id))
+            conn.execute("INSERT INTO standings(season_id,team_id,gp,updated_at)"
+                         " VALUES (31,?,4,'x')", (team_id,))
+        conn.execute(
+            "INSERT INTO team_leagues(team_id,season_id,league_id,division_id,"
+            "name) VALUES (701,31,3,?,'Tri Valley Bulls 16AA')", (norcal,))
+
+        for game_id, league_id in ((900, 37), (901, 38), (902, 3)):
+            conn.execute(
+                "INSERT INTO games(game_id,season_id,league_id,division_id,"
+                "date_iso,home_team_id,away_team_id,status,game_class) "
+                "VALUES (?,31,?,?,'2026-03-20',700,701,'final','playoff')",
+                (game_id, league_id, district if league_id != 3 else norcal))
+            conn.execute("INSERT INTO goals(game_id,side,seq,period,"
+                         "scorer_jersey) VALUES (?,'home',0,'1','9')", (game_id,))
+        conn.commit()
+
+    def _run_migration(self):
+        db.set_meta(self.conn, "schema_version", "5")
+        db.init(self.conn)
+
+    def test_the_championship_games_go_and_the_rest_stay(self):
+        self._seed_championship()
+        self._run_migration()
+        left = [r[0] for r in self.conn.execute(
+            "SELECT game_id FROM games ORDER BY game_id")]
+        self.assertEqual(left, [902], "only the Norcal game survives")
+
+    def test_deleting_a_game_takes_its_events_with_it(self):
+        self._seed_championship()
+        self._run_migration()
+        self.assertEqual(
+            [r[0] for r in self.conn.execute("SELECT game_id FROM goals")], [902])
+
+    def test_a_team_that_only_played_the_championship_is_removed(self):
+        self._seed_championship()
+        self._run_migration()
+        self.assertIsNone(db.scalar(
+            self.conn, "SELECT team_id FROM teams WHERE team_id = 700"))
+        self.assertIsNone(db.scalar(
+            self.conn, "SELECT team_id FROM standings WHERE team_id = 700"))
+
+    def test_a_team_that_also_plays_a_real_season_is_kept_and_repointed(self):
+        self._seed_championship()
+        self._run_migration()
+        row = self.conn.execute(
+            "SELECT league_id, name FROM teams WHERE team_id = 701").fetchone()
+        self.assertIsNotNone(row, "a team with a real season must not be deleted")
+        self.assertEqual(row["league_id"], 3)
+        self.assertEqual(row["name"], "Tri Valley Bulls 16AA")
+
+    def test_the_leagues_themselves_are_marked_excluded(self):
+        self._seed_championship()
+        self._run_migration()
+        for league_id in db.DROPPED_LEAGUES:
+            self.assertEqual(
+                db.scalar(self.conn,
+                          "SELECT kind FROM leagues WHERE league_id = ?", (league_id,)),
+                "excluded")
+        self.assertEqual(
+            db.scalar(self.conn, "SELECT count(*) FROM divisions WHERE league_id = 37"), 0)
+
+    def test_it_is_safe_to_run_on_a_database_that_has_neither(self):
+        self._run_migration()
+        self.assertEqual(db.scalar(self.conn, "SELECT count(*) FROM games"), 0)
+
+    def _player(self, player_id, name, game_ids, team_id=700):
+        """A player, their spelling, and a stat line in each of these games."""
+        self.conn.execute(
+            "INSERT INTO players(player_id,canonical_name,display_name,created_at)"
+            " VALUES (?,?,?,'x')", (player_id, name.lower(), name))
+        self.conn.execute(
+            "INSERT INTO player_names(name,player_id,seen) VALUES (?,?,1)",
+            (name, player_id))
+        self.conn.execute(
+            "INSERT INTO player_name_map(name,season_id,team_id,player_id)"
+            " VALUES (?,31,?,?)", (name, team_id, player_id))
+        self.conn.execute(
+            "INSERT INTO player_team_seasons(player_id,season_id,team_id,jersey,games)"
+            " VALUES (?,31,?,'9',1)", (player_id, team_id))
+        for game_id in game_ids:
+            self.conn.execute(
+                "INSERT INTO player_game_stats(game_id,player_id,season_id,team_id)"
+                " VALUES (?,?,31,?)", (game_id, player_id, team_id))
+        self.conn.commit()
+
+    def test_a_player_only_ever_in_the_championship_is_removed(self):
+        # Nothing else in the codebase deletes a player, so leaving these would
+        # add to the orphan pile rather than clear it.
+        self._seed_championship()
+        self._player(5001, "Buffalo Skater", [900])
+        self._run_migration()
+        for table, column in (("players", "player_id"), ("player_names", "player_id"),
+                              ("player_name_map", "player_id"),
+                              ("player_team_seasons", "player_id")):
+            self.assertEqual(
+                db.scalar(self.conn,
+                          f"SELECT count(*) FROM {table} WHERE {column} = 5001"),
+                0, table)
+
+    def test_a_player_with_no_stat_line_is_still_found(self):
+        # The way in that is easy to miss: a player whose games were never
+        # scoresheeted has no stat line and no roster row, and is tied to the
+        # competition only by the team they were listed on.
+        self._seed_championship()
+        self.conn.execute(
+            "INSERT INTO players(player_id,canonical_name,display_name,created_at)"
+            " VALUES (5007,'rostered only','Rostered Only','x')")
+        self.conn.execute(
+            "INSERT INTO player_team_seasons(player_id,season_id,team_id,jersey,games)"
+            " VALUES (5007,31,700,'7',0)")
+        self.conn.commit()
+        self._run_migration()
+        self.assertEqual(
+            db.scalar(self.conn, "SELECT count(*) FROM players WHERE player_id = 5007"),
+            0, "a rostered player with no stats must still be purged")
+
+    def test_a_player_who_also_played_elsewhere_is_kept(self):
+        self._seed_championship()
+        self._player(5002, "Local Skater", [900, 902], team_id=701)
+        self._run_migration()
+        self.assertEqual(
+            db.scalar(self.conn, "SELECT count(*) FROM players WHERE player_id = 5002"), 1)
+        left = db.scalar(
+            self.conn, "SELECT count(*) FROM player_game_stats WHERE player_id = 5002")
+        self.assertEqual(left, 1, "only the Norcal line survives")
+
+    def test_a_hand_made_decision_protects_a_player(self):
+        # An override is a decision somebody made. Deleting the row it points at
+        # would throw the decision away silently.
+        self._seed_championship()
+        self._player(5003, "Disputed Name", [900])
+        self.conn.execute(
+            "INSERT INTO player_overrides(name,player_id,note)"
+            " VALUES ('disputed name',5003,'kept by hand')")
+        self.conn.commit()
+        self._run_migration()
+        self.assertEqual(
+            db.scalar(self.conn, "SELECT count(*) FROM players WHERE player_id = 5003"),
+            1, "a player named in an override must survive the purge")
+
+    def test_a_pre_existing_orphan_is_not_swept_up(self):
+        # 4,330 of these predate the purge, from splits that were undone. They
+        # are a separate problem and this is not the change that decides them.
+        self._seed_championship()
+        self.conn.execute(
+            "INSERT INTO players(player_id,canonical_name,display_name,created_at)"
+            " VALUES (5004,'ghost','Ghost','x')")
+        self.conn.commit()
+        self._run_migration()
+        self.assertEqual(
+            db.scalar(self.conn, "SELECT count(*) FROM players WHERE player_id = 5004"), 1)
+
+    def test_the_rows_that_do_not_cascade_go_too(self):
+        self._seed_championship()
+        self.conn.execute(
+            "INSERT INTO team_stat_rows(season_id,team_id,kind,row_index,data_json)"
+            " VALUES (31,700,'skater',0,'{}')")
+        self.conn.execute(
+            "INSERT INTO players(player_id,canonical_name,display_name,created_at)"
+            " VALUES (5005,'bench','Bench','x')")
+        self.conn.execute(
+            "INSERT INTO player_team_seasons(player_id,season_id,team_id,jersey,games)"
+            " VALUES (5005,31,700,'4',1)")
+        self.conn.commit()
+        self._run_migration()
+        self.assertEqual(db.scalar(
+            self.conn, "SELECT count(*) FROM team_stat_rows WHERE team_id = 700"), 0)
+        self.assertEqual(db.scalar(
+            self.conn, "SELECT count(*) FROM player_team_seasons WHERE team_id = 700"), 0)
+
+    def test_it_reports_what_it_removed(self):
+        self._seed_championship()
+        self._player(5006, "Counted Skater", [900])
+        gone = db.purge_leagues(self.conn, db.DROPPED_LEAGUES)
+        self.assertEqual(gone["games"], 2)
+        self.assertEqual(gone["teams"], 1, "701 is re-pointed, not removed")
+        self.assertEqual(gone["players"], 1)
+
+    def test_the_caha_roll_up_is_applied_to_an_existing_database(self):
+        # INSERT OR IGNORE cannot update rows that are already there, which is
+        # exactly the case this migration exists for.
+        self.conn.execute("UPDATE leagues SET parent_id = NULL, stage = NULL")
+        self.conn.commit()
+        self._run_migration()
+        self.assertEqual(
+            db.scalar(self.conn, "SELECT stage FROM leagues WHERE league_id = 17"),
+            "Weekends")
+        self.assertEqual(
+            db.scalar(self.conn, "SELECT parent_id FROM leagues WHERE league_id = 24"), 5)
+
+
 class TestLeagueClassification(LeagueDbTestCase):
     def test_playoff_names_are_recognised(self):
         for name in ("CAHA Playoffs", "Pacific District", "USAH Nationals",
                      "State Championship", "Regional Final"):
             self.assertTrue(pipeline._PLAYOFF_NAMES.search(name), name)
+
+    def test_a_championship_above_the_league_is_not_collected_on_its_name(self):
+        # The mistake that put Pacific District and USAH Nationals in the
+        # database: both read as playoffs, so both were collected.
+        for name in ("Pacific District", "USAH Nationals", "Northwest Regionals",
+                     "National Championship"):
+            self.assertIsNotNone(pipeline._PLAYOFF_NAMES.search(name), name)
+            self.assertIsNotNone(pipeline._CHAMPIONSHIP_NAMES.search(name), name)
+
+    def test_a_league_ending_its_own_season_still_is(self):
+        # "Playoff" and "final" describe how a league finishes, not a
+        # championship above it, so these must keep collecting themselves.
+        for name in ("CAHA Playoffs", "Norcal Playoffs", "League Final"):
+            self.assertIsNotNone(pipeline._PLAYOFF_NAMES.search(name), name)
+            self.assertIsNone(pipeline._CHAMPIONSHIP_NAMES.search(name), name)
 
     def test_tournament_names_are_not_mistaken_for_playoffs(self):
         for name in ("Wine Country Face Off", "Silver Stick", "One Hockey",

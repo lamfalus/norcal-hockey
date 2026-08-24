@@ -9,6 +9,11 @@ So the split follows *granularity* instead:
     summaries, teams, divisions, clubs, leagues, standings. Loaded once, and
     enough on its own for every view the app has today.
 
+``schedule.json``
+    Every game there has ever been, header only -- when, where, who, the score.
+    One file because the date order the app opens on runs across seasons as
+    well as across leagues. 1.5 MB, 223 KB gzipped.
+
 ``logs/p<NN>.json``
     Per-game lines for a player, bucketed by player id. Opening a player fetches
     one bucket, around 100 KB gzipped, and it covers every season they played.
@@ -31,6 +36,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 from collections import defaultdict
 from pathlib import Path
@@ -54,11 +60,34 @@ def shard_for(player_id: int) -> int:
     return player_id % SHARD_COUNT
 
 
+def league_rollup(conn: sqlite3.Connection) -> tuple[dict[int, int], dict[int, str]]:
+    """How a collected league id is presented: ``(parent_of, stage_of)``.
+
+    The site runs one competition under several ids -- CAHA has four, for the
+    main league, preseason, weekends and playoffs -- and collection follows the
+    site, because that is how the pages are fetched. A reader does not care:
+    they pick CAHA. So every id maps to the league it is shown as, and the round
+    it actually was survives as a label on the game rather than as a league of
+    its own.
+
+    ``parent_of`` covers every league, mapping the standalone ones to
+    themselves, so a caller can look up any id without checking first.
+    """
+    parent_of: dict[int, int] = {}
+    stage_of: dict[int, str] = {}
+    for r in conn.execute("SELECT league_id, parent_id, stage FROM leagues"):
+        parent_of[r["league_id"]] = r["parent_id"] or r["league_id"]
+        if r["stage"]:
+            stage_of[r["league_id"]] = r["stage"]
+    return parent_of, stage_of
+
+
 # --------------------------------------------------------------------- core
 
 
 def build_core(conn: sqlite3.Connection) -> dict:
     """Everything the app needs before anyone clicks into a player or game."""
+    parent_of, _ = league_rollup(conn)
     seasons = [
         {"id": r["season_id"], "label": r["label"], "startYear": r["start_year"]}
         for r in conn.execute(
@@ -66,10 +95,13 @@ def build_core(conn: sqlite3.Connection) -> dict:
             " WHERE season_id IN (SELECT DISTINCT season_id FROM teams)"
             " ORDER BY season_id")
     ]
+    # Only the leagues a reader picks from: a round of a bigger competition is
+    # not one of them, and neither is anything not collected.
     leagues = [
         {"id": r["league_id"], "name": r["name"]}
         for r in conn.execute(
-            "SELECT league_id, name FROM leagues WHERE kind = 'season' ORDER BY priority")
+            "SELECT league_id, name FROM leagues"
+            " WHERE kind = 'season' AND parent_id IS NULL ORDER BY priority")
     ]
     divisions = [
         {"id": r["division_id"], "season": r["season_id"], "league": r["league_id"],
@@ -78,6 +110,8 @@ def build_core(conn: sqlite3.Connection) -> dict:
             "SELECT division_id, season_id, league_id, name, gender FROM divisions"
             " ORDER BY season_id, league_id, sort_order")
     ]
+    for d in divisions:
+        d["league"] = parent_of.get(d["league"], d["league"])
     # A team id is only unique within its season -- the table is keyed by both --
     # so anything reading these keys on (season, id), never on the id alone.
     # ``seq`` is the club's own numbering, which is the only thing telling two
@@ -92,6 +126,8 @@ def build_core(conn: sqlite3.Connection) -> dict:
             "       club_seq"
             "  FROM teams ORDER BY season_id, name")
     ]
+    for t in teams:
+        t["league"] = parent_of.get(t["league"], t["league"])
     # Clubs carry the name to group by, the shorter one to show, and what the
     # thing is. Half the names the site prints are bracket slots, high schools
     # or visiting teams: they still need naming on a schedule, so they are
@@ -227,6 +263,7 @@ def build_core(conn: sqlite3.Connection) -> dict:
 
 def build_player_logs(conn: sqlite3.Connection) -> dict[int, dict]:
     """Per-game lines for every player, grouped into shards by player id."""
+    parent_of, stage_of = league_rollup(conn)
     shards: dict[int, dict[str, list]] = {i: {} for i in range(SHARD_COUNT)}
 
     for r in conn.execute("""
@@ -243,12 +280,16 @@ def build_player_logs(conn: sqlite3.Connection) -> dict[int, dict]:
             "game": r["game_id"], "season": r["season_id"], "date": r["date_iso"],
             "team": r["team_id"],
             "opp": r["away_team_id"] if home else r["home_team_id"],
-            "home": home, "class": r["game_class"], "league": r["league_id"],
+            "home": home, "class": r["game_class"],
+            "league": parent_of.get(r["league_id"], r["league_id"]),
             "for": r["home_goals"] if home else r["away_goals"],
             "against": r["away_goals"] if home else r["home_goals"],
             "g": r["goals"], "a": r["assists"], "pts": r["points"],
             "pim": r["pim"], "ppg": r["ppg"], "shg": r["shg"],
         }
+        stage = stage_of.get(r["league_id"])
+        if stage:
+            line["stage"] = stage
         if r["is_goalie"]:
             line["goalie"] = True
             line["ga"] = r["goals_against"]
@@ -275,6 +316,7 @@ def build_game_detail(conn: sqlite3.Connection) -> dict[int, dict]:
     it exactly where it matters most: a season that has started but finished
     nothing has 119 scheduled games and no final ones at all.
     """
+    parent_of, stage_of = league_rollup(conn)
     games: dict[int, dict[str, dict]] = defaultdict(dict)
 
     for r in conn.execute("""
@@ -287,11 +329,17 @@ def build_game_detail(conn: sqlite3.Connection) -> dict[int, dict]:
         entry = {
             "date": r["date_iso"], "time": r["time_text"], "rink": r["rink"],
             "level": r["level"], "class": r["game_class"], "type": r["game_type"],
-            "league": r["league_id"], "division": r["division_id"],
+            "league": parent_of.get(r["league_id"], r["league_id"]),
+            "division": r["division_id"],
             "home": r["home_team_id"], "away": r["away_team_id"],
             "homeName": r["home_name"], "awayName": r["away_name"],
             "periods": {}, "goals": [], "penalties": [],
         }
+        # Which round of the competition, where the league it was collected
+        # under was a round rather than the whole thing.
+        stage = stage_of.get(r["league_id"])
+        if stage:
+            entry["stage"] = stage
         if r["status"] == "final":
             entry["hg"] = r["home_goals"]
             entry["ag"] = r["away_goals"]
@@ -360,6 +408,91 @@ def build_game_detail(conn: sqlite3.Connection) -> dict[int, dict]:
     }
 
 
+# ------------------------------------------------------------------ schedule
+
+
+#: One row of ``schedule.json``. Rows are arrays rather than objects because
+#: the same fifteen keys repeated 14,196 times cost more than the data does:
+#: as objects the file is 3.4 MB, as arrays 1.5 MB.
+SCHEDULE_COLUMNS = (
+    "season", "id", "date", "time", "league", "division",
+    "home", "away", "hg", "ag", "rink", "level", "class",
+    "homeName", "awayName", "stage",
+)
+
+
+#: Two shapes only, on 14,196 games: "7:45 PM" on all but 309 of them, and
+#: "12 Noon" on the rest. Anything else sorts to the end of its day rather than
+#: to the start, so a time the site invents a new spelling for is visible.
+_TIME_RE = re.compile(r"^(\d{1,2}):(\d{2})\s*([AP])M$", re.I)
+
+
+def _minute_of_day(text: Optional[str]) -> int:
+    text = (text or "").strip()
+    if text.lower() in ("12 noon", "noon"):
+        return 12 * 60
+    match = _TIME_RE.match(text)
+    if not match:
+        return 24 * 60
+    hour, minute, half = int(match.group(1)), int(match.group(2)), match.group(3).upper()
+    hour = hour % 12 + (12 if half == "P" else 0)
+    return hour * 60 + minute
+
+
+def build_schedule(conn: sqlite3.Connection) -> dict:
+    """Every game there has ever been, header only, in one file.
+
+    The per-season files above answer "what happened in this game"; this one
+    answers "what games are there", which is a question no single season can
+    settle. A view ordered by date across leagues and divisions would otherwise
+    have to pull six files of three megabytes to show one evening, so the part
+    a list actually prints -- when, where, who, and the score -- is split out
+    here and the events stay behind the click.
+
+    Sorted by date and then by time of day, which the app relies on: it shows
+    a day as a block and never sorts, so the order in the file is the order on
+    the screen. Both bands are found by splitting this list at today -- what is
+    coming reads forward from there, what happened reads back.
+
+    Games with no result carry no score rather than nil-nil, exactly as in the
+    detail files. There are a lot of them -- 5,613 of 14,196 -- and they are
+    real fixtures, so they are listed and marked, not dropped.
+
+    A side that could not be identified has a null id; only then is its printed
+    name carried, which is 503 games rather than all of them.
+    """
+    parent_of, stage_of = league_rollup(conn)
+    rows = []
+    for r in conn.execute("""
+        SELECT game_id, season_id, league_id, division_id, date_iso, time_text,
+               rink, level, game_class, status,
+               home_team_id, away_team_id, home_name, away_name,
+               home_goals, away_goals
+          FROM games
+    """):
+        final = r["status"] == "final"
+        rows.append([
+            r["season_id"], r["game_id"], r["date_iso"], r["time_text"],
+            parent_of.get(r["league_id"], r["league_id"]), r["division_id"],
+            r["home_team_id"], r["away_team_id"],
+            r["home_goals"] if final else None,
+            r["away_goals"] if final else None,
+            r["rink"], r["level"], r["game_class"],
+            r["home_name"] if r["home_team_id"] is None else None,
+            r["away_name"] if r["away_team_id"] is None else None,
+            stage_of.get(r["league_id"]),
+        ])
+
+    rows.sort(key=lambda row: (row[2] or "", _minute_of_day(row[3]), row[1]))
+
+    return {
+        "metadata": {"generated": _now(), "games": len(rows),
+                     "played": sum(1 for row in rows if row[8] is not None)},
+        "columns": list(SCHEDULE_COLUMNS),
+        "games": rows,
+    }
+
+
 # ------------------------------------------------------------------ writing
 
 
@@ -369,6 +502,8 @@ def write_app(conn: sqlite3.Connection, out_dir: Path) -> dict[str, int]:
     written: dict[str, int] = {}
 
     written["core.json"] = write_json(out_dir / "core.json", build_core(conn))
+    written["schedule.json"] = write_json(
+        out_dir / "schedule.json", build_schedule(conn))
 
     for index, payload in build_player_logs(conn).items():
         name = f"logs/p{index:02d}.json"

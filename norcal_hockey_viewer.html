@@ -27,6 +27,13 @@
   .global-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;padding-bottom:18px;margin-bottom:22px;border-bottom:1px solid var(--border);}
   .global-filters select{min-width:170px;}
   .filter-note{font-size:.78rem;color:var(--muted);margin-left:auto;align-self:center;}
+  /* "Games counted" decides what a stat total counts, and the note beside it
+     counts player seasons. The schedule is a fixture list rather than a total
+     and has its own Type filter, so both are hidden there -- a control that
+     visibly does nothing is worse than no control, and on a phone the pair of
+     them is 68px of a screen that has none to spare. */
+  body[data-view="schedule"] #lbl-gameclass,
+  body[data-view="schedule"] .filter-note{display:none;}
   /* The browse filters collapse on a small screen; on a desktop the summary is
      redundant, so it is hidden and the panel is simply always open. */
   .filter-panel > summary{display:none;}
@@ -55,6 +62,20 @@
   .game-link{cursor:pointer;}
   .game-link:hover{background:var(--surface2);}
   .sched{color:var(--muted);font-style:italic;}
+  /* Schedule feed. A day is a row spanning the table rather than a repeated
+     date column: on a phone the date is the one thing every row would share. */
+  .sched-day td{background:var(--surface2);font-weight:600;font-size:.8rem;
+                padding:8px 14px;border-top:1px solid var(--border);}
+  .sched-day .day-n{color:var(--muted);font-weight:400;font-size:.75rem;margin-left:10px;}
+  .sched-at{color:var(--muted);}
+  .sched-win{font-weight:600;}
+  .sched-score{white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .sched-none{color:var(--muted);font-size:.72rem;font-style:italic;white-space:nowrap;}
+  .sched-more{display:block;width:100%;background:var(--surface2);border:1px solid var(--border);
+              color:var(--muted);padding:10px;border-radius:6px;cursor:pointer;
+              font-size:.85rem;margin-top:12px;}
+  .sched-more:hover{color:var(--text);border-color:var(--accent);}
+  .band-note{color:var(--muted);font-size:.8rem;margin:-8px 0 14px;}
   .period-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:8px;}
   .period-cell{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center;}
   .period-cell .pc-lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
@@ -312,7 +333,8 @@
     <span class="load-status" id="load-status">✓ Loaded</span>
   </div>
   <div class="tab-bar">
-    <button class="tab-btn active" onclick="showView('browse',this)">Browse by Season</button>
+    <button class="tab-btn active" onclick="showView('schedule',this)">Schedule</button>
+    <button class="tab-btn" onclick="showView('browse',this)">Browse by Season</button>
     <button class="tab-btn" onclick="showView('club',this)">Club View</button>
     <button class="tab-btn" onclick="showView('player',this)">Player Lookup</button>
     <button class="tab-btn" onclick="showView('migration',this);renderMigration()">Player Flow</button>
@@ -328,14 +350,45 @@
       <option value="">— all leagues —</option>
     </select>
   </label>
-  <label>Games counted
+  <label id="lbl-gameclass">Games counted
     <select id="sel-gameclass" onchange="onFilterChange()"></select>
   </label>
   <span class="filter-note" id="filter-note"></span>
 </div>
 
+<!-- VIEW 0: Schedule. The landing view, and the only one that reads across
+     leagues, divisions and seasons at once -- everything else in the app starts
+     from a season, a club or a name, and this starts from a date. -->
+<div class="view active" id="view-schedule">
+  <details class="filter-panel" id="sched-filters" open>
+    <summary id="sched-filter-summary">Filters</summary>
+  <div class="controls">
+    <label>Level
+      <select id="sel-sched-level" onchange="renderSchedule()">
+        <option value="">&mdash; all levels &mdash;</option>
+      </select>
+    </label>
+    <label>Club
+      <select id="sel-sched-club" onchange="renderSchedule()">
+        <option value="">&mdash; all clubs &mdash;</option>
+      </select>
+    </label>
+    <!-- Its own, not the "Games counted" filter above. That one decides what a
+         stat total counts and defaults to league games; a fixture list is not
+         a total, and on the day the new season opens 117 of its 120 games are
+         preseason or exhibition. Defaulting to those rules would show three. -->
+    <label>Type
+      <select id="sel-sched-class" onchange="renderSchedule()"></select>
+    </label>
+  </div>
+  </details>
+  <div id="schedule-content">
+    <div class="empty"><div class="icon">📅</div>Loading the schedule&hellip;</div>
+  </div>
+</div>
+
 <!-- VIEW 1: Browse by Season -->
-<div class="view active" id="view-browse">
+<div class="view" id="view-browse">
   <!-- Five dropdowns are 175px of a phone's screen even two to a row, and most
        of the time they are showing what you already chose. Collapsed on a small
        screen, with the summary saying what is set; always open on a desktop,
@@ -827,10 +880,14 @@ function loadSeasonGames(season) {
 
 // ── View switching ──
 function captureAppState(viewOverride) {
-  var views = ['browse','club','player','team','migration'];
-  var v = viewOverride || views.find(function(v){ return document.getElementById('view-'+v).classList.contains('active'); }) || 'browse';
+  var views = ['schedule','browse','club','player','team','migration'];
+  var v = viewOverride || views.find(function(v){ return document.getElementById('view-'+v).classList.contains('active'); }) || 'schedule';
   var s = {view: v};
-  if (v === 'browse') {
+  if (v === 'schedule') {
+    s.level = SCHED.level;
+    s.club  = SCHED.club;
+    s.cls   = SCHED.cls;
+  } else if (v === 'browse') {
     s.season = document.getElementById('sel-season').value;
     s.club   = document.getElementById('sel-club-browse').value;
     s.div    = document.getElementById('sel-div-browse').value;
@@ -848,11 +905,12 @@ function captureAppState(viewOverride) {
 }
 function applyAppState(s) {
   if (!s || !s.view) return;
-  var viewOrder = ['browse','club','player','migration'];
+  var viewOrder = ['schedule','browse','club','player','migration'];
   if (s.view === 'team') {
     document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
     document.querySelectorAll('.tab-btn').forEach(function(el){el.classList.remove('active');});
     document.getElementById('view-team').classList.add('active');
+    markActiveView('team');
     if (s.teamKey) renderTeam(s.teamKey);
     window.scrollTo({top:0, behavior:'smooth'});
     return;
@@ -860,9 +918,17 @@ function applyAppState(s) {
   document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
   document.querySelectorAll('.tab-btn').forEach(function(el){el.classList.remove('active');});
   document.getElementById('view-'+s.view).classList.add('active');
+  markActiveView(s.view);
   var ti = viewOrder.indexOf(s.view);
   if (ti >= 0) document.querySelectorAll('.tab-btn')[ti].classList.add('active');
-  if (s.view === 'browse') {
+  if (s.view === 'schedule') {
+    // The dropdowns may not be filled yet if the back button lands here before
+    // the schedule has loaded; initSchedule renders once it is.
+    if (s.level != null) document.getElementById('sel-sched-level').value = s.level;
+    if (s.club  != null) document.getElementById('sel-sched-club').value = s.club;
+    if (s.cls)           document.getElementById('sel-sched-class').value = s.cls;
+    renderSchedule();
+  } else if (s.view === 'browse') {
     if (s.season) document.getElementById('sel-season').value = s.season;
     if (s.type)   document.getElementById('sel-type').value = s.type;
     if (s.minGP)  document.getElementById('sel-min-gp').value = s.minGP;
@@ -887,12 +953,331 @@ function applyAppState(s) {
 }
 window.addEventListener('popstate', function(e){ applyAppState(e.state); });
 
+// The global filter bar is drawn once, above the tabs, but not every control
+// in it means something in every view. This is what the stylesheet reads.
+function markActiveView(v) {
+  document.body.setAttribute('data-view', v);
+}
+
 function showView(v, btn) {
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(el=>el.classList.remove('active'));
   document.getElementById('view-'+v).classList.add('active');
   if(btn) btn.classList.add('active');
+  markActiveView(v);
   history.pushState(captureAppState(v), '');
+}
+
+// ════════════════════════════════════════
+// VIEW 0: Schedule
+// ════════════════════════════════════════
+// What is on next and what just happened, across every league and division at
+// once. Two bands split at today: forwards from there, and backwards from
+// there. That date order runs across seasons as well as leagues, which is why
+// it cannot be served by the per-season files -- it reads schedule.json, every
+// game there has ever been with only the parts a list prints, 1.4 MB for
+// 14,196 of them. Events stay behind the click: opening a box score still
+// fetches the season shard.
+
+var SCHEDULE = { rows: null, loading: null };
+
+// How many games a band shows before asking. 8,463 played games is more than
+// any list wants to hold, and a phone least of all.
+var SCHED_PAGE = 60;
+var SCHED = { level: '', club: '', cls: 'all', upcoming: SCHED_PAGE, recent: SCHED_PAGE };
+
+function todayISO() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+       + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function loadSchedule() {
+  if (SCHEDULE.rows) return Promise.resolve(SCHEDULE.rows);
+  if (SCHEDULE.loading) return SCHEDULE.loading;
+  // Named columns rather than positions: the file is arrays to keep it small,
+  // and the header it ships with is what says which slot is what.
+  SCHEDULE.loading = loadJSON('schedule.json').then(function(payload) {
+    var col = {};
+    (payload.columns || []).forEach(function(name, i) { col[name] = i; });
+    SCHEDULE.rows = (payload.games || []).map(function(r) {
+      return {
+        season: r[col.season], id: r[col.id], date: r[col.date], time: r[col.time],
+        league: r[col.league], division: r[col.division],
+        home: r[col.home], away: r[col.away], hg: r[col.hg], ag: r[col.ag],
+        rink: r[col.rink], level: r[col.level], cls: r[col['class']],
+        homeName: r[col.homeName], awayName: r[col.awayName],
+        stage: r[col.stage]
+      };
+    });
+    return SCHEDULE.rows;
+  });
+  return SCHEDULE.loading;
+}
+
+// ── Filling the two dropdowns the view owns ───────────────────────────────
+// A level ("12U AA") rather than a division, because a division id means
+// nothing outside its own season and this list spans six of them.
+function schedLevelOrder(level) {
+  var m = /^(\d+)/.exec(level || '');
+  return [m ? parseInt(m[1]) : 999, level || ''];
+}
+
+function initSchedule() {
+  var classSel = document.getElementById('sel-sched-class');
+  GAME_CLASS_PRESETS.forEach(function(p) {
+    var o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = p.id === 'all' ? 'All games' : p.label;
+    if (p.id === SCHED.cls) o.selected = true;
+    classSel.appendChild(o);
+  });
+
+  loadSchedule().then(function(rows) {
+    var levels = {}, clubs = {};
+    rows.forEach(function(g) {
+      if (isEmptyBracket(g)) return;
+      if (g.level) levels[g.level] = true;
+      [g.home, g.away].forEach(function(id) {
+        if (id == null) return;
+        var team = APP.teamByKey[teamKey(g.season, id)];
+        if (team && team.club && isBrowsableClub(team.club)) clubs[team.club] = true;
+      });
+    });
+
+    var levelSel = document.getElementById('sel-sched-level');
+    Object.keys(levels).sort(function(a, b) {
+      var x = schedLevelOrder(a), y = schedLevelOrder(b);
+      return x[0] - y[0] || x[1].localeCompare(y[1]);
+    }).forEach(function(l) {
+      var o = document.createElement('option');
+      o.value = l; o.textContent = l;
+      levelSel.appendChild(o);
+    });
+
+    var clubSel = document.getElementById('sel-sched-club');
+    Object.keys(clubs).sort(function(a, b) {
+      return clubDisplayName(a).localeCompare(clubDisplayName(b));
+    }).forEach(function(c) {
+      var o = document.createElement('option');
+      o.value = c; o.textContent = clubDisplayName(c);
+      clubSel.appendChild(o);
+    });
+
+    renderSchedule();
+  }).catch(function(err) {
+    // schedule.json is newer than the rest of the dataset, so a copy published
+    // before this view existed will not have it. That is a deployment lag
+    // rather than a fault, and it says so: everything else on the page still
+    // works, because every other view reads core.json.
+    var missing = /404/.test(err.message);
+    document.getElementById('schedule-content').innerHTML =
+      '<div class="empty"><div class="icon">' + (missing ? '🗓️' : '⚠️') + '</div>'
+      + (missing
+          ? 'This dataset was published before the schedule view existed, so it'
+            + ' has no <code>schedule.json</code> yet. The nightly collection'
+            + ' adds one.<div style="margin-top:8px;font-size:.85rem">'
+            + 'Every other tab reads <code>core.json</code> and is unaffected.</div>'
+          : 'Could not load the schedule.<div style="margin-top:8px;font-size:.85rem">'
+            + escHtml(err.message) + '</div>')
+      + '</div>';
+  });
+}
+
+// ── Filtering ─────────────────────────────────────────────────────────────
+function schedClubOf(g, side) {
+  var id = side === 'home' ? g.home : g.away;
+  if (id == null) return null;
+  var team = APP.teamByKey[teamKey(g.season, id)];
+  return team ? team.club : null;
+}
+
+// An empty bracket slot -- "14AAA Seed 1" against "14AAA Seed 4" -- is a shape
+// the playoff draw printed before it knew who was in it. 238 of them, all in
+// CAHA Playoffs, and not one was ever given a result or a real team: a seed
+// slot cannot appear on anybody's schedule, so it does not appear on this one.
+//
+// Note this is not the same thing as a game with no team id. Those 92 are the
+// ambiguous_team cases -- same club against itself, named on both sides, 32 of
+// them with a full box score -- and they stay.
+function isEmptyBracket(g) {
+  return ['home', 'away'].some(function(side) {
+    var club = schedClubOf(g, side);
+    var known = club ? APP.clubByName[club] : null;
+    return known ? known.kind === 'bracket' : false;
+  });
+}
+
+function schedulePasses(g, classes) {
+  if (isEmptyBracket(g)) return false;
+  if (FILTERS.league && g.league !== parseInt(FILTERS.league)) return false;
+  if (classes && !classes[g.cls]) return false;
+  if (SCHED.level && g.level !== SCHED.level) return false;
+  if (SCHED.club && schedClubOf(g, 'home') !== SCHED.club
+                 && schedClubOf(g, 'away') !== SCHED.club) return false;
+  return true;
+}
+
+// ── Rendering ─────────────────────────────────────────────────────────────
+var SCHED_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var SCHED_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+function scheduleDayLabel(iso) {
+  var p = iso.split('-');
+  if (p.length !== 3) return iso;
+  var d = new Date(+p[0], +p[1] - 1, +p[2]);
+  var label = SCHED_DAYS[d.getDay()] + ' ' + SCHED_MONTHS[d.getMonth()] + ' ' + (+p[2])
+            + ', ' + p[0];
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var days = Math.round((d - today) / 86400000);
+  if (days === 0) return 'Today · ' + label;
+  if (days === 1) return 'Tomorrow · ' + label;
+  if (days === -1) return 'Yesterday · ' + label;
+  return label;
+}
+
+// A side the collector could not pin to a team row -- 503 games have one --
+// keeps the name the site printed, and is not a link to anywhere.
+function scheduleSide(g, side, winner) {
+  var id = side === 'home' ? g.home : g.away;
+  var team = id != null ? APP.teamByKey[teamKey(g.season, id)] : null;
+  var won = winner === side;
+  if (!team) {
+    var raw = (side === 'home' ? g.homeName : g.awayName) || 'Unknown';
+    return won ? '<span class="sched-win">' + escHtml(raw) + '</span>' : escHtml(raw);
+  }
+  return '<span class="team-link' + (won ? ' sched-win' : '')
+    + '" onclick="event.stopPropagation();goToTeam(\'' + teamKey(g.season, id) + '\')">'
+    + escHtml(teamName(team)) + '</span>';
+}
+
+function scheduleRow(g, today) {
+  var played = g.hg != null && g.ag != null;
+  var winner = played ? (g.hg > g.ag ? 'home' : g.ag > g.hg ? 'away' : null) : null;
+  var result;
+  if (played) {
+    result = '<span class="sched-score">' + g.ag + ' – ' + g.hg + '</span>';
+  } else if (g.date >= today) {
+    result = '<span class="sched">–</span>';
+  } else {
+    // Scheduled, in the past, never given a score. 5,613 games are like this,
+    // and they were real fixtures, so the row stays and says so.
+    result = '<span class="sched-none">no result</span>';
+  }
+  return '<tr class="game-link" onclick="openBoxScore(' + g.season + ',\'' + g.id + '\')">'
+    + '<td class="log-date">' + escHtml(g.time || '') + '</td>'
+    + '<td>' + scheduleSide(g, 'away', winner)
+    + ' <span class="sched-at">@</span> ' + scheduleSide(g, 'home', winner) + '</td>'
+    + '<td class="log-class">' + escHtml(g.level || '') + '</td>'
+    + '<td class="log-class">' + escHtml(gameTypeLabel(g.cls, g.stage)) + '</td>'
+    + '<td class="num">' + result + '</td>'
+    + '<td class="log-class">' + escHtml(g.rink || '') + '</td>'
+    + '</tr>';
+}
+
+function scheduleBand(games, shown, band, today) {
+  var slice = games.slice(0, shown);
+  var body = '', day = null, i;
+  for (i = 0; i < slice.length; i++) {
+    if (slice[i].date !== day) {
+      day = slice[i].date;
+      var n = 0;
+      for (var j = i; j < slice.length && slice[j].date === day; j++) n++;
+      body += '<tr class="sched-day"><td colspan="6">' + escHtml(scheduleDayLabel(day))
+            + '<span class="day-n">' + n + (n === 1 ? ' game' : ' games') + '</span></td></tr>';
+    }
+    body += scheduleRow(slice[i], today);
+  }
+  var html = '<div class="table-wrap"><table><thead><tr>'
+    + '<th>Time</th><th>Game</th><th>Level</th><th>Type</th>'
+    + '<th style="text-align:right">Result</th><th>Rink</th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div>';
+  if (games.length > slice.length) {
+    var left = games.length - slice.length;
+    html += '<button class="sched-more" onclick="schedMore(\'' + band + '\')">'
+      + 'Show ' + Math.min(left, SCHED_PAGE) + ' more · ' + left.toLocaleString()
+      + ' still hidden</button>';
+  }
+  return html;
+}
+
+function schedMore(band) {
+  SCHED[band] += SCHED_PAGE;
+  renderSchedule();
+}
+
+// What the collapsed filter panel says it is showing, on the same terms as the
+// browse one: only what is actually narrowing something gets named.
+function updateSchedSummary() {
+  var el = document.getElementById('sched-filter-summary');
+  if (!el) return;
+  var parts = [SCHED.level || 'All levels'];
+  if (SCHED.club) parts.push(clubDisplayName(SCHED.club));
+  if (SCHED.cls !== 'all') {
+    var preset = GAME_CLASS_PRESETS.filter(function(p) { return p.id === SCHED.cls; })[0];
+    if (preset) parts.push(preset.label);
+  }
+  el.textContent = parts.join(' · ');
+}
+
+function renderSchedule() {
+  var content = document.getElementById('schedule-content');
+  if (!SCHEDULE.rows) return;
+
+  var level = document.getElementById('sel-sched-level').value;
+  var club = document.getElementById('sel-sched-club').value;
+  var cls = document.getElementById('sel-sched-class').value;
+  // Any change to what is being asked for starts the bands over. Keeping a
+  // reader 300 rows deep after they narrow to one club shows them nothing.
+  if (level !== SCHED.level || club !== SCHED.club || cls !== SCHED.cls) {
+    SCHED.upcoming = SCHED.recent = SCHED_PAGE;
+  }
+  SCHED.level = level; SCHED.club = club; SCHED.cls = cls;
+  updateSchedSummary();
+
+  var preset = GAME_CLASS_PRESETS.filter(function(p) { return p.id === SCHED.cls; })[0];
+  var classes = null;
+  if (preset && preset.classes) {
+    classes = {};
+    preset.classes.forEach(function(c) { classes[c] = true; });
+  }
+
+  var today = todayISO();
+  var upcoming = [], recent = [], noResult = 0;
+  // The file arrives sorted by date, so splitting it is a walk, not a sort.
+  SCHEDULE.rows.forEach(function(g) {
+    if (!schedulePasses(g, classes)) return;
+    if (g.date >= today) upcoming.push(g);
+    else {
+      recent.push(g);
+      if (g.hg == null) noResult++;
+    }
+  });
+  recent.reverse();
+
+  if (!upcoming.length && !recent.length) {
+    content.innerHTML = '<div class="empty"><div class="icon">📭</div>'
+      + 'No games match these filters.</div>';
+    return;
+  }
+
+  var html = '<div class="section-heading"><h2>Next up</h2><span class="badge">'
+    + (upcoming.length ? upcoming.length.toLocaleString() + ' scheduled' : 'nothing scheduled')
+    + '</span></div>'
+    + (upcoming.length
+        ? scheduleBand(upcoming, SCHED.upcoming, 'upcoming', today)
+        : '<div class="band-note">No games ahead of today. The collector adds them'
+          + ' as the leagues publish their schedules.</div>')
+    + '<div style="margin-top:28px"></div>'
+    + '<div class="section-heading"><h2>Recent results</h2><span class="badge">'
+    + (recent.length - noResult).toLocaleString() + ' played'
+    + (noResult ? ' · ' + noResult.toLocaleString() + ' with no result' : '')
+    + '</span></div>'
+    + (recent.length
+        ? scheduleBand(recent, SCHED.recent, 'recent', today)
+        : '<div class="band-note">Nothing played yet.</div>');
+
+  content.innerHTML = html;
 }
 
 // ════════════════════════════════════════
@@ -1761,7 +2146,7 @@ function renderGameLogTable(season, games) {
       + '<td>' + (g.home ? '<span class="log-vs">vs</span> ' : '<span class="log-vs">@</span> ')
       + '<span class="team-link" onclick="event.stopPropagation();goToTeam(\''
       + escAttr(teamKey(g.season, g.opp)) + '\')">' + escHtml(oppName) + '</span></td>'
-      + '<td class="log-class">' + escHtml(gameClassLabel(g['class'])) + '</td>'
+      + '<td class="log-class">' + escHtml(gameTypeLabel(g['class'], g.stage)) + '</td>'
       + '<td class="num"><span class="' + cls + '">' + result + '</span> ' + g['for'] + '–' + g.against + '</td>'
       + (g.goalie
         ? '<td class="num">—</td><td class="num">—</td><td class="num">—</td>'
@@ -1792,6 +2177,23 @@ function formatGameDate(iso) {
 function gameClassLabel(c) {
   return { regular: 'Regular', playoff: 'Playoff', preseason: 'Preseason',
            exhibition: 'Exhibition', other: '—' }[c] || c || '—';
+}
+
+// The game's own type, plus which round of the competition it belonged to.
+//
+// The two are not the same question and do not agree: CAHA runs its tier
+// competition under four league ids, and the one named "CAHA Preseason" holds
+// 819 games the schedule types as Regular. Those four ids are one league to a
+// reader, so the round they came from rides on the game as this label -- the
+// only place that distinction still lives.
+//
+// Both are shown unless they say the same word, since "Playoff · Playoffs"
+// tells nobody anything.
+function gameTypeLabel(cls, stage) {
+  var type = gameClassLabel(cls);
+  if (!stage) return type;
+  if (stage.toLowerCase().indexOf(String(cls || '').toLowerCase()) === 0) return stage;
+  return type + ' · ' + stage;
 }
 
 
@@ -1927,10 +2329,11 @@ function onFilterChange() {
   updateFilterNote();
   refreshClubOptions();
 
-  var active = ['browse', 'club', 'player', 'migration'].filter(function(v) {
+  var active = ['schedule', 'browse', 'club', 'player', 'migration'].filter(function(v) {
     return document.getElementById('view-' + v).classList.contains('active');
-  })[0] || 'browse';
-  if (active === 'browse') onSeasonChange();
+  })[0] || 'schedule';
+  if (active === 'schedule') renderSchedule();
+  else if (active === 'browse') onSeasonChange();
   else if (active === 'club') renderClub();
   else if (active === 'migration') renderMigration();
   else if (active === 'player') {
@@ -1948,15 +2351,19 @@ function boot() {
     indexCore(core);
     buildEntries();
     initFilters();
+    markActiveView('schedule');
+    initSchedule();
     initBrowse();
     initClub();
     initMigration();
     // Open in the markup so the panel still works without this, and closed here
     // only where the screen is small enough to need it. Once at boot: after
     // that it is the reader's to open and leave open.
-    var filters = document.getElementById('browse-filters');
-    if (filters && isNarrow()) {
-      filters.open = false;
+    if (isNarrow()) {
+      ['browse-filters', 'sched-filters'].forEach(function(id) {
+        var filters = document.getElementById(id);
+        if (filters) filters.open = false;
+      });
     }
     watchForTables();
     status.textContent = '✓ ' + core.metadata.counts.players.toLocaleString() + ' players · '
@@ -1966,7 +2373,7 @@ function boot() {
       '--header-h', document.querySelector('header').offsetHeight + 'px');
   }).catch(function(err) {
     status.textContent = '✗ ' + err.message;
-    document.getElementById('browse-content').innerHTML =
+    document.getElementById('schedule-content').innerHTML =
       '<div class="empty"><div class="icon">⚠️</div>Could not load the dataset from <code>'
       + escHtml(APP.base || APP_DATA_SOURCES.join(' or ')) + '</code>.'
       + '<div style="margin-top:8px;font-size:.85rem">'
@@ -1990,6 +2397,7 @@ function goToTeam(key) {
   document.querySelectorAll('.view').forEach(function(el) { el.classList.remove('active'); });
   document.querySelectorAll('.tab-btn').forEach(function(el) { el.classList.remove('active'); });
   document.getElementById('view-team').classList.add('active');
+  markActiveView('team');
   history.pushState({ view: 'team', teamKey: key }, '');
   window.scrollTo({ top: 0, behavior: 'smooth' });
   renderTeam(key);
@@ -2096,7 +2504,8 @@ function renderTeamSchedule(rows, team) {
       + '<td class="log-date">' + escHtml(formatGameDate(r.game.date)) + '</td>'
       + '<td>' + (r.home ? '<span class="log-vs">vs</span> ' : '<span class="log-vs">@</span> ')
       + escHtml(opp ? teamName(opp) : (r.oppName || 'Unknown')) + '</td>'
-      + '<td class="log-class">' + escHtml(gameClassLabel(r.game['class'])) + '</td>'
+      + '<td class="log-class">'
+      + escHtml(gameTypeLabel(r.game['class'], r.game.stage)) + '</td>'
       + '<td class="num">' + (r.played
           ? '<span class="' + cls + '">' + res + '</span> ' + r.gf + '–' + r.ga
           : '<span class="sched">' + escHtml(r.game.time || 'scheduled') + '</span>') + '</td>'
@@ -2279,7 +2688,8 @@ function renderBoxScore(season, g) {
       }).join('')
     + '</tbody></table></div>';
 
-  var meta = [formatGameDate(g.date), g.time, g.rink, gameClassLabel(g['class']), g.level]
+  var meta = [formatGameDate(g.date), g.time, g.rink,
+              gameTypeLabel(g['class'], g.stage), g.level]
     .filter(Boolean).map(escHtml).join(' · ');
 
   return '<div class="box-head">'
