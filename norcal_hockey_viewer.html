@@ -132,18 +132,49 @@
      composes the set they want, and every combination is reachable instead of
      the six somebody thought of in advance. */
   .filter-group{display:flex;flex-direction:column;gap:5px;font-size:.82rem;color:var(--muted);}
-  .class-boxes{display:flex;flex-wrap:wrap;gap:6px;}
-  .class-box{flex-direction:row;align-items:center;gap:6px;background:var(--surface2);
-             border:1px solid var(--border);border-radius:20px;padding:5px 11px;
-             font-size:.8rem;font-weight:600;cursor:pointer;user-select:none;
-             transition:all .15s;}
-  .class-box:hover{color:var(--text);border-color:var(--accent);}
-  .class-box:has(input:checked){background:var(--accent);border-color:var(--accent);color:#fff;}
-  .class-box input{accent-color:var(--accent);cursor:pointer;margin:0;}
-  .class-box:has(input:checked) input{accent-color:#fff;}
+  /* Game Type: a closed control that says what is ticked, opening onto the
+     list. Five boxes laid out flat were three lines of a phone's filter bar
+     and the answer is usually "all of them", so the answer is what shows and
+     the choices come out only when asked for. */
+  .type-menu{position:relative;}
+  .type-menu > summary{list-style:none;cursor:pointer;background:var(--surface2);
+                       border:1px solid var(--border);color:var(--text);
+                       padding:9px 12px;border-radius:6px;font-size:.92rem;
+                       min-width:180px;display:flex;align-items:center;
+                       justify-content:space-between;gap:10px;transition:border-color .15s;}
+  .type-menu > summary::-webkit-details-marker{display:none;}
+  .type-menu > summary::after{content:'▾';color:var(--muted);font-size:.8rem;}
+  .type-menu[open] > summary{border-color:var(--accent);}
+  .type-menu[open] > summary::after{content:'▴';}
+  .type-menu:hover > summary{border-color:var(--accent);}
+  /* Absolutely positioned children escape the hiding a closed <details> does
+     for itself, so the closed state is stated outright rather than inherited
+     from how one element happens to interact with another. */
+  .type-menu:not([open]) .type-list{display:none;}
+  .type-list{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;
+             background:var(--surface);border:1px solid var(--border);
+             border-radius:6px;padding:5px;z-index:200;white-space:nowrap;
+             box-shadow:0 8px 24px rgba(0,0,0,.35);}
+  .type-opt{flex-direction:row;align-items:center;gap:9px;padding:7px 10px;
+            border-radius:4px;cursor:pointer;user-select:none;font-size:.88rem;
+            color:var(--text);font-weight:500;}
+  .type-opt:hover{background:var(--surface2);}
+  .type-opt input{accent-color:var(--accent);cursor:pointer;margin:0;}
+  .type-all{border-top:1px solid var(--border);margin-top:4px;padding-top:8px;}
   .team-boxes{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 18px;}
   .team-boxes-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;
                     color:var(--muted);margin-right:2px;}
+  /* Laid out flat rather than behind a summary like Game Type: these are the
+     player's own teams, they change with every player, and which of them the
+     page is showing is the thing worth seeing without a click. */
+  .team-box{flex-direction:row;align-items:center;gap:6px;background:var(--surface2);
+            border:1px solid var(--border);border-radius:20px;padding:5px 11px;
+            font-size:.8rem;font-weight:600;cursor:pointer;user-select:none;
+            transition:all .15s;}
+  .team-box:hover{color:var(--text);border-color:var(--accent);}
+  .team-box:has(input:checked){background:var(--accent);border-color:var(--accent);color:#fff;}
+  .team-box input{accent-color:var(--accent);cursor:pointer;margin:0;}
+  .team-box:has(input:checked) input{accent-color:#fff;}
   select,input[type=text]{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:.92rem;min-width:180px;outline:none;transition:border-color .15s;}
   select:focus,input[type=text]:focus{border-color:var(--accent);}
   select option{background:var(--surface2);}
@@ -244,13 +275,11 @@
     .tab-bar{margin-left:0;width:100%;gap:2px;}
     .tab-btn{flex:1;text-align:center;padding:8px 2px;font-size:.72rem;
              border-radius:5px;}
-    /* The filter bar is chrome above every row of data, on the screen that has
-       the least to spare, so five boxes at their desktop size cost a
-       percentage point of it. Tightened until the pair fits the 28% the rest
-       of the phone layout was measured down to. They still wrap to three
-       lines -- 25px each, the same target the team pills have always used. */
-    .class-boxes{gap:4px;}
-    .class-box{padding:4px 8px;font-size:.74rem;gap:4px;}
+    /* A player's teams are named in full, so on a phone they wrap; tightened
+       so six of them are two or three lines rather than six. */
+    .team-boxes{gap:4px;}
+    .team-box{padding:4px 8px;font-size:.74rem;gap:4px;}
+    .type-menu > summary{min-width:0;}
     /* Layout */
     main{padding:12px 10px;}
     .panel{padding:12px;}
@@ -389,7 +418,7 @@
   </div>
   <div class="tab-bar">
     <button class="tab-btn active" onclick="showView('schedule',this)">Schedule</button>
-    <button class="tab-btn" onclick="showView('browse',this)">Browse by Season</button>
+    <button class="tab-btn" onclick="showView('browse',this)">Stats by Season</button>
     <button class="tab-btn" onclick="showView('club',this)">Club View</button>
     <button class="tab-btn" onclick="showView('player',this)">Player Lookup</button>
     <button class="tab-btn" onclick="showView('migration',this);renderMigration()">Player Flow</button>
@@ -412,7 +441,10 @@
     </select>
   </label>
   <div id="lbl-gameclass" class="filter-group">Game Type
-    <div class="class-boxes" id="gameclass-boxes"></div>
+    <details class="type-menu" id="gameclass-menu">
+      <summary id="gameclass-summary">All types</summary>
+      <div class="type-list" id="gameclass-boxes"></div>
+    </details>
   </div>
   <span class="filter-note" id="filter-note"></span>
 </div>
@@ -443,7 +475,10 @@
          a total, and on the day the new season opens 117 of its 120 games are
          preseason or exhibition. Defaulting to those rules would show three. -->
     <div class="filter-group">Game Type
-      <div class="class-boxes" id="sched-type-boxes"></div>
+      <details class="type-menu" id="sched-type-menu">
+        <summary id="sched-type-summary">All types</summary>
+        <div class="type-list" id="sched-type-boxes"></div>
+      </details>
     </div>
   </div>
   </details>
@@ -452,7 +487,7 @@
   </div>
 </div>
 
-<!-- VIEW 1: Browse by Season -->
+<!-- VIEW 1: Stats by Season -->
 <div class="view" id="view-browse">
   <!-- Five dropdowns are 175px of a phone's screen even two to a row, and most
        of the time they are showing what you already chose. Collapsed on a small
@@ -833,6 +868,70 @@ var FILTERS = { classes: null, league: '' };
 // The Type column already names these, and the same thing should read the same
 // way in both places. Its one unusable answer is "other", which it shows as a
 // dash -- right in a dense table cell, meaningless on a checkbox.
+// One control, built twice: above the tabs for what a stat total counts, and
+// in the schedule panel for what kind of fixture to list. Same shape, same
+// name, same everything ticked to begin with.
+function buildTypeMenu(listId, handler) {
+  var list = document.getElementById(listId);
+  if (!list) return;
+  list.innerHTML = (APP.gameClasses || []).map(function(c) {
+    return '<label class="type-opt"><input type="checkbox" value="' + escHtml(c)
+      + '" checked onchange="' + handler + '"><span>'
+      + escHtml(filterClassLabel(c)) + '</span></label>';
+  }).join('')
+    + '<label class="type-opt type-all"><input type="checkbox" checked>'
+    + '<span>All types</span></label>';
+}
+
+// What the closed control says. Naming one or two is more use than a count;
+// past that the names run longer than the control and the count is the point.
+function typeMenuSummary(ticked) {
+  var all = APP.gameClasses || [];
+  if (!ticked.length) return 'No types';
+  if (ticked.length === all.length) return 'All types';
+  if (ticked.length <= 2) {
+    return all.filter(function(c) { return ticked.indexOf(c) !== -1; })
+              .map(filterClassLabel).join(', ');
+  }
+  return ticked.length + ' of ' + all.length + ' types';
+}
+
+function paintTypeMenu(summaryId, listId, ticked) {
+  var summary = document.getElementById(summaryId);
+  if (summary) summary.textContent = typeMenuSummary(ticked);
+  var all = document.querySelector('#' + listId + ' .type-all input');
+  if (all) {
+    all.checked = ticked.length === (APP.gameClasses || []).length;
+    all.indeterminate = ticked.length > 0 && !all.checked;
+  }
+}
+
+// The "All types" row sets every box in its own list. Delegated rather than
+// wired inline, because the handler it then has to call differs per menu and
+// an onchange attribute is a poor place to keep that.
+document.addEventListener('change', function(e) {
+  var box = e.target;
+  if (!box.matches || !box.matches('.type-all input')) return;
+  var list = box.closest('.type-list');
+  if (!list) return;
+  list.querySelectorAll('input').forEach(function(input) { input.checked = box.checked; });
+  if (list.id === 'sched-type-boxes') onSchedTypeChange(); else onFilterChange();
+});
+
+// A details element opens on its summary and stays open; nothing about it
+// closes when the reader looks elsewhere. One listener, both menus.
+document.addEventListener('click', function(e) {
+  document.querySelectorAll('details.type-menu[open]').forEach(function(menu) {
+    if (!menu.contains(e.target)) menu.open = false;
+  });
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape') return;
+  document.querySelectorAll('details.type-menu[open]').forEach(function(menu) {
+    menu.open = false;
+  });
+});
+
 function filterClassLabel(c) {
   var label = gameClassLabel(c);
   return label === '—' ? c.charAt(0).toUpperCase() + c.slice(1) : label;
@@ -1279,12 +1378,7 @@ function initSchedule() {
   // Same control as the one above the tabs, same name, same everything ticked
   // by default -- a fixture list and a stat total ask different questions of
   // the game's class, but they ask it in the same words.
-  var boxes = document.getElementById('sched-type-boxes');
-  boxes.innerHTML = APP.gameClasses.map(function(c) {
-    return '<label class="class-box"><input type="checkbox" value="' + escHtml(c)
-      + '" checked onchange="onSchedTypeChange()"><span>'
-      + escHtml(filterClassLabel(c)) + '</span></label>';
-  }).join('');
+  buildTypeMenu('sched-type-boxes', 'onSchedTypeChange()');
   readSchedTypes();
 
   loadSchedule().then(function(rows) {
@@ -1490,9 +1584,10 @@ function updateSchedSummary() {
 function readSchedTypes() {
   var ticked = {};
   document.querySelectorAll('#sched-type-boxes input:checked').forEach(function(box) {
-    ticked[box.value] = true;
+    if (!box.closest('.type-all')) ticked[box.value] = true;
   });
   SCHED.classes = ticked;
+  paintTypeMenu('sched-type-summary', 'sched-type-boxes', Object.keys(ticked));
 }
 
 function schedClassFilter() {
@@ -2402,6 +2497,9 @@ function showAllGameClasses() {
   onFilterChange();
 }
 
+// The class lists are ticked by their own boxes everywhere else; this is the
+// one place that sets them from outside, so it repaints too.
+
 // Which of a player's own teams are ticked. Reset whenever the page moves to
 // a different player: the list is theirs, and so is the state.
 var PLAYER_TEAMS = { playerId: null, ticked: {} };
@@ -2440,7 +2538,7 @@ function teamBoxes(groups) {
   return '<div class="team-boxes"><span class="team-boxes-label">Teams</span>'
     + groups.map(function(g) {
         var seasons = g.seasons.map(function(s) { return SEASON_LABELS[s]; }).join(', ');
-        return '<label class="class-box" title="' + escHtml(seasons) + '">'
+        return '<label class="team-box" title="' + escHtml(seasons) + '">'
           + '<input type="checkbox" value="' + escHtml(g.key) + '"'
           + (PLAYER_TEAMS.ticked[g.key] ? ' checked' : '')
           + ' onchange="onPlayerTeamsChange()"><span>' + escHtml(g.label) + '</span></label>';
@@ -2833,12 +2931,7 @@ function initFilters() {
   // the stat lines out is the wrong default: the reader who wants league
   // numbers can say so, but the reader who does not know they are filtering
   // cannot un-know it.
-  var boxes = document.getElementById('gameclass-boxes');
-  boxes.innerHTML = APP.gameClasses.map(function(c) {
-    return '<label class="class-box"><input type="checkbox" value="' + escHtml(c)
-      + '" checked onchange="onFilterChange()"><span>'
-      + escHtml(filterClassLabel(c)) + '</span></label>';
-  }).join('');
+  buildTypeMenu('gameclass-boxes', 'onFilterChange()');
   readGameClasses();
   updateFilterNote();
 }
@@ -2846,9 +2939,10 @@ function initFilters() {
 function readGameClasses() {
   var ticked = {};
   document.querySelectorAll('#gameclass-boxes input:checked').forEach(function(box) {
-    ticked[box.value] = true;
+    if (!box.closest('.type-all')) ticked[box.value] = true;
   });
   FILTERS.classes = ticked;
+  paintTypeMenu('gameclass-summary', 'gameclass-boxes', Object.keys(ticked));
 }
 
 function updateFilterNote() {

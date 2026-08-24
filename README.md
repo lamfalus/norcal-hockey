@@ -34,7 +34,7 @@ Counts are a snapshot taken 2026-08-24, after the first run on schema v6; the
 collector adds to them nightly.
 
 The viewer opens on the **schedule**: what is on next and what just happened,
-across every league and division at once. Behind that are browse by season, club
+across every league and division at once. Behind that are stats by season, club
 pages, player pages with per-game logs and linemates, team pages with schedule,
 standings and scoring by period, box scores, and the club-to-club player flow
 chart. It works on a phone — that took measuring rather than guessing, and the
@@ -916,7 +916,7 @@ Three things about it are decisions rather than defaults:
   The index earns its keep on the results band, which spans six seasons and
   15.8 MB of per-season files.
 
-**Browse by Season** — every skater and goalie in a season, narrowed by club
+**Stats by Season** — every skater and goalie in a season, narrowed by club
 and division, sortable on any column.
 
 **Club View** — a club's teams season by season, with rosters. Teams are
@@ -1024,9 +1024,18 @@ game that came from a round carries its name as a label instead, shown in the
 Type column beside the game's own class — "Regular · Weekends" — and collapsed
 to one word where the two would say the same thing.
 
-**Game Type** — one box per game class, **all of them ticked**. The classes
-are read off the dataset itself, so one the collector starts producing appears
-as a box rather than as games that quietly belong to no filter.
+**Game Type** — one box per game class, **all of them ticked**, behind a
+control that says what is ticked and opens onto the list. The classes are read
+off the dataset itself, so one the collector starts producing appears as a box
+rather than as games that quietly belong to no filter.
+
+Closed by default because the answer is usually "all of them": five boxes laid
+out flat were three lines of a phone's filter bar spent saying nothing had been
+narrowed. The closed control names one or two classes where that is what is
+ticked and counts them past that — `Regular`, `Regular, Playoff`, `3 of 5
+types` — and an **All types** row at the foot of the list turns the whole set
+on or off, showing indeterminate while some are on. It shuts on a click
+elsewhere or on Escape.
 
 It was a dropdown of six pre-combined presets defaulting to regular plus
 playoffs, and both halves of that were wrong. Boxes compose: every combination
