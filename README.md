@@ -639,31 +639,6 @@ longer written by anything.
 
 ## Running on the Raspberry Pi
 
-### Reaching it
-
-```bash
-ssh lamfalus@raspberrypi.local
-```
-
-`raspberrypi.local` resolves over mDNS on the home network and survives the
-DHCP lease changing, which the address does not — it is `192.168.86.216`
-today. Both are private addresses, unroutable from outside the network, which
-is why they are written down here in a public repository. The Pi is also on a
-tailnet, so it is reachable from away; that address is deliberately not
-recorded here.
-
-The checkout lives at `/home/lamfalus/norcal-hockey` and its remote is the
-SSH deploy key, so it pulls and pushes without a prompt:
-
-```bash
-ssh lamfalus@raspberrypi.local 'cd norcal-hockey && git pull'
-```
-
-**Nothing on the Pi updates itself.** The systemd unit runs the collector out
-of that directory and never touches git, so code changes reach it only by
-pulling — before 03:30, or the night's run uses the old code. A schema change
-applies itself on the next run, because `db.connect()` migrates on open.
-
 ### Installing
 
 ```bash
@@ -685,6 +660,12 @@ systemctl list-timers norcalstats@$USER.timer     # when it next runs
 journalctl -u norcalstats@$USER.service -f        # watch a run
 sudo systemctl start norcalstats@$USER.service    # run now
 ```
+
+**Nothing on the Pi updates itself.** The unit runs the collector out of its
+checkout and never touches git, so code changes reach it only by pulling, and
+they have to be pulled *before* the timer fires or the night's run uses the old
+code. A schema change needs nothing: `db.connect()` migrates on open, so the
+first command after a pull upgrades the database.
 
 Then seed the archive:
 

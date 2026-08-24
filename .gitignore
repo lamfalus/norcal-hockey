@@ -8,3 +8,7 @@ __pycache__/
 .venv/
 *.tmp
 .claude/settings.local.json
+
+# Local operator notes: how to reach the machines this runs on. Deliberately
+# not published -- the repository is public.
+README.local.md
