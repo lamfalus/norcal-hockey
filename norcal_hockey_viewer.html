@@ -159,6 +159,11 @@
   .ph-table{table-layout:fixed;width:100%;}
   .ph-table td:first-child,.ph-table th:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .season-badge{display:inline-block;background:var(--accent);color:#fff;border-radius:4px;padding:1px 7px;font-size:.75rem;font-weight:700;}
+  .season-hidden{border:1px dashed var(--border);border-radius:var(--radius);padding:12px 14px;
+                 margin:14px 0;color:var(--muted);font-size:.85rem;line-height:1.55;}
+  .season-hidden strong{color:var(--text);}
+  .note-link{color:var(--accent);cursor:pointer;font-weight:600;text-decoration:underline;
+             background:none;border:none;padding:0;font:inherit;}
   .div-badge{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 7px;font-size:.75rem;color:var(--muted);}
   .search-wrap{position:relative;}
   .autocomplete-list{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;max-height:260px;overflow-y:auto;z-index:200;}
@@ -2123,6 +2128,57 @@ function goToBrowseTeam(key) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// A season whose every game is preseason or exhibition disappears completely
+// under the default "Regular + Playoffs" -- section, stats and all. In August
+// that is every season that has just started, so a parent looking for the game
+// they watched on the weekend finds nothing, and an absent section reads
+// exactly like a collection failure. Name what is being held back instead.
+function hiddenSeasonsFor(player, shownSeasons) {
+  var shown = {};
+  shownSeasons.forEach(function(s) { shown[s] = true; });
+  var league = FILTERS.league ? parseInt(FILTERS.league) : null;
+  var kinds = {}, seasons = [];
+
+  (player.seasons || []).forEach(function(s) {
+    if (shown[s.season]) return;
+    // Only the class filter is being explained here, so a season the league
+    // filter removed must not be blamed on it.
+    var team = teamFor(s.season, s.team);
+    if (!team || (league && team.league !== league)) return;
+    if (seasons.indexOf(s.season) === -1) seasons.push(s.season);
+    kinds[s['class']] = true;
+  });
+  seasons.sort(function(a, b) { return a - b; });
+  return { seasons: seasons, kinds: Object.keys(kinds).sort() };
+}
+
+function joinList(items) {
+  if (items.length < 2) return items[0] || '';
+  return items.slice(0, -1).join(', ') + ' and ' + items[items.length - 1];
+}
+
+function hiddenSeasonNote(player, shownSeasons) {
+  var hidden = hiddenSeasonsFor(player, shownSeasons);
+  if (!hidden.seasons.length) return '';
+  var many = hidden.seasons.length > 1;
+  var preset = GAME_CLASS_PRESETS.filter(function(p) { return p.id === FILTERS.gameClass; })[0];
+  return '<div class="season-hidden"><strong>'
+    + escHtml(joinList(hidden.seasons.map(function(s) { return SEASON_LABELS[s]; })))
+    + '</strong> ' + (many ? 'are' : 'is') + ' not shown. Every game '
+    + (many ? 'in them is ' : 'in it is ') + escHtml(joinList(hidden.kinds))
+    + ', and <em>Games counted</em> is set to '
+    + escHtml(preset ? preset.label : FILTERS.gameClass) + '. '
+    + '<button class="note-link" onclick="showAllGameClasses()">Show all games</button>'
+    + '</div>';
+}
+
+function showAllGameClasses() {
+  var sel = document.getElementById('sel-gameclass');
+  if (!sel) return;
+  sel.value = 'all';
+  onFilterChange();
+}
+
 function renderPlayerHistory(playerId) {
   CURRENT_PLAYER_ID = playerId;
   const player = APP.playerById[playerId];
@@ -2132,7 +2188,8 @@ function renderPlayerHistory(playerId) {
   const entries = ALL_ENTRIES.filter(e => e.playerId === playerId);
   if (!entries.length) {
     content.innerHTML = '<div class="player-history-header"><h2>' + escHtml(player.name) + bornLabel(playerId)
-      + '</h2></div><div class="empty"><div class="icon">📭</div>No games match the current filters.</div>';
+      + '</h2></div><div class="empty"><div class="icon">📭</div>No games match the current filters.</div>'
+      + hiddenSeasonNote(player, []);
     return;
   }
 
@@ -2261,6 +2318,7 @@ function renderPlayerHistory(playerId) {
   content.innerHTML = '<div class="player-history-header"><h2>' + escHtml(player.name) + bornLabel(playerId) + '</h2>'
     + (isTwoWay ? '<span class="div-badge">⛸ + 🥅 Two-Way</span>' : isGoalie ? '<span class="div-badge">🥅 Goalie</span>' : '')
     + '</div>' + aliasNote + summaryCards + seasonSections
+    + hiddenSeasonNote(player, seasons)
     + '<div id="linemates"></div>';
 
   renderGameLogs(playerId, seasons);

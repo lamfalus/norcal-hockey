@@ -981,6 +981,23 @@ It is hidden on the Schedule view, along with the note beside it that counts
 player seasons: neither means anything above a fixture list, and a control that
 visibly does nothing is worse than no control. League still applies there.
 
+**A player page names the seasons it is holding back.** The same default that
+would have shown three fixtures on opening day removes a whole season from a
+career, section and stats together, whenever every game in it is preseason or
+exhibition — which in August is every season that has started. An absent
+section is indistinguishable from a collection failure, and the reader looking
+for the game they watched on the weekend has no way to tell which they are
+looking at. So the page says which seasons are missing, what class their games
+are, and offers the switch:
+
+```
+'23-'24 and '26-'27 are not shown. Every game in them is exhibition,
+and Games counted is set to Regular + Playoffs.   [Show all games]
+```
+
+Only the class filter is explained there. A season the **League** picker
+removed is left out of the note rather than blamed on the wrong control.
+
 The Schedule view adds three of its own: **Division**, **Club** and **Type**.
 
 **Division** filters on the divisions the two *teams* are in, not on the game's
