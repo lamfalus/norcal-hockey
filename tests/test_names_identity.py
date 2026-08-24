@@ -105,6 +105,80 @@ class TestBirthYear(unittest.TestCase):
     def test_contradictory_windows_yield_none(self):
         self.assertIsNone(N.intersect_windows([(2012, 2013), (2016, 2017)]))
 
+    def test_boys_tier_one_ladder_is_one_birth_year(self):
+        # 11U through 16U AAA all ice in the same league and season, which is
+        # only possible if each is a single year.
+        for age in range(11, 17):
+            division = f"{age}U AAA"
+            self.assertEqual(N.birth_year_span(division), 1, division)
+            self.assertEqual(
+                N.birth_year_window(division, 2025), (2025 - age, 2025 - age))
+
+    def test_eighteen_aaa_is_the_exception_at_the_top(self):
+        # 17- and 18-year-olds, so it is an ordinary two-year band.
+        self.assertEqual(N.birth_year_span("18U AAA"), 2)
+        self.assertEqual(N.birth_year_window("18U AAA", 2025), (2007, 2008))
+
+    def test_lower_tiers_stay_two_years(self):
+        # The single-year ladder is Tier I only; AA and below are bands.
+        for division in ("12U AA", "14U AA", "16U A", "10U BB"):
+            self.assertEqual(N.birth_year_span(division), 2, division)
+        self.assertEqual(N.birth_year_window("14U AA", 2025), (2011, 2012))
+
+    def test_girls_tier_one_is_two_years_all_the_way_up(self):
+        # The girls ladder does not go single-year at any age.
+        for age, window in ((12, (2013, 2014)), (14, (2011, 2012)),
+                            (16, (2009, 2010))):
+            division = f"Girls {age}AAA"
+            self.assertEqual(N.birth_year_span(division), 2, division)
+            self.assertEqual(N.birth_year_window(division, 2025), window)
+
+    def test_girls_nineteen_carries_three_birth_years(self):
+        # 17, 18 and 19 -- and it is an age classification, not a tier rule,
+        # so 19AA spans the same three years as 19AAA.
+        for division in ("Girls 19AAA", "Girls 19AA"):
+            self.assertEqual(N.birth_year_span(division), 3, division)
+            self.assertEqual(N.birth_year_window(division, 2025), (2006, 2008))
+
+    def test_combined_band_reaches_down_to_its_lower_classification(self):
+        # "Girls 16/19AA" is 15- to 19-year-olds: the 19U ceiling and the 16U
+        # floor, not the top classification alone.
+        self.assertEqual(N.division_ages("Girls 16/19AA"), [16, 19])
+        self.assertEqual(N.birth_year_window("Girls 16/19AA", 2025), (2006, 2010))
+
+    def test_team_numbers_do_not_widen_a_band(self):
+        # Only a slash marks a combined band; a trailing number is which team.
+        self.assertEqual(N.division_ages("Girls 16AA 5"), [16])
+        self.assertEqual(N.birth_year_window("Girls 16AA 5", 2025), (2009, 2010))
+
+    def test_one_single_year_season_settles_a_career_of_bands(self):
+        # Two years of 10U, two of 12U and a one-game call-up leave two
+        # candidate years -- the call-up alone contradicts the rest, so the
+        # strict pass fails and the tolerant one can only answer with a range.
+        # The 13U AAA season is what decides between them.
+        career = [(27, "10U BB"), (28, "10U A"), (28, "12U A"),
+                  (29, "12U AA"), (30, "12U AA"), (31, "13U AAA")]
+        years = {27: 2021, 28: 2022, 29: 2023, 30: 2024, 31: 2025}
+
+        bands = [(s, d) for s, d in career if d != "13U AAA"]
+        cluster = identity.Cluster(key="range", divisions=set(bands))
+        self.assertEqual(identity._birth_window(cluster, years), (2012, 2013))
+
+        cluster = identity.Cluster(key="exact", divisions=set(career))
+        self.assertEqual(identity._birth_window(cluster, years), (2012, 2012))
+
+    def test_home_division_cap_does_not_depend_on_set_order(self):
+        # ``Cluster.divisions`` is a set, and the 13U AAA window ties with the
+        # 14U AAA band that starts on the same year. Answering differently
+        # between runs would move a player's badge for no reason.
+        career = [(31, "13U AAA"), (32, "14U AAA"), (30, "12U AA")]
+        years = {30: 2024, 31: 2025, 32: 2026}
+        answers = {
+            identity._birth_window(identity.Cluster(key="k", divisions=set(order)), years)
+            for order in (career, career[::-1], career[1:] + career[:1])
+        }
+        self.assertEqual(answers, {(2012, 2012)})
+
 
 def obs(name, season, team, jersey="", division="10U A", goalie=False):
     return Observation(name=name, season_id=season, team_id=team,

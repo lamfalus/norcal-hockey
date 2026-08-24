@@ -371,7 +371,11 @@ class TestDoubleRostering(unittest.TestCase):
         self.assertEqual(len(clusters), 1)
         window = identity._birth_window(clusters[0], YEARS)
         self.assertIsNotNone(window, "must not come back unknown")
-        self.assertEqual(window, (2011, 2011))
+        # Her 14U season is 2011 or 2012 and the 19U one cannot choose between
+        # them, so the range is the honest answer. It used to come back as a
+        # flat 2011, but only because the 19U band was a year too narrow --
+        # once 19U carries 17s as well, 2012 is admissible too.
+        self.assertEqual(window, (2011, 2012))
 
     def test_home_division_caps_the_birth_window(self):
         # Without the cap the answer drifts younger than the youngest division

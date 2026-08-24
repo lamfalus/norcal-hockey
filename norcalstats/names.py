@@ -388,6 +388,28 @@ def division_age(division: str) -> Optional[int]:
     return max(candidates) if candidates else None
 
 
+#: A band written as two classifications joined by a slash: "Girls 16/19AA",
+#: "Girls 14U/15U". Only a slash counts. Reading every number in a name as an
+#: age would let a team number widen the window -- "Girls 16AA 5" would reach
+#: down to five-year-olds -- and the slash is what the site actually uses.
+_COMBINED_BAND = re.compile(r"(\d{1,2})\s*U?\s*/\s*(\d{1,2})\s*U?", re.I)
+
+
+def division_ages(division: str) -> list[int]:
+    """Every age classification a division name names, low to high.
+
+    Usually one. A combined band names two, and both matter: the upper figure
+    is the eligibility ceiling, the lower one is how far down the band reaches.
+    """
+    combined = _COMBINED_BAND.search(division or "")
+    if combined:
+        ages = sorted(int(n) for n in combined.groups())
+        if all(a in _AGE_RANGE for a in ages):
+            return ages
+    age = division_age(division)
+    return [age] if age else []
+
+
 #: The tier, written against the age with or without the U: "10UA", "12 AA",
 #: "16AAA", "10UBB-1". Longest first, so AAA is not read as AA and BB is not
 #: read as B.
@@ -431,16 +453,67 @@ def division_from_team_name(team_name: str) -> Optional[str]:
     return f"{age}U {tier}"
 
 
+#: Division ages with nothing above them. They carry a wide spread of ages
+#: because there is nowhere else for an older teenager to play -- a 19U roster
+#: routinely holds 15- to 19-year-olds, and in a sparse girls program it may be
+#: the only team above 16U. ``identity`` reads its play-up tolerance off this
+#: same tuple, so the two cannot drift apart.
+TERMINAL_AGES = (18, 19)
+
+#: Tier I boys run a single-birth-year ladder the whole way up -- 11U, 12U,
+#: 13U, 14U, 15U and 16U AAA all ice in the same league and the same season,
+#: which is only possible if each is one year. The terminal rung is the
+#: exception: 18U AAA carries 17- and 18-year-olds.
+_SINGLE_YEAR_TIER = "AAA"
+
+#: The girls ladder is two years the whole way up -- 12AAA is 11s and 12s,
+#: 14AAA is 13s and 14s, 16AAA is 15s and 16s -- with its own exception at the
+#: top, in the other direction: 19U carries 17-, 18- **and** 19-year-olds.
+#: That is a tier-independent age classification, so 19AA spans three years
+#: exactly as 19AAA does.
+_GIRLS_TERMINAL_AGE = 19
+_GIRLS_TERMINAL_SPAN = 3
+
+
+def _span_at(age: int, division: str) -> int:
+    """How many birth years the classification at ``age`` admits."""
+    if is_girls(division):
+        return _GIRLS_TERMINAL_SPAN if age == _GIRLS_TERMINAL_AGE else 2
+    if age not in TERMINAL_AGES and division_tier(division) == _SINGLE_YEAR_TIER:
+        return 1
+    return 2
+
+
+def birth_year_span(division: str) -> int:
+    """How many birth years a division admits: 1, 2 or 3."""
+    age = division_age(division)
+    return 2 if age is None else _span_at(age, division)
+
+
 def birth_year_window(division: str, start_year: int) -> Optional[tuple[int, int]]:
-    """The two-year birth window implied by playing ``division`` in a season.
+    """The birth window implied by playing ``division`` in a season.
 
     A 10U player in a season starting 2022 was born in 2012 or 2013 -- the same
     convention the existing viewer uses, so inferred years stay consistent.
+
+    Three spans rather than one. **Single-birth-year divisions are the whole
+    reason a career resolves**: a player who spends six seasons in two-year
+    bands can still end with two candidate years, where one season of 14U AAA
+    fixes the year outright. **Three-year ones are the reverse** -- claiming two
+    years for a girls 19U team would put a third of its roster a year out, and a
+    window that is too narrow is worse than one that is too wide, because it
+    contradicts the player's other seasons instead of merely failing to narrow
+    them.
+
+    A combined band is read from both ends: "Girls 16/19AA" tops out at the 19U
+    ceiling and reaches down to the 16U floor, so it spans 15- to 19-year-olds
+    rather than the top classification alone.
     """
-    age = division_age(division)
-    if not age or not start_year:
+    ages = division_ages(division)
+    if not ages or not start_year:
         return None
-    return (start_year - age, start_year - age + 1)
+    return (start_year - max(ages),
+            start_year - min(ages) + _span_at(min(ages), division) - 1)
 
 
 #: How many years younger than a division's nominal age a player may be and

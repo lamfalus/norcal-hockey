@@ -370,8 +370,8 @@ pair is raised for review and left separate, because a wrong merge is far harder
 to notice later than a missing one.
 
 **Two children sharing a name are detected from division history.** Each age
-division implies a two-year birth window, so a `Ryan Smith` who appears in both
-10U and 16U in one season is two boys, not one. They become separate players
+division implies a [birth window](#how-wide-a-birth-window-is), so a `Ryan
+Smith` who appears in both 10U and 16U in one season is two boys, not one. They become separate players
 with separate birth years and separate stats.
 
 The obvious trap here is a **call-up** — a 10U child playing a game or two up in
@@ -407,8 +407,43 @@ Both boundaries are pinned by tests, so the tuning cannot drift silently. If the
 real backfill shows it erring either way, the dials are `PLAY_UP_TOLERANCE` and
 `TERMINAL_PLAY_UP_TOLERANCE` in `identity.py`.
 
-Birth years are inferred as before: each division implies a two-year window, and
-intersecting a player's seasons often narrows it to one year.
+#### How wide a birth window is
+
+Birth years are inferred by intersecting a player's seasons, so how many years
+each division admits is the whole of the arithmetic. It is not always two.
+
+| Divisions | Birth years | |
+|---|---|---|
+| 11U–16U **AAA** | **1** | Tier I boys run a single-year ladder |
+| 18U AAA | 2 | the top of the boys ladder carries 17s and 18s |
+| Girls 12AAA, 14AAA, 16AAA | 2 | the girls ladder is two years at every rung |
+| **Girls 19U**, any tier | **3** | the top of the girls ladder carries 17s, 18s and 19s |
+| everything else | 2 | |
+
+The single-year rungs are why a career resolves at all. A player who spends six
+seasons in two-year bands can still finish with two candidate years and nothing
+to choose between them; one season of 14U AAA fixes the year outright. It is
+visible in the data too — 11U, 12U, 13U, 14U, 15U and 16U AAA all ice in the
+same league in the same season, which is only possible if each is one year.
+
+Both ends of the ladder are exceptions, in opposite directions, and the girls
+one matters more. **A window that is too narrow is worse than one that is too
+wide**: too wide merely fails to narrow the answer, while too narrow
+contradicts the player's other seasons and can lose the birth year entirely.
+Reading a girls 19U team as two years does exactly that to a third of its
+roster.
+
+A combined band is read from both ends. `Girls 16/19AA` tops out at the 19U
+ceiling and reaches down to the 16U floor, so it spans 15- to 19-year-olds
+rather than the top classification alone. Only a slash marks one — reading
+every number in a name as an age would let a team number widen the window,
+turning `Girls 16AA 5` into a band reaching down to five-year-olds.
+
+Where two windows tie on their earliest year, the **narrower** one wins. That
+is not only precision: the divisions are held in a set, so picking arbitrarily
+between a single-year division and the two-year band starting alongside it
+would answer differently between runs, and a player's badge would move for no
+reason.
 
 ### Double-rostered players
 

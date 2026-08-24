@@ -457,11 +457,10 @@ def _maybe_flag_double_roster(
     ))
 
 
-#: Division ages with nothing above them. They carry a wide spread of ages
-#: because there is nowhere else for an older teenager to play -- a 19U roster
-#: routinely holds 15- to 19-year-olds, and in a sparse girls program it may be
-#: the only team above 16U.
-TERMINAL_DIVISION_AGES = (18, 19)
+#: Division ages with nothing above them -- the same tuple the birth-window
+#: spans are read off, so a division cannot be terminal for one and not the
+#: other.
+TERMINAL_DIVISION_AGES = N.TERMINAL_AGES
 
 #: Play-up tolerance for those terminal divisions. Four years lets a 16U (and
 #: even a 14U) player appear on a 19U roster, while still keeping 12U and below
@@ -875,7 +874,17 @@ def _birth_window(
     # The youngest division a player appeared in is the best evidence of their
     # actual age group -- they play up, not down -- so it caps the answer and
     # keeps it from drifting younger than the data supports.
-    home = max((w for _, w in pairs if w), key=lambda w: w[0], default=None)
+    #
+    # Ties break toward the narrower window, and not only for precision:
+    # ``cluster.divisions`` is a set, so picking arbitrarily between two windows
+    # with the same floor would answer differently between runs. A single-year
+    # division ties with the two-year band that starts alongside it, and is the
+    # better answer of the two every time.
+    home = max(
+        (w for _, w in pairs if w),
+        key=lambda w: (w[0], -w[1]),
+        default=None,
+    )
     return N.intersect_windows([widened, home]) or widened
 
 
