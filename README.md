@@ -639,6 +639,33 @@ longer written by anything.
 
 ## Running on the Raspberry Pi
 
+### Reaching it
+
+```bash
+ssh lamfalus@raspberrypi.local
+```
+
+`raspberrypi.local` resolves over mDNS on the home network and survives the
+DHCP lease changing, which the address does not — it is `192.168.86.216`
+today. Both are private addresses, unroutable from outside the network, which
+is why they are written down here in a public repository. The Pi is also on a
+tailnet, so it is reachable from away; that address is deliberately not
+recorded here.
+
+The checkout lives at `/home/lamfalus/norcal-hockey` and its remote is the
+SSH deploy key, so it pulls and pushes without a prompt:
+
+```bash
+ssh lamfalus@raspberrypi.local 'cd norcal-hockey && git pull'
+```
+
+**Nothing on the Pi updates itself.** The systemd unit runs the collector out
+of that directory and never touches git, so code changes reach it only by
+pulling — before 03:30, or the night's run uses the old code. A schema change
+applies itself on the next run, because `db.connect()` migrates on open.
+
+### Installing
+
 ```bash
 git clone https://github.com/lamfalus/norcal-hockey
 cd norcal-hockey
@@ -718,13 +745,24 @@ whatever authentication is already configured.
 
 **`"publish_app": true`** sends the app dataset to a branch of its own
 (`app_branch`, default `data`) as a single **parentless commit, force-pushed**,
-replacing what was there. 39 files rebuilt nightly would otherwise add
+replacing what was there. 40 files rebuilt nightly would otherwise add
 megabytes to the history every night and never give any of it back; a branch
 with no history has nothing to grow. It is written with git plumbing against a
 temporary index, so the working tree, the index and the checked-out branch are
 never touched — the nightly run can publish while you are midway through an
 edit — and it stages only the dataset directory, so nothing else can be swept
-in. Unchanged data publishes nothing.
+in.
+
+It compares the tree it is about to push against the published one and skips
+the push when they match. **In practice they never match.** Every file carries
+a `metadata.generated` timestamp, so all 40 differ every night whatever the
+data did; `app dataset unchanged; nothing to publish` has never been logged.
+
+That is worth leaving alone rather than optimising. The viewer's footer reads
+`generated` as *when the collector last ran*, and that is what makes a Pi that
+has quietly stopped visible. Skipping unchanged publishes would freeze the date
+through a quiet week and make a healthy collector look dead — the failure this
+is meant to catch, reported backwards.
 
 **`"publish": true`** commits the legacy exports to `git_branch` in the normal
 way. It stages **only the export files**, never `git add -A`, refuses to run
