@@ -906,10 +906,23 @@ grouped by identity, never by name: in the older seasons the site gives every
 one of a club's teams the same name, and eighteen different squads are all
 called "Anaheim Jr Ducks" in 2021.
 
-**Player Lookup** — a career, one section per season, each with a collapsible
-**game log**: date, opponent, home or away, result, goals, assists, points,
-penalty minutes, and power-play or short-handed marks. One fetch of the
+**Player Lookup** — a career, **newest season first**, each section with a
+collapsible **game log**: date, opponent, home or away, result, goals, assists,
+points, penalty minutes, and power-play or short-handed marks. One fetch of the
 player's shard covers every season they played.
+
+Above the seasons is a box per **team**, all ticked. The same team across two
+seasons is one box, not two — a player who stayed put for two years played for
+one team and should be able to say so with one tick. Club plus the team's own
+name identifies it: the division can move underneath a squad (`14U AA East` one
+year, `14U AA` the next) while the squad is unchanged, and two squads in one
+club are told apart by their names — `12-1`, `12-2` — rather than by anything
+else the site prints. The box carries the seasons it covers as its tooltip.
+
+Unticking a team takes it out of the season tables, the game logs and the
+linemates panel alike, at team-season grain rather than by season: a player
+with two teams in one year can drop the one-game call-up and keep the season.
+The boxes only appear where there is more than one team to choose between.
 
 **Player Flow** — an alluvial diagram of movement between clubs across seasons.
 
@@ -968,7 +981,10 @@ none.
 Two pickers sit above the tabs, because both change what counts as a game in
 every view below.
 
-**League** — one of the four, or all of them. Four rather than nine: the CAHA
+**League** — one of the four, or all of them. Hidden on a player page, which
+asks about one child where "which league" is a question about everybody else —
+and the page ignores it there rather than letting it drop a team the box list
+is still showing. Its own team boxes narrow that page instead. Four rather than nine: the CAHA
 rounds roll up into CAHA, and the two out-of-state championships are gone. A
 game that came from a round carries its name as a label instead, shown in the
 Type column beside the game's own class — "Regular · Weekends" — and collapsed

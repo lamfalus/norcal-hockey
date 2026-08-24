@@ -34,6 +34,11 @@
      them is 68px of a screen that has none to spare. */
   body[data-view="schedule"] #lbl-gameclass,
   body[data-view="schedule"] .filter-note{display:none;}
+  /* A player page asks about one child, where "which league" is a question
+     about everybody else. It carries a list of that player's own teams
+     instead, and the page ignores the league filter entirely rather than
+     letting it drop a team the list is still showing. */
+  body[data-view="player"] #lbl-league{display:none;}
   /* The browse filters collapse on a small screen; on a desktop the summary is
      redundant, so it is hidden and the panel is simply always open. */
   .filter-panel > summary{display:none;}
@@ -131,6 +136,9 @@
   .class-box:has(input:checked){background:var(--accent);border-color:var(--accent);color:#fff;}
   .class-box input{accent-color:var(--accent);cursor:pointer;margin:0;}
   .class-box:has(input:checked) input{accent-color:#fff;}
+  .team-boxes{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 18px;}
+  .team-boxes-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;
+                    color:var(--muted);margin-right:2px;}
   select,input[type=text]{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:.92rem;min-width:180px;outline:none;transition:border-color .15s;}
   select:focus,input[type=text]:focus{border-color:var(--accent);}
   select option{background:var(--surface2);}
@@ -387,7 +395,7 @@
 <!-- Both of these change what counts as a game in every view below, which is
      why they sit above the tabs instead of inside any one of them. -->
 <div class="global-filters">
-  <label>League
+  <label id="lbl-league">League
     <select id="sel-league" onchange="onFilterChange()">
       <option value="">— all leagues —</option>
     </select>
@@ -849,70 +857,66 @@ function uncheckedClasses() {
 // a few milliseconds, which is cheaper than keeping a filtered copy of each.
 var ALL_ENTRIES = [];
 
-function buildEntries() {
-  var classes = classFilter();
-  var league = FILTERS.league ? parseInt(FILTERS.league) : null;
-  var rows = [];
+// One player's rows. Split out of buildEntries because the player page needs
+// them without the league filter: that page replaces the League picker with a
+// list of the player's own teams, and a league quietly dropping one of those
+// teams would be exactly the invisible filtering the list exists to end.
+function entriesForPlayer(p, classes, league) {
   var byKey = {};
-
-  APP.players.forEach(function(p) {
-    var goalieSeasons = {};
-    p.seasons.forEach(function(s) { if (s.goalie) goalieSeasons[s.season] = (goalieSeasons[s.season] || 0) + 1; });
-    // Just this player's rows. Reaching into the full list to find them again
-    // means scanning all 25,000 of them once per player, which is most of a
-    // ten-second load and happens again on every filter change.
-    var mine = [];
-
-    p.seasons.forEach(function(s) {
-      if (classes && !classes[s['class']]) return;
-      var team = teamFor(s.season, s.team);
-      if (!team) return;
-      if (league && team.league !== league) return;
-
-      var key = p.id + '|' + s.season + '|' + s.team + '|' + (s.goalie ? 'g' : 's');
-      var row = byKey[key];
-      if (!row) {
-        var div = APP.divisionById[team.division];
-        row = byKey[key] = {
-          playerId: p.id, playerName: p.name, born: p.born, bornRange: p.bornRange,
-          season: s.season, teamId: s.team, teamKey: teamKey(s.season, s.team),
-          team: teamName(team), teamBase: teamName(team), teamShort: teamLabel(team),
-          club: team.club || '', division: div ? div.name : '',
-          leagueId: team.league, gender: team.gender,
-          type: s.goalie ? 'goalie' : 'skater', jersey: s.jersey || '',
-          GP: 0, G: 0, A: 0, PIM: 0, PPG: 0, SHG: 0, GA: 0
-        };
-        rows.push(row);
-        mine.push(row);
-      }
-      row.GP += s.gp;
-      row.G += s.g;
-      row.A += s.a;
-      row.PIM += s.pim;
-      row.PPG += s.ppg;
-      row.SHG += s.shg;
-      if (s.ga != null) row.GA += s.ga;
-      if (!row.jersey && s.jersey) row.jersey = s.jersey;
-    });
-
-    // Shots and save percentage come from the league's own goalie table, never
-    // from the scoresheet shot grids: only about one grid in seven adds up.
-    // That table is per season, so it can only be trusted onto a row when the
-    // goalie played for a single team that season.
-    if (p.official) {
-      mine.forEach(function(row) {
-        if (row.type !== 'goalie') return;
-        if (goalieSeasons[row.season] !== 1) return;
-        var off = p.official[row.season + ':goalie'];
-        if (!off) return;
-        if (off.shots != null) row.Shots = off.shots;
-        if (off.so != null) row.SO = off.so;
-        if (off.gaa) row.GAA = parseFloat(off.gaa);
-        if (off.savePct) row['Save%'] = off.savePct;
-        row.official = true;
-      });
-    }
+  var rows = [];
+  var goalieSeasons = {};
+  p.seasons.forEach(function(s) {
+    if (s.goalie) goalieSeasons[s.season] = (goalieSeasons[s.season] || 0) + 1;
   });
+
+  p.seasons.forEach(function(s) {
+    if (classes && !classes[s['class']]) return;
+    var team = teamFor(s.season, s.team);
+    if (!team) return;
+    if (league && team.league !== league) return;
+
+    var key = p.id + '|' + s.season + '|' + s.team + '|' + (s.goalie ? 'g' : 's');
+    var row = byKey[key];
+    if (!row) {
+      var div = APP.divisionById[team.division];
+      row = byKey[key] = {
+        playerId: p.id, playerName: p.name, born: p.born, bornRange: p.bornRange,
+        season: s.season, teamId: s.team, teamKey: teamKey(s.season, s.team),
+        team: teamName(team), teamBase: teamName(team), teamShort: teamLabel(team),
+        club: team.club || '', division: div ? div.name : '',
+        leagueId: team.league, gender: team.gender,
+        type: s.goalie ? 'goalie' : 'skater', jersey: s.jersey || '',
+        GP: 0, G: 0, A: 0, PIM: 0, PPG: 0, SHG: 0, GA: 0
+      };
+      rows.push(row);
+    }
+    row.GP += s.gp;
+    row.G += s.g;
+    row.A += s.a;
+    row.PIM += s.pim;
+    row.PPG += s.ppg;
+    row.SHG += s.shg;
+    if (s.ga != null) row.GA += s.ga;
+    if (!row.jersey && s.jersey) row.jersey = s.jersey;
+  });
+
+  // Shots and save percentage come from the league's own goalie table, never
+  // from the scoresheet shot grids: only about one grid in seven adds up.
+  // That table is per season, so it can only be trusted onto a row when the
+  // goalie played for a single team that season.
+  if (p.official) {
+    rows.forEach(function(row) {
+      if (row.type !== 'goalie') return;
+      if (goalieSeasons[row.season] !== 1) return;
+      var off = p.official[row.season + ':goalie'];
+      if (!off) return;
+      if (off.shots != null) row.Shots = off.shots;
+      if (off.so != null) row.SO = off.so;
+      if (off.gaa) row.GAA = parseFloat(off.gaa);
+      if (off.savePct) row['Save%'] = off.savePct;
+      row.official = true;
+    });
+  }
 
   // Without the league's table, goals against per game is the honest stand-in
   // for GAA -- it is the same figure whenever a goalie went the distance, and
@@ -921,6 +925,17 @@ function buildEntries() {
     if (row.type !== 'goalie' || row.GAA != null) return;
     row.GAA = row.GP > 0 ? (row.GA / row.GP) : 0;
     row.derivedGAA = true;
+  });
+
+  return rows;
+}
+
+function buildEntries() {
+  var classes = classFilter();
+  var league = FILTERS.league ? parseInt(FILTERS.league) : null;
+  var rows = [];
+  APP.players.forEach(function(p) {
+    rows = rows.concat(entriesForPlayer(p, classes, league));
   });
 
   ALL_ENTRIES = rows;
@@ -2143,6 +2158,11 @@ function goToPlayer(playerId) {
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
   document.getElementById('view-player').classList.add('active');
   document.querySelectorAll('.tab-btn')[2].classList.add('active');
+  // The filter bar reads this to decide which of its controls mean anything
+  // here. Without it a player reached from the schedule keeps the schedule's
+  // rules, which hide "Games counted" -- a filter still applying, with its
+  // control taken away.
+  markActiveView('player');
   document.getElementById('player-search').value = p ? p.name : '';
   document.getElementById('ac-list').style.display = 'none';
   history.pushState({ view: 'player', playerId: playerId }, '');
@@ -2157,6 +2177,7 @@ function goToBrowseTeam(key) {
   document.querySelectorAll('.tab-btn').forEach(function(el) { el.classList.remove('active'); });
   document.getElementById('view-browse').classList.add('active');
   document.querySelectorAll('.tab-btn')[0].classList.add('active');
+  markActiveView('browse');
   document.getElementById('sel-season').value = match.season;
   onSeasonChange();
   if (match.club) document.getElementById('sel-club-browse').value = match.club;
@@ -2179,15 +2200,14 @@ function goToBrowseTeam(key) {
 function hiddenSeasonsFor(player, shownSeasons) {
   var shown = {};
   shownSeasons.forEach(function(s) { shown[s] = true; });
-  var league = FILTERS.league ? parseInt(FILTERS.league) : null;
   var kinds = {}, seasons = [];
 
   (player.seasons || []).forEach(function(s) {
     if (shown[s.season]) return;
-    // Only the class filter is being explained here, so a season the league
-    // filter removed must not be blamed on it.
-    var team = teamFor(s.season, s.team);
-    if (!team || (league && team.league !== league)) return;
+    // The seasons passed in were built with no league filter and every team
+    // ticked, so anything missing from them is missing for one reason, and
+    // this is it. A team the reader unticked never reaches here.
+    if (!teamFor(s.season, s.team)) return;
     if (seasons.indexOf(s.season) === -1) seasons.push(s.season);
     kinds[s['class']] = true;
   });
@@ -2230,23 +2250,96 @@ function showAllGameClasses() {
   onFilterChange();
 }
 
+// Which of a player's own teams are ticked. Reset whenever the page moves to
+// a different player: the list is theirs, and so is the state.
+var PLAYER_TEAMS = { playerId: null, ticked: {} };
+
+// The same team across two seasons is one entry, not two -- a player who
+// stayed put for two years played for one team and should be able to say so
+// with one box. Club plus the team's own name identifies it: the division can
+// move underneath a team ("14U AA East" one year, "14U AA" the next) while the
+// squad is unchanged, and two squads in one club are told apart by their names
+// ("12-1", "12-2") rather than by anything else the site prints.
+function teamGroupKey(entry) {
+  return entry.club + '|' + (entry.teamShort || entry.team);
+}
+
+function playerTeamGroups(entries) {
+  var byKey = {}, groups = [];
+  entries.forEach(function(e) {
+    var key = teamGroupKey(e);
+    var group = byKey[key];
+    if (!group) {
+      group = byKey[key] = { key: key, label: e.team, seasons: [], newest: e.season };
+      groups.push(group);
+    }
+    if (group.seasons.indexOf(e.season) === -1) group.seasons.push(e.season);
+    // Name the group as its most recent season names it: a club that renames
+    // a team should be read by what it is called now.
+    if (e.season > group.newest) { group.newest = e.season; group.label = e.team; }
+  });
+  groups.forEach(function(g) { g.seasons.sort(function(a, b) { return b - a; }); });
+  groups.sort(function(a, b) { return b.newest - a.newest || a.label.localeCompare(b.label); });
+  return groups;
+}
+
+function teamBoxes(groups) {
+  if (groups.length < 2) return '';
+  return '<div class="team-boxes"><span class="team-boxes-label">Teams</span>'
+    + groups.map(function(g) {
+        var seasons = g.seasons.map(function(s) { return SEASON_LABELS[s]; }).join(', ');
+        return '<label class="class-box" title="' + escHtml(seasons) + '">'
+          + '<input type="checkbox" value="' + escHtml(g.key) + '"'
+          + (PLAYER_TEAMS.ticked[g.key] ? ' checked' : '')
+          + ' onchange="onPlayerTeamsChange()"><span>' + escHtml(g.label) + '</span></label>';
+      }).join('')
+    + '</div>';
+}
+
+function onPlayerTeamsChange() {
+  var ticked = {};
+  document.querySelectorAll('.team-boxes input:checked').forEach(function(box) {
+    ticked[box.value] = true;
+  });
+  PLAYER_TEAMS.ticked = ticked;
+  renderPlayerHistory(PLAYER_TEAMS.playerId);
+}
+
 function renderPlayerHistory(playerId) {
   CURRENT_PLAYER_ID = playerId;
   const player = APP.playerById[playerId];
   const content = document.getElementById('player-content');
   if (!player) { content.innerHTML = '<div class="empty"><div class="icon">❌</div>Player not found.</div>'; return; }
 
-  const entries = ALL_ENTRIES.filter(e => e.playerId === playerId);
+  // The player's whole history under the class filter, with no league applied:
+  // the team boxes below are what narrows it, and they can only be honest if
+  // they are listing every team there is.
+  const everyEntry = entriesForPlayer(player, classFilter(), null);
+  const groups = playerTeamGroups(everyEntry);
+  if (PLAYER_TEAMS.playerId !== playerId) {
+    PLAYER_TEAMS = { playerId: playerId, ticked: {} };
+    groups.forEach(function(g) { PLAYER_TEAMS.ticked[g.key] = true; });
+  }
+
+  const header = '<div class="player-history-header"><h2>' + escHtml(player.name) + bornLabel(playerId) + '</h2></div>';
+  // Computed before the team boxes narrow anything: a season the reader has
+  // deliberately unticked is not one the page owes an explanation for.
+  const classNote = hiddenSeasonNote(player, [...new Set(everyEntry.map(e => e.season))]);
+
+  const entries = everyEntry.filter(e => PLAYER_TEAMS.ticked[teamGroupKey(e)]);
   if (!entries.length) {
-    content.innerHTML = '<div class="player-history-header"><h2>' + escHtml(player.name) + bornLabel(playerId)
-      + '</h2></div><div class="empty"><div class="icon">📭</div>No games match the current filters.</div>'
-      + hiddenSeasonNote(player, []);
+    content.innerHTML = header + teamBoxes(groups)
+      + '<div class="empty"><div class="icon">📭</div>'
+      + (everyEntry.length ? 'No teams ticked.' : 'No games match the current filters.')
+      + '</div>' + classNote;
     return;
   }
 
   const skaterEntries = entries.filter(e => e.type === 'skater');
   const goalieEntries = entries.filter(e => e.type === 'goalie');
-  const seasons = [...new Set(entries.map(e => e.season))].sort();
+  // Newest first. A player page is read about the season the player is in
+  // now, and a team held for two years shows its more recent one first.
+  const seasons = [...new Set(entries.map(e => e.season))].sort((a, b) => b - a);
   const isTwoWay = skaterEntries.length > 0 && goalieEntries.length > 0;
   const isGoalie = goalieEntries.length > 0;
   const sum = (list, f) => list.reduce((s, e) => s + (f(e) || 0), 0);
@@ -2368,18 +2461,22 @@ function renderPlayerHistory(playerId) {
 
   content.innerHTML = '<div class="player-history-header"><h2>' + escHtml(player.name) + bornLabel(playerId) + '</h2>'
     + (isTwoWay ? '<span class="div-badge">⛸ + 🥅 Two-Way</span>' : isGoalie ? '<span class="div-badge">🥅 Goalie</span>' : '')
-    + '</div>' + aliasNote + summaryCards + seasonSections
-    + hiddenSeasonNote(player, seasons)
+    + '</div>' + aliasNote + teamBoxes(groups) + summaryCards + seasonSections
+    + classNote
     + '<div id="linemates"></div>';
 
-  renderGameLogs(playerId, seasons);
-  renderLinemates(playerId, seasons);
+  // Which team-seasons survived the boxes, so the log and the linemates panel
+  // count the same games the tables above them do.
+  const playing = {};
+  entries.forEach(e => { playing[e.season + '|' + e.teamId] = true; });
+  renderGameLogs(playerId, seasons, playing);
+  renderLinemates(playerId, seasons, playing);
 }
 
 // ── Game log ──────────────────────────────────────────────────────────────
 // One fetch of the player's shard covers every season, so the log is drawn for
 // all of them at once rather than a request per section.
-function renderGameLogs(playerId, seasons) {
+function renderGameLogs(playerId, seasons, playing) {
   seasons.forEach(function(s) {
     var host = document.getElementById('gamelog-' + s);
     if (host) host.innerHTML = '<div class="log-loading">Loading game log…</div>';
@@ -2387,10 +2484,11 @@ function renderGameLogs(playerId, seasons) {
 
   loadPlayerLog(playerId).then(function(lines) {
     var classes = classFilter();
-    var league = FILTERS.league ? parseInt(FILTERS.league) : null;
     var kept = lines.filter(function(l) {
       if (classes && !classes[l['class']]) return false;
-      if (league && l.league !== league) return false;
+      // The log line names the team it was played for, so an unticked team
+      // drops out here rather than only at the season heading above it.
+      if (playing && !playing[l.season + '|' + l.team]) return false;
       return true;
     });
 
@@ -3099,7 +3197,7 @@ var LINEMATES = null;
 // never was, so the counts have to read as English either way.
 function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
 
-function renderLinemates(playerId, seasons) {
+function renderLinemates(playerId, seasons, playing) {
   var host = document.getElementById('linemates');
   if (!host) return;
   host.innerHTML = '<div class="log-loading">Working out linemates…</div>';
@@ -3110,9 +3208,18 @@ function renderLinemates(playerId, seasons) {
     if (document.getElementById('linemates') !== host) return;
 
     var classes = classFilter();
-    var league = FILTERS.league ? parseInt(FILTERS.league) : null;
 
     function blank() { return { fedMe: {}, iFed: {}, goals: 0, assists: 0, assisted: 0 }; }
+
+    // A game counts when one of the player's still-ticked teams was in it.
+    // That replaces the league test this used to run: the player page has no
+    // league picker any more, and the teams are the finer question anyway --
+    // untick one of two teams a player had in a season and the games of the
+    // other are what should remain.
+    function ours(season, game) {
+      if (!playing) return true;
+      return playing[season + '|' + game.home] || playing[season + '|' + game.away];
+    }
 
     function tally(into, game) {
       (game.goals || []).forEach(function(goal) {
@@ -3134,7 +3241,7 @@ function renderLinemates(playerId, seasons) {
       Object.keys(games).forEach(function(id) {
         var g = games[id];
         if (classes && !classes[g['class']]) return;
-        if (league && g.league !== league) return;
+        if (!ours(seasons[i], g)) return;
         tally(here, g);
         tally(everything, g);
       });
