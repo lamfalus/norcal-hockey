@@ -39,6 +39,11 @@
      instead, and the page ignores the league filter entirely rather than
      letting it drop a team the list is still showing. */
   body[data-view="player"] #lbl-league{display:none;}
+  /* The schedule's season sits up here rather than in the panel below, because
+     it is what both of that view's bands are cut from and the panel collapses
+     on a phone. Every other view starts from a season of its own. */
+  #lbl-sched-season{display:none;}
+  body[data-view="schedule"] #lbl-sched-season{display:flex;}
   /* The browse filters collapse on a small screen; on a desktop the summary is
      redundant, so it is hidden and the panel is simply always open. */
   .filter-panel > summary{display:none;}
@@ -392,15 +397,21 @@
 </header>
 <main>
 
-<!-- Both of these change what counts as a game in every view below, which is
-     why they sit above the tabs instead of inside any one of them. -->
+<!-- These change what counts as a game in the views below, which is why they
+     sit above the tabs instead of inside any one of them. Not every one means
+     something in every view, so the stylesheet shows and hides them by
+     data-view: a control that visibly does nothing is worse than no control,
+     and one that is doing something invisibly is worse than either. -->
 <div class="global-filters">
+  <label id="lbl-sched-season">Season
+    <select id="sel-sched-season" onchange="onSchedSeasonChange()"></select>
+  </label>
   <label id="lbl-league">League
     <select id="sel-league" onchange="onFilterChange()">
       <option value="">— all leagues —</option>
     </select>
   </label>
-  <div id="lbl-gameclass" class="filter-group">Games counted
+  <div id="lbl-gameclass" class="filter-group">Game Type
     <div class="class-boxes" id="gameclass-boxes"></div>
   </div>
   <span class="filter-note" id="filter-note"></span>
@@ -431,9 +442,9 @@
          stat total counts and defaults to league games; a fixture list is not
          a total, and on the day the new season opens 117 of its 120 games are
          preseason or exhibition. Defaulting to those rules would show three. -->
-    <label>Type
-      <select id="sel-sched-class" onchange="renderSchedule()"></select>
-    </label>
+    <div class="filter-group">Game Type
+      <div class="class-boxes" id="sched-type-boxes"></div>
+    </div>
   </div>
   </details>
   <div id="schedule-content">
@@ -813,14 +824,6 @@ function indexCore(core) {
 // exhibition games are a third of all lines, so folding them into a season
 // total quietly inflates it -- the filter decides what counts, and defaults to
 // the games a standings table would count.
-var GAME_CLASS_PRESETS = [
-  { id: 'league',     label: 'Regular + Playoffs', classes: ['regular', 'playoff'] },
-  { id: 'regular',    label: 'Regular season',     classes: ['regular'] },
-  { id: 'playoff',    label: 'Playoffs',           classes: ['playoff'] },
-  { id: 'preseason',  label: 'Preseason',          classes: ['preseason'] },
-  { id: 'exhibition', label: 'Exhibition',         classes: ['exhibition'] },
-  { id: 'all',        label: 'All games',          classes: null }
-];
 
 //: What "Games counted" has ticked. ``null`` until the boxes are built, which
 //: is before the first buildEntries() -- and means everything, the same as
@@ -976,7 +979,8 @@ function captureAppState(viewOverride) {
   if (v === 'schedule') {
     s.div   = SCHED.div;
     s.club  = SCHED.club;
-    s.cls   = SCHED.cls;
+    s.season = SCHED.season;
+    s.cls   = Object.keys(SCHED.classes || {}).sort().join(',');
   } else if (v === 'browse') {
     s.season = document.getElementById('sel-season').value;
     s.club   = document.getElementById('sel-club-browse').value;
@@ -1016,7 +1020,22 @@ function applyAppState(s) {
     // the schedule has loaded; initSchedule renders once it is.
     if (s.div   != null) document.getElementById('sel-sched-div').value = s.div;
     if (s.club  != null) document.getElementById('sel-sched-club').value = s.club;
-    if (s.cls)           document.getElementById('sel-sched-class').value = s.cls;
+    if (s.season != null) {
+      SCHED.season = s.season;
+      var seasonSel = document.getElementById('sel-sched-season');
+      if (seasonSel) seasonSel.value = String(s.season);
+    }
+    // An empty list is a state that renders nothing. It is reachable -- untick
+    // every box, then navigate -- and restoring it on the way back would look
+    // like the page had failed, so the boxes keep whatever they have.
+    if (s.cls) {
+      var want = {};
+      s.cls.split(',').filter(Boolean).forEach(function(c) { want[c] = true; });
+      document.querySelectorAll('#sched-type-boxes input').forEach(function(box) {
+        box.checked = !!want[box.value];
+      });
+      readSchedTypes();
+    }
     renderSchedule();
   } else if (s.view === 'browse') {
     if (s.season) document.getElementById('sel-season').value = s.season;
@@ -1080,8 +1099,8 @@ var SCHEDULE = { rows: null, loading: null, partial: null };
 // How many games a band shows before asking. 8,463 played games is more than
 // any list wants to hold, and a phone least of all.
 var SCHED_PAGE = 60;
-var SCHED = { div: '', club: '', cls: 'all', upcoming: SCHED_PAGE, recent: SCHED_PAGE,
-              allSeasons: false };
+var SCHED = { season: null, div: '', club: '', classes: null,
+              upcoming: SCHED_PAGE, recent: SCHED_PAGE };
 
 // ── Provenance ────────────────────────────────────────────────────────────
 // Two different dates, and conflating them is the whole reason this exists:
@@ -1257,14 +1276,16 @@ function schedDivisionsOf(g) {
 }
 
 function initSchedule() {
-  var classSel = document.getElementById('sel-sched-class');
-  GAME_CLASS_PRESETS.forEach(function(p) {
-    var o = document.createElement('option');
-    o.value = p.id;
-    o.textContent = p.id === 'all' ? 'All games' : p.label;
-    if (p.id === SCHED.cls) o.selected = true;
-    classSel.appendChild(o);
-  });
+  // Same control as the one above the tabs, same name, same everything ticked
+  // by default -- a fixture list and a stat total ask different questions of
+  // the game's class, but they ask it in the same words.
+  var boxes = document.getElementById('sched-type-boxes');
+  boxes.innerHTML = APP.gameClasses.map(function(c) {
+    return '<label class="class-box"><input type="checkbox" value="' + escHtml(c)
+      + '" checked onchange="onSchedTypeChange()"><span>'
+      + escHtml(filterClassLabel(c)) + '</span></label>';
+  }).join('');
+  readSchedTypes();
 
   loadSchedule().then(function(rows) {
     var divisions = {}, clubs = {};
@@ -1296,6 +1317,20 @@ function initSchedule() {
       o.value = c; o.textContent = clubDisplayName(c);
       clubSel.appendChild(o);
     });
+
+    // Only the seasons this file actually holds. Where there is no index that
+    // is the one season the fallback read, and the picker says so by having
+    // nothing else in it.
+    var present = {};
+    rows.forEach(function(g) { present[g.season] = true; });
+    var seasonSel = document.getElementById('sel-sched-season');
+    var seasons = Object.keys(present).map(Number).sort(function(a, b) { return b - a; });
+    seasonSel.innerHTML = seasons.map(function(id) {
+      return '<option value="' + id + '">' + escHtml(SEASON_LABELS[id] || ('Season ' + id))
+        + '</option>';
+    }).join('');
+    if (SCHED.season == null || !present[SCHED.season]) SCHED.season = currentScheduleSeason();
+    if (SCHED.season != null) seasonSel.value = String(SCHED.season);
 
     renderSchedule();
   }).catch(function(err) {
@@ -1437,42 +1472,49 @@ function schedMore(band) {
 function updateSchedSummary() {
   var el = document.getElementById('sched-filter-summary');
   if (!el) return;
-  var parts = [SCHED.div || 'All divisions'];
+  var parts = [];
+  if (SCHED.season != null) parts.push(SEASON_LABELS[SCHED.season] || ('Season ' + SCHED.season));
+  parts.push(SCHED.div || 'All divisions');
   if (SCHED.club) parts.push(clubDisplayName(SCHED.club));
-  if (SCHED.cls !== 'all') {
-    var preset = GAME_CLASS_PRESETS.filter(function(p) { return p.id === SCHED.cls; })[0];
-    if (preset) parts.push(preset.label);
+  var unticked = (APP.gameClasses || []).filter(function(c) {
+    return !SCHED.classes || !SCHED.classes[c];
+  });
+  if (unticked.length) {
+    parts.push((APP.gameClasses || []).filter(function(c) {
+      return SCHED.classes && SCHED.classes[c];
+    }).map(filterClassLabel).join(' + ') || 'no game types');
   }
   el.textContent = parts.join(' · ');
 }
 
-// "Recent" has to mean recent. Reading back across every season put an August
-// day next to a game from 2021 and called both results, which is a fixture
-// archive rather than an answer to "what happened lately" -- and at the start
-// of a season, when the band holds thirty games and five thousand older ones,
-// it is the older ones a reader wades through.
-//
-// Held back rather than dropped: the earlier games are still in the dataset and
-// still on every team and player page, so the band says how many it is not
-// showing and offers them, the same way the class filter does on a player page.
-function seasonScopeNote(season, earlier, shown) {
-  if (season == null) return '';
-  if (SCHED.allSeasons) {
-    return '<div class="band-note">Showing <strong>every season</strong>. '
-      + '<button class="note-link" onclick="schedToggleSeasons()">'
-      + 'Just ' + escHtml(SEASON_LABELS[season] || 'this season') + '</button></div>';
-  }
-  if (!earlier) return '';
-  return '<div class="band-note">Results stop at the start of <strong>'
-    + escHtml(SEASON_LABELS[season] || 'this season') + '</strong>'
-    + (shown ? '' : ', which has none yet') + '. '
-    + earlier.toLocaleString() + ' earlier result' + (earlier === 1 ? '' : 's')
-    + ' not shown. '
-    + '<button class="note-link" onclick="schedToggleSeasons()">'
-    + 'Include every season</button></div>';
+function readSchedTypes() {
+  var ticked = {};
+  document.querySelectorAll('#sched-type-boxes input:checked').forEach(function(box) {
+    ticked[box.value] = true;
+  });
+  SCHED.classes = ticked;
 }
 
-// The season the results band means by "recent".
+function schedClassFilter() {
+  if (!SCHED.classes) return null;
+  var ticked = Object.keys(SCHED.classes);
+  if (APP.gameClasses && ticked.length === APP.gameClasses.length) return null;
+  return SCHED.classes;
+}
+
+function onSchedTypeChange() {
+  readSchedTypes();
+  SCHED.upcoming = SCHED.recent = SCHED_PAGE;
+  renderSchedule();
+}
+
+function onSchedSeasonChange() {
+  SCHED.season = parseInt(document.getElementById('sel-sched-season').value);
+  SCHED.upcoming = SCHED.recent = SCHED_PAGE;
+  renderSchedule();
+}
+
+// Which season the picker opens on.
 //
 // Read off the newest game that has actually been played rather than the
 // newest season in the file, so it rolls over on its own: through the summer
@@ -1491,42 +1533,29 @@ function currentScheduleSeason() {
   return SCHEDULE.season;
 }
 
-function schedToggleSeasons() {
-  SCHED.allSeasons = !SCHED.allSeasons;
-  SCHED.recent = SCHED_PAGE;
-  renderSchedule();
-}
-
 function renderSchedule() {
   var content = document.getElementById('schedule-content');
   if (!SCHEDULE.rows) return;
 
   var div = document.getElementById('sel-sched-div').value;
   var club = document.getElementById('sel-sched-club').value;
-  var cls = document.getElementById('sel-sched-class').value;
   // Any change to what is being asked for starts the bands over. Keeping a
   // reader 300 rows deep after they narrow to one club shows them nothing.
-  if (div !== SCHED.div || club !== SCHED.club || cls !== SCHED.cls) {
+  if (div !== SCHED.div || club !== SCHED.club) {
     SCHED.upcoming = SCHED.recent = SCHED_PAGE;
   }
-  SCHED.div = div; SCHED.club = club; SCHED.cls = cls;
+  SCHED.div = div; SCHED.club = club;
   updateSchedSummary();
 
-  var preset = GAME_CLASS_PRESETS.filter(function(p) { return p.id === SCHED.cls; })[0];
-  var classes = null;
-  if (preset && preset.classes) {
-    classes = {};
-    preset.classes.forEach(function(c) { classes[c] = true; });
-  }
-
+  var classes = schedClassFilter();
   var today = todayISO();
-  var season = currentScheduleSeason();
-  var upcoming = [], recent = [], noResult = 0, earlier = 0;
+  var season = SCHED.season;
+  var upcoming = [], recent = [], noResult = 0;
   // The file arrives sorted by date, so splitting it is a walk, not a sort.
   SCHEDULE.rows.forEach(function(g) {
+    if (season != null && g.season !== season) return;
     if (!schedulePasses(g, classes)) return;
     if (g.date >= today) upcoming.push(g);
-    else if (!SCHED.allSeasons && season != null && g.season !== season) earlier++;
     else {
       recent.push(g);
       if (g.hg == null) noResult++;
@@ -1534,7 +1563,7 @@ function renderSchedule() {
   });
   recent.reverse();
 
-  if (!upcoming.length && !recent.length && !earlier) {
+  if (!upcoming.length && !recent.length) {
     content.innerHTML = '<div class="empty"><div class="icon">📭</div>'
       + 'No games match these filters.</div>';
     return;
@@ -1548,25 +1577,24 @@ function renderSchedule() {
       + ' cross-season index, so earlier seasons are not listed here — they are'
       + ' still on every team and player page. The nightly run writes one.</div>';
   }
-  html += '<div class="section-heading"><h2>Next up</h2><span class="badge">'
-    + (upcoming.length ? upcoming.length.toLocaleString() + ' scheduled' : 'nothing scheduled')
-    + '</span></div>'
-    + (upcoming.length
-        ? scheduleBand(upcoming, SCHED.upcoming, 'upcoming', today)
-        : '<div class="band-note">No games ahead of today. The collector adds them'
-          + ' as the leagues publish their schedules.</div>')
-    + '<div style="margin-top:28px"></div>'
-    + '<div class="section-heading"><h2>Recent results</h2><span class="badge">'
+  // A season with nothing left to play is an archive, not a schedule: there is
+  // no "next", so there is no "recent" either -- everything in it is simply
+  // the results. Both words go rather than sit over a band that has one game
+  // in it from two years ago.
+  if (upcoming.length) {
+    html += '<div class="section-heading"><h2>Next up</h2><span class="badge">'
+      + upcoming.length.toLocaleString() + ' scheduled</span></div>'
+      + scheduleBand(upcoming, SCHED.upcoming, 'upcoming', today)
+      + '<div style="margin-top:28px"></div>';
+  }
+  html += '<div class="section-heading"><h2>'
+    + (upcoming.length ? 'Recent results' : 'Results') + '</h2><span class="badge">'
     + (recent.length - noResult).toLocaleString() + ' played'
     + (noResult ? ' · ' + noResult.toLocaleString() + ' with no result' : '')
-    + (SCHED.allSeasons || season == null ? '' : ' · ' + escHtml(SEASON_LABELS[season] || ''))
     + '</span></div>'
     + (recent.length
         ? scheduleBand(recent, SCHED.recent, 'recent', today)
-        : '<div class="band-note">'
-          + (earlier ? 'Nothing played yet this season.' : 'Nothing played yet.')
-          + '</div>')
-    + seasonScopeNote(season, earlier, recent.length);
+        : '<div class="band-note">Nothing played yet.</div>');
 
   content.innerHTML = html;
 }

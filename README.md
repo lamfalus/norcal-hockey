@@ -217,7 +217,7 @@ game-level data covers the rest.
 
 Every stat line is therefore tagged with the class of game it came from. In
 the app dataset each season split carries its own `class`, which is what the
-viewer's **Games counted** filter switches on; the legacy export folds the
+viewer's **Game Type** boxes switch on; the legacy export folds the
 same thing into a `byClass` breakdown:
 
 ```json
@@ -883,23 +883,27 @@ Three things about it are decisions rather than defaults:
   The games that genuinely have no `team_id` are the `ambiguous_team` ones
   above, which are worth keeping, so filtering on the missing id would have
   dropped exactly the wrong 92 games and kept all 238 of these.
-- **It has its own Type filter, and the global "Games counted" one is hidden
-  while it is showing.** A fixture list is not a stat total. On the day the
-  2026 season opens, 117 of its 120 games are preseason or exhibition, so the
-  global default — regular plus playoffs — would have shown three.
-- **Results stop at the current season.** "Recent" has to mean recent: reading
-  back across every season put an August day next to a game from 2021 and
-  called both results, which is a fixture archive rather than an answer to
-  *what happened lately*. At the start of a season that is thirty games against
-  thirteen thousand older ones, and it is the older ones a reader wades
-  through. The band says how many it is holding back and offers them, the way
-  a player page does with its game classes.
+- **Both bands are cut from one season**, chosen at the top of the page beside
+  League. "Recent" has to mean recent, and reading back across every season put
+  an August day next to a game from 2021 and called both results — a fixture
+  archive rather than an answer to *what happened lately*. At the start of a
+  season that is thirty games against thirteen thousand older ones, and it is
+  the older ones a reader wades through.
 
-  Which season counts as current is read off **the newest game that has
-  actually been played**, not the highest season id in the file. It rolls over
-  on its own that way: through the summer it is the season just finished, and
-  the first preseason weekend moves it forward. Taking the highest id would
-  empty the band the moment a league published next year's fixtures.
+  The picker opens on **the season of the newest game that has actually been
+  played**, not the highest season id in the file. It rolls over on its own
+  that way: through the summer it is the season just finished, and the first
+  preseason weekend moves it forward. Taking the highest id would empty the
+  view the moment a league published next year's fixtures.
+
+- **A finished season has results, not recent results.** Where nothing is left
+  to play there is no "next", so both the Next up band and the word *recent* go
+  and the heading reads plainly **Results**. Neither word survives sitting over
+  a band whose newest game is two years old.
+- **It has its own Game Type boxes, and the global set is hidden while it is
+  showing.** A fixture list is not a stat total, and the two want the class
+  separately — but they want it in the same words, so both controls carry the
+  same name and the same box per class.
 
 - **Both bands page rather than render.** 8,130 played games is more than any
   list wants to hold, and a phone least of all, so each band shows 60 and says
@@ -1004,7 +1008,7 @@ game that came from a round carries its name as a label instead, shown in the
 Type column beside the game's own class — "Regular · Weekends" — and collapsed
 to one word where the two would say the same thing.
 
-**Games counted** — one box per game class, **all of them ticked**. The classes
+**Game Type** — one box per game class, **all of them ticked**. The classes
 are read off the dataset itself, so one the collector starts producing appears
 as a box rather than as games that quietly belong to no filter.
 
@@ -1021,10 +1025,10 @@ totals are on the team page, labelled as such.
 
 The boxes are hidden on the Schedule view, along with the note beside them that
 counts player seasons: neither means anything above a fixture list, and a
-control that visibly does nothing is worse than no control. The Schedule keeps
-its own **Type** dropdown, which asks a different question — what kind of
-fixture this is, rather than what a total should count. League still applies
-there.
+control that visibly does nothing is worse than no control. The Schedule has
+its own set, named and shaped the same, asking the neighbouring question — what
+kind of fixture this is, rather than what a total should count. League still
+applies there.
 
 **A player page names the seasons it is holding back.** The same default that
 would have shown three fixtures on opening day removes a whole season from a
@@ -1037,7 +1041,7 @@ are, and offers the switch:
 
 ```
 '23-'24 and '26-'27 are not shown. Every game in them is exhibition,
-and that is unticked under Games counted.       [Count every game]
+and that is unticked under Game Type.           [Count every game]
 ```
 
 The classes it names are, by definition, the unticked ones, so the note points
@@ -1045,7 +1049,10 @@ straight at the boxes to tick. Only the class filter is explained there: a
 season the **League** picker removed is left out rather than blamed on the
 wrong control.
 
-The Schedule view adds three of its own: **Division**, **Club** and **Type**.
+The Schedule view carries a **Season** of its own, up beside League because it
+is what both of that view's bands are cut from and because the panel below
+collapses on a phone. Every other view starts from a season it picks itself.
+The panel adds **Division**, **Club** and its own **Game Type**.
 
 **Division** filters on the divisions the two *teams* are in, not on the game's
 own level. Those are different questions and the answer differs for 2,868 of
