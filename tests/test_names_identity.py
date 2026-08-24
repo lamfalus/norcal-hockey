@@ -167,6 +167,59 @@ class TestBirthYear(unittest.TestCase):
         cluster = identity.Cluster(key="exact", divisions=set(career))
         self.assertEqual(identity._birth_window(cluster, years), (2012, 2012))
 
+    @staticmethod
+    def career(seasons):
+        """A cluster from ``{season_id: {division: appearances}}``."""
+        cluster = identity.Cluster(key="k")
+        for season, divisions in seasons.items():
+            for division, count in divisions.items():
+                cluster.division_counts[(season, division)] = count
+        cluster.divisions = set(cluster.division_counts)
+        return cluster
+
+    def test_a_call_up_does_not_outvote_the_season_it_was_borrowed_from(self):
+        # Two seasons of 10U and two of 12U pin this player to 2012 -- but one
+        # afternoon up in 12U in 2022 implies born 2010-11, which nothing else
+        # agrees with. Counted equally it empties the strict intersection and
+        # costs the player a year his real seasons never left ambiguous.
+        cluster = self.career({
+            27: {"10U BB": 20},
+            28: {"10U A": 29, "12U A": 1},
+            29: {"12U AA": 5},
+            30: {"12U AA": 24},
+        })
+        years = {27: 2021, 28: 2022, 29: 2023, 30: 2024}
+
+        self.assertNotIn((28, "12U A"), identity._primary_divisions(cluster))
+        self.assertEqual(identity._birth_window(cluster, years), (2012, 2012))
+
+        # Counted equally -- one division, one vote -- the single game wins and
+        # the answer falls back to a range.
+        flat = identity.Cluster(key="k", divisions=set(cluster.divisions))
+        self.assertEqual(identity._birth_window(flat, years), (2012, 2013))
+
+    def test_a_real_second_roster_still_counts(self):
+        # A girl playing a girls team and a co-ed one is genuinely in both, so
+        # neither is dropped. The rule is share of a season, not a raw count.
+        cluster = identity.Cluster(key="k")
+        cluster.division_counts[(31, "12U A")] = 14
+        cluster.division_counts[(31, "Girls 12AA")] = 11
+        cluster.divisions = set(cluster.division_counts)
+        self.assertEqual(len(identity._primary_divisions(cluster)), 2)
+
+    def test_a_call_up_still_sets_a_floor(self):
+        # Dropping a call-up from the strict pass drops its upper bound, which
+        # was never true of a call-up. Its lower bound is a real age limit and
+        # has to survive: nobody in a 12U game is older than 12U admits, so
+        # this is a 12U-aged player whose season is spent up at 14U.
+        cluster = identity.Cluster(key="k")
+        cluster.division_counts[(31, "14U A")] = 20
+        cluster.division_counts[(31, "12U A")] = 1
+        cluster.divisions = set(cluster.division_counts)
+        self.assertEqual(identity._primary_divisions(cluster), {(31, "14U A")})
+        # 14U/2025 alone would say 2011-12; the single 12U game rules both out.
+        self.assertEqual(identity._birth_window(cluster, {31: 2025}), (2013, 2014))
+
     def test_home_division_cap_does_not_depend_on_set_order(self):
         # ``Cluster.divisions`` is a set, and the 13U AAA window ties with the
         # 14U AAA band that starts on the same year. Answering differently

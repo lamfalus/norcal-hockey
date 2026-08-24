@@ -439,6 +439,24 @@ rather than the top classification alone. Only a slash marks one — reading
 every number in a name as an age would let a team number widen the window,
 turning `Girls 16AA 5` into a band reaching down to five-year-olds.
 
+#### What counts as a season
+
+The windows are intersected over the divisions a player *mainly* played, not
+over every division they were ever seen in. One guest game in an older division
+implies a birth year two years off from the rest of a career, and counted
+equally it empties the intersection — so a player whose every real season
+agrees ends up with two candidate years because of a single afternoon. A
+division carries a season when it saw at least half as many appearances as the
+busiest one that season, which is the same rule the [same-name
+split](#player-identity) uses, so a full second roster survives and a call-up
+does not.
+
+A call-up's **lower** bound is kept even so. Age rules run one way, so nobody in
+a 12U game is older than 12U admits, however few games it was — what a call-up
+never justified is its *upper* bound, which is the half that was breaking the
+intersection. A player with twenty games at 14U and one at 12U is a 12U-aged
+player spending the season up, and the single game is what says so.
+
 Where two windows tie on their earliest year, the **narrower** one wins. That
 is not only precision: the divisions are held in a set, so picking arbitrarily
 between a single-year division and the two-year band starting alongside it

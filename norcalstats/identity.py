@@ -82,6 +82,12 @@ class Cluster:
     team_seasons: set[tuple[int, int]] = field(default_factory=set)
     sweaters: set[tuple[int, int, str]] = field(default_factory=set)
     divisions: set[tuple[int, str]] = field(default_factory=set)
+    #: How many appearances each ``(season, division)`` carried. ``divisions``
+    #: says where a player was seen; this says how much of a season it was, and
+    #: a birth window needs the difference -- one guest game must not outvote
+    #: thirty in the player's own division.
+    division_counts: dict[tuple[int, str], int] = field(
+        default_factory=lambda: defaultdict(int))
     #: ``(spelling, season, team)`` triples, used to build the resolution map
     #: so a shared spelling can still point at the right child.
     appearance_keys: set[tuple[str, int, Optional[int]]] = field(default_factory=set)
@@ -97,6 +103,8 @@ class Cluster:
         self.team_seasons |= other.team_seasons
         self.sweaters |= other.sweaters
         self.divisions |= other.divisions
+        for key, count in other.division_counts.items():
+            self.division_counts[key] += count
         self.appearance_keys |= other.appearance_keys
         self.appearances += other.appearances
         self.goalie = self.goalie or other.goalie
@@ -254,6 +262,7 @@ def _make_cluster(key: str, group: list[Observation], person_key: str) -> Cluste
                 )
         if obs.division:
             cluster.divisions.add((obs.season_id, obs.division))
+            cluster.division_counts[(obs.season_id, obs.division)] += 1
         cluster.goalie = cluster.goalie or obs.is_goalie
     return cluster
 
@@ -842,6 +851,27 @@ def rebuild(conn: sqlite3.Connection, *, include_stat_rows: bool = True) -> dict
     }
 
 
+def _primary_divisions(cluster: Cluster) -> set[tuple[int, str]]:
+    """The ``(season, division)`` pairs that genuinely defined a season.
+
+    The same rule ``_primary_appearances`` uses when deciding whether one
+    spelling covers two children: a division carries a season if it saw at
+    least half as many appearances as the busiest one that season. A full
+    second roster survives -- a girl playing girls and co-ed really is in both
+    -- while a handful of games in an older division does not.
+    """
+    by_season: dict[int, list[tuple[str, int]]] = defaultdict(list)
+    for (season, division), count in cluster.division_counts.items():
+        by_season[season].append((division, count))
+
+    kept: set[tuple[int, str]] = set()
+    for season, entries in by_season.items():
+        busiest = max(count for _, count in entries)
+        kept.update((season, division) for division, count in entries
+                    if count * SECONDARY_SHARE >= busiest)
+    return kept
+
+
 def _birth_window(
     cluster: Cluster, season_years: dict[int, Optional[int]]
 ) -> Optional[tuple[int, int]]:
@@ -852,13 +882,35 @@ def _birth_window(
     play-up tolerance is applied as a fallback rather than always -- which would
     needlessly widen the answer for everyone else.
     """
-    pairs = [
-        (division, N.birth_year_window(division, season_years.get(season) or 0))
+    windows = {
+        (season, division):
+            N.birth_year_window(division, season_years.get(season) or 0)
         for season, division in cluster.divisions
-    ]
-    strict = N.intersect_windows(window for _, window in pairs)
+    }
+
+    # A call-up is not evidence of age, and treating it as such is what stops a
+    # career resolving. One guest game in an older division contradicts a full
+    # season in the player's own, the strict pass comes back empty, and the
+    # tolerant one below can only ever answer with a range -- so a player whose
+    # every real season agrees ends up with two candidate years because of a
+    # single afternoon. The strict pass therefore sees only the divisions that
+    # carried a season. Nothing is lost by it: a call-up's *lower* bound is
+    # still enforced below, since a player in a 12U game cannot be older than
+    # 12U admits, and its upper bound was never true of a call-up anyway.
+    primary = _primary_divisions(cluster) or set(windows)
+    strict = N.intersect_windows(windows[key] for key in primary)
+    if strict:
+        # The floor every appearance agrees on, call-ups included: a player in
+        # a 12U game cannot be older than 12U admits, however few games it was.
+        # Dropping a call-up from the strict pass drops its upper bound, which
+        # was never true of a call-up; it must not drop this.
+        floor = max((w[0] for w in windows.values() if w), default=strict[0])
+        strict = (max(strict[0], floor), strict[1]) if floor <= strict[1] else None
     if strict:
         return strict
+
+    pairs = [(division, windows[(season, division)])
+             for season, division in cluster.divisions]
 
     # This player played up somewhere, so the nominal windows cannot all hold at
     # once. Widen exactly as the bucketing did -- including the larger band for
