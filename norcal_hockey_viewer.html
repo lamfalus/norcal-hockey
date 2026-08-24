@@ -118,6 +118,19 @@
   .mate-season:hover{color:var(--text);border-color:var(--accent);}
   .mate-season.active{background:var(--accent);border-color:var(--accent);color:#fff;}
   label{display:flex;flex-direction:column;gap:5px;font-size:.82rem;color:var(--muted);}
+  /* One box per class rather than a list of pre-combined presets: the reader
+     composes the set they want, and every combination is reachable instead of
+     the six somebody thought of in advance. */
+  .filter-group{display:flex;flex-direction:column;gap:5px;font-size:.82rem;color:var(--muted);}
+  .class-boxes{display:flex;flex-wrap:wrap;gap:6px;}
+  .class-box{flex-direction:row;align-items:center;gap:6px;background:var(--surface2);
+             border:1px solid var(--border);border-radius:20px;padding:5px 11px;
+             font-size:.8rem;font-weight:600;cursor:pointer;user-select:none;
+             transition:all .15s;}
+  .class-box:hover{color:var(--text);border-color:var(--accent);}
+  .class-box:has(input:checked){background:var(--accent);border-color:var(--accent);color:#fff;}
+  .class-box input{accent-color:var(--accent);cursor:pointer;margin:0;}
+  .class-box:has(input:checked) input{accent-color:#fff;}
   select,input[type=text]{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:.92rem;min-width:180px;outline:none;transition:border-color .15s;}
   select:focus,input[type=text]:focus{border-color:var(--accent);}
   select option{background:var(--surface2);}
@@ -218,6 +231,13 @@
     .tab-bar{margin-left:0;width:100%;gap:2px;}
     .tab-btn{flex:1;text-align:center;padding:8px 2px;font-size:.72rem;
              border-radius:5px;}
+    /* The filter bar is chrome above every row of data, on the screen that has
+       the least to spare, so five boxes at their desktop size cost a
+       percentage point of it. Tightened until the pair fits the 28% the rest
+       of the phone layout was measured down to. They still wrap to three
+       lines -- 25px each, the same target the team pills have always used. */
+    .class-boxes{gap:4px;}
+    .class-box{padding:4px 8px;font-size:.74rem;gap:4px;}
     /* Layout */
     main{padding:12px 10px;}
     .panel{padding:12px;}
@@ -372,9 +392,9 @@
       <option value="">— all leagues —</option>
     </select>
   </label>
-  <label id="lbl-gameclass">Games counted
-    <select id="sel-gameclass" onchange="onFilterChange()"></select>
-  </label>
+  <div id="lbl-gameclass" class="filter-group">Games counted
+    <div class="class-boxes" id="gameclass-boxes"></div>
+  </div>
   <span class="filter-note" id="filter-note"></span>
 </div>
 
@@ -746,6 +766,10 @@ function latestSeasonWithData() {
 function indexCore(core) {
   APP.core = core;
   APP.players = core.players;
+  // The dataset names its own classes, so a new one appears as a box rather
+  // than as games that quietly belong to no filter.
+  APP.gameClasses = (core.metadata && core.metadata.gameClasses)
+    || ['regular', 'playoff', 'preseason', 'exhibition', 'other'];
 
   SEASONS = core.seasons.map(function(s) { return s.id; });
   APP.seasons = SEASONS;
@@ -790,14 +814,33 @@ var GAME_CLASS_PRESETS = [
   { id: 'all',        label: 'All games',          classes: null }
 ];
 
-var FILTERS = { gameClass: 'league', league: '' };
+//: What "Games counted" has ticked. ``null`` until the boxes are built, which
+//: is before the first buildEntries() -- and means everything, the same as
+//: every box ticked.
+var FILTERS = { classes: null, league: '' };
 
+// The Type column already names these, and the same thing should read the same
+// way in both places. Its one unusable answer is "other", which it shows as a
+// dash -- right in a dense table cell, meaningless on a checkbox.
+function filterClassLabel(c) {
+  var label = gameClassLabel(c);
+  return label === '—' ? c.charAt(0).toUpperCase() + c.slice(1) : label;
+}
+
+// Null means "do not filter", which is both the fast path and the honest one:
+// it keeps any class a future dataset adds, where an explicit set of today's
+// classes would silently drop it.
 function classFilter() {
-  var preset = GAME_CLASS_PRESETS.filter(function(p) { return p.id === FILTERS.gameClass; })[0];
-  if (!preset || !preset.classes) return null;
-  var set = {};
-  preset.classes.forEach(function(c) { set[c] = true; });
-  return set;
+  if (!FILTERS.classes) return null;
+  var ticked = Object.keys(FILTERS.classes);
+  if (APP.gameClasses && ticked.length === APP.gameClasses.length) return null;
+  return FILTERS.classes;
+}
+
+function uncheckedClasses() {
+  return (APP.gameClasses || []).filter(function(c) {
+    return !FILTERS.classes || !FILTERS.classes[c];
+  });
 }
 
 // ── Entries ───────────────────────────────────────────────────────────────
@@ -2152,30 +2195,38 @@ function hiddenSeasonsFor(player, shownSeasons) {
   return { seasons: seasons, kinds: Object.keys(kinds).sort() };
 }
 
-function joinList(items) {
+function joinList(items, conjunction) {
   if (items.length < 2) return items[0] || '';
-  return items.slice(0, -1).join(', ') + ' and ' + items[items.length - 1];
+  return items.slice(0, -1).join(', ') + ' ' + (conjunction || 'and') + ' '
+    + items[items.length - 1];
 }
 
 function hiddenSeasonNote(player, shownSeasons) {
   var hidden = hiddenSeasonsFor(player, shownSeasons);
   if (!hidden.seasons.length) return '';
   var many = hidden.seasons.length > 1;
-  var preset = GAME_CLASS_PRESETS.filter(function(p) { return p.id === FILTERS.gameClass; })[0];
+  // The classes that hid these seasons are, by definition, the unticked ones,
+  // so the note can point straight at the boxes to tick.
+  // In the dataset's own order, not alphabetical: "regular, playoff, preseason"
+  // is the order these are named everywhere else in the app.
+  var kinds = (APP.gameClasses || hidden.kinds)
+    .filter(function(c) { return hidden.kinds.indexOf(c) !== -1; })
+    .map(filterClassLabel);
   return '<div class="season-hidden"><strong>'
     + escHtml(joinList(hidden.seasons.map(function(s) { return SEASON_LABELS[s]; })))
     + '</strong> ' + (many ? 'are' : 'is') + ' not shown. Every game '
-    + (many ? 'in them is ' : 'in it is ') + escHtml(joinList(hidden.kinds))
-    + ', and <em>Games counted</em> is set to '
-    + escHtml(preset ? preset.label : FILTERS.gameClass) + '. '
-    + '<button class="note-link" onclick="showAllGameClasses()">Show all games</button>'
+    + (many ? 'in them is ' : 'in it is ')
+    + escHtml(joinList(kinds, 'or').toLowerCase())
+    + ', and ' + (kinds.length > 1 ? 'those are' : 'that is')
+    + ' unticked under <em>Games counted</em>. '
+    + '<button class="note-link" onclick="showAllGameClasses()">Count every game</button>'
     + '</div>';
 }
 
 function showAllGameClasses() {
-  var sel = document.getElementById('sel-gameclass');
-  if (!sel) return;
-  sel.value = 'all';
+  document.querySelectorAll('#gameclass-boxes input').forEach(function(box) {
+    box.checked = true;
+  });
   onFilterChange();
 }
 
@@ -2528,19 +2579,35 @@ function initFilters() {
     o.value = l.id; o.textContent = l.name;
     leagueSel.appendChild(o);
   });
-  var classSel = document.getElementById('sel-gameclass');
-  GAME_CLASS_PRESETS.forEach(function(p) {
-    var o = document.createElement('option');
-    o.value = p.id; o.textContent = p.label;
-    if (p.id === FILTERS.gameClass) o.selected = true;
-    classSel.appendChild(o);
-  });
+  // Everything ticked to start with. A total that quietly leaves a third of
+  // the stat lines out is the wrong default: the reader who wants league
+  // numbers can say so, but the reader who does not know they are filtering
+  // cannot un-know it.
+  var boxes = document.getElementById('gameclass-boxes');
+  boxes.innerHTML = APP.gameClasses.map(function(c) {
+    return '<label class="class-box"><input type="checkbox" value="' + escHtml(c)
+      + '" checked onchange="onFilterChange()"><span>'
+      + escHtml(filterClassLabel(c)) + '</span></label>';
+  }).join('');
+  readGameClasses();
   updateFilterNote();
+}
+
+function readGameClasses() {
+  var ticked = {};
+  document.querySelectorAll('#gameclass-boxes input:checked').forEach(function(box) {
+    ticked[box.value] = true;
+  });
+  FILTERS.classes = ticked;
 }
 
 function updateFilterNote() {
   var note = document.getElementById('filter-note');
   if (!note) return;
+  if (FILTERS.classes && !Object.keys(FILTERS.classes).length) {
+    note.textContent = 'no game types ticked — nothing is counted';
+    return;
+  }
   var skaters = 0, goalies = 0;
   ALL_ENTRIES.forEach(function(e) { if (e.type === 'goalie') goalies++; else skaters++; });
   note.textContent = skaters.toLocaleString() + ' skater and ' + goalies.toLocaleString()
@@ -2552,7 +2619,7 @@ function updateFilterNote() {
 // repopulated, since a league filter can remove clubs and divisions entirely.
 function onFilterChange() {
   FILTERS.league = document.getElementById('sel-league').value;
-  FILTERS.gameClass = document.getElementById('sel-gameclass').value;
+  readGameClasses();
   buildEntries();
   updateFilterNote();
   refreshClubOptions();

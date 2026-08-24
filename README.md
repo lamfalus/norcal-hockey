@@ -974,12 +974,27 @@ game that came from a round carries its name as a label instead, shown in the
 Type column beside the game's own class — "Regular · Weekends" — and collapsed
 to one word where the two would say the same thing.
 
-**Games counted** — regular plus playoffs by default. Preseason and exhibition
-games are a third of all stat lines, so folding them into a season total
-quietly inflates it. The filter makes that a decision rather than an accident.
-It is hidden on the Schedule view, along with the note beside it that counts
-player seasons: neither means anything above a fixture list, and a control that
-visibly does nothing is worse than no control. League still applies there.
+**Games counted** — one box per game class, **all of them ticked**. The classes
+are read off the dataset itself, so one the collector starts producing appears
+as a box rather than as games that quietly belong to no filter.
+
+It was a dropdown of six pre-combined presets defaulting to regular plus
+playoffs, and both halves of that were wrong. Boxes compose: every combination
+is reachable, where a preset list only offers the ones somebody thought of in
+advance, and `Regular + Playoffs` stops needing to exist as an entry at all.
+And a default that hides a third of the data is one the reader has to already
+know about to escape — a season whose games are all exhibition was simply not
+there, on a page giving no sign anything had been left out. Preseason and
+exhibition genuinely do inflate a season total, but that is a caveat to state
+rather than a default to impose silently, and the league's own regular-season
+totals are on the team page, labelled as such.
+
+The boxes are hidden on the Schedule view, along with the note beside them that
+counts player seasons: neither means anything above a fixture list, and a
+control that visibly does nothing is worse than no control. The Schedule keeps
+its own **Type** dropdown, which asks a different question — what kind of
+fixture this is, rather than what a total should count. League still applies
+there.
 
 **A player page names the seasons it is holding back.** The same default that
 would have shown three fixtures on opening day removes a whole season from a
@@ -992,11 +1007,13 @@ are, and offers the switch:
 
 ```
 '23-'24 and '26-'27 are not shown. Every game in them is exhibition,
-and Games counted is set to Regular + Playoffs.   [Show all games]
+and that is unticked under Games counted.       [Count every game]
 ```
 
-Only the class filter is explained there. A season the **League** picker
-removed is left out of the note rather than blamed on the wrong control.
+The classes it names are, by definition, the unticked ones, so the note points
+straight at the boxes to tick. Only the class filter is explained there: a
+season the **League** picker removed is left out rather than blamed on the
+wrong control.
 
 The Schedule view adds three of its own: **Division**, **Club** and **Type**.
 
