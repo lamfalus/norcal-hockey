@@ -93,6 +93,25 @@ def name_key(name: str) -> str:
     return fold(strip_periods(name))
 
 
+#: Marks the person inside a canonical name. Where one spelling turned out to
+#: be two children, the resolver keys them "ryan smith#a" and "ryan smith#b" --
+#: but the decision that split them is recorded against the bare "ryan smith",
+#: because that is all the reviewer was shown. Anything matching a canonical
+#: name against that decision has to take the person back off first, which is
+#: what canonical_person is for.
+PERSON_SEPARATOR = "#"
+
+
+def canonical_person(canonical_name: str) -> tuple[str, str]:
+    """A canonical name split into the key it was built from and the person.
+
+    ``"ryan smith#a"`` -> ``("ryan smith", "a")``, and a name that was never
+    split -> ``("ryan smith", "")``.
+    """
+    key, _, person = (canonical_name or "").partition(PERSON_SEPARATOR)
+    return key, person
+
+
 def base_key(name: str) -> str:
     """Match key ignoring generational suffixes."""
     base, _ = split_suffix(strip_periods(name))

@@ -217,7 +217,8 @@ def build_clusters(
         for person_key, members in _partition_people(
             key, group, splits, season_years, items
         ).items():
-            cluster_key = key if not person_key else f"{key}#{person_key}"
+            cluster_key = (key if not person_key
+                           else f"{key}{N.PERSON_SEPARATOR}{person_key}")
             clusters[cluster_key] = _make_cluster(cluster_key, members, person_key)
 
     union = _Union()

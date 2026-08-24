@@ -410,6 +410,36 @@ class TestDroppingTheChampionships(LeagueDbTestCase):
             db.scalar(self.conn, "SELECT count(*) FROM players WHERE player_id = 5003"),
             1, "a player named in an override must survive the purge")
 
+    def test_a_hand_made_split_protects_a_player(self):
+        """The other half of the promise, and the half that was not kept.
+
+        A split child's ``canonical_name`` carries the person suffix the
+        resolver gave it -- ``ryan smith#a`` -- while ``player_splits.name``
+        holds the bare key it was decided under, ``ryan smith``. Comparing the
+        two directly never matches, so the decision has to be looked up on the
+        base key.
+        """
+        self._seed_championship()
+        for player_id, canonical in ((5008, "ryan smith#a"), (5009, "ryan smith#b")):
+            self.conn.execute(
+                "INSERT INTO players(player_id,canonical_name,display_name,created_at)"
+                " VALUES (?,?,'Ryan Smith','x')", (player_id, canonical))
+            self.conn.execute(
+                "INSERT INTO player_game_stats(game_id,player_id,season_id,team_id)"
+                " VALUES (900,?,31,700)", (player_id,))
+        self.conn.execute(
+            "INSERT INTO player_splits(name,season_id,team_id,person_key,note)"
+            " VALUES ('ryan smith',31,NULL,'a','split by hand')")
+        self.conn.commit()
+
+        self._run_migration()
+
+        for player_id in (5008, 5009):
+            self.assertEqual(
+                db.scalar(self.conn,
+                          "SELECT count(*) FROM players WHERE player_id = ?", (player_id,)),
+                1, f"player {player_id} is named by a hand-made split and must survive")
+
     def test_a_pre_existing_orphan_is_not_swept_up(self):
         # 4,330 of these predate the purge, from splits that were undone. They
         # are a separate problem and this is not the change that decides them.

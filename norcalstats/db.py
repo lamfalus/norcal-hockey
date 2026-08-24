@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence
 
+from . import names as N
+
 log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 6
@@ -242,12 +244,21 @@ def purge_leagues(conn: sqlite3.Connection, league_ids: Sequence[int]) -> dict[s
         conn.execute(f"DELETE FROM {table} WHERE league_id IN ({marks})", ids)
 
     # Players with nothing left anywhere, and no hand-made decision naming them.
+    # An override names a player_id outright, so it needs no translation. A
+    # split names the *key* it was decided under -- "ryan smith" -- while the
+    # children it produced carry the person inside their canonical name,
+    # "ryan smith#a". Comparing those two directly never matches, which is how
+    # the promise above came to be broken for exactly the half that a reviewer
+    # had to think hardest about.
     protected = {
         r[0] for r in conn.execute(
-            "SELECT player_id FROM player_overrides WHERE player_id IS NOT NULL"
-            " UNION SELECT p.player_id FROM players p"
-            "   JOIN player_splits s ON s.name = p.canonical_name")
+            "SELECT player_id FROM player_overrides WHERE player_id IS NOT NULL")
     }
+    split_keys = {r[0] for r in conn.execute("SELECT DISTINCT name FROM player_splits")}
+    if split_keys:
+        for r in conn.execute("SELECT player_id, canonical_name FROM players"):
+            if N.canonical_person(r["canonical_name"])[0] in split_keys:
+                protected.add(r["player_id"])
     removed_players = 0
     for player_id in candidates:
         if player_id is None or player_id in protected:
