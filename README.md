@@ -887,6 +887,20 @@ Three things about it are decisions rather than defaults:
   while it is showing.** A fixture list is not a stat total. On the day the
   2026 season opens, 117 of its 120 games are preseason or exhibition, so the
   global default — regular plus playoffs — would have shown three.
+- **Results stop at the current season.** "Recent" has to mean recent: reading
+  back across every season put an August day next to a game from 2021 and
+  called both results, which is a fixture archive rather than an answer to
+  *what happened lately*. At the start of a season that is thirty games against
+  thirteen thousand older ones, and it is the older ones a reader wades
+  through. The band says how many it is holding back and offers them, the way
+  a player page does with its game classes.
+
+  Which season counts as current is read off **the newest game that has
+  actually been played**, not the highest season id in the file. It rolls over
+  on its own that way: through the summer it is the season just finished, and
+  the first preseason weekend moves it forward. Taking the highest id would
+  empty the band the moment a league published next year's fixtures.
+
 - **Both bands page rather than render.** 8,130 played games is more than any
   list wants to hold, and a phone least of all, so each band shows 60 and says
   how many it is holding back.

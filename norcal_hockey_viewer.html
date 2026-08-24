@@ -1080,7 +1080,8 @@ var SCHEDULE = { rows: null, loading: null, partial: null };
 // How many games a band shows before asking. 8,463 played games is more than
 // any list wants to hold, and a phone least of all.
 var SCHED_PAGE = 60;
-var SCHED = { div: '', club: '', cls: 'all', upcoming: SCHED_PAGE, recent: SCHED_PAGE };
+var SCHED = { div: '', club: '', cls: 'all', upcoming: SCHED_PAGE, recent: SCHED_PAGE,
+              allSeasons: false };
 
 // ── Provenance ────────────────────────────────────────────────────────────
 // Two different dates, and conflating them is the whole reason this exists:
@@ -1445,6 +1446,57 @@ function updateSchedSummary() {
   el.textContent = parts.join(' · ');
 }
 
+// "Recent" has to mean recent. Reading back across every season put an August
+// day next to a game from 2021 and called both results, which is a fixture
+// archive rather than an answer to "what happened lately" -- and at the start
+// of a season, when the band holds thirty games and five thousand older ones,
+// it is the older ones a reader wades through.
+//
+// Held back rather than dropped: the earlier games are still in the dataset and
+// still on every team and player page, so the band says how many it is not
+// showing and offers them, the same way the class filter does on a player page.
+function seasonScopeNote(season, earlier, shown) {
+  if (season == null) return '';
+  if (SCHED.allSeasons) {
+    return '<div class="band-note">Showing <strong>every season</strong>. '
+      + '<button class="note-link" onclick="schedToggleSeasons()">'
+      + 'Just ' + escHtml(SEASON_LABELS[season] || 'this season') + '</button></div>';
+  }
+  if (!earlier) return '';
+  return '<div class="band-note">Results stop at the start of <strong>'
+    + escHtml(SEASON_LABELS[season] || 'this season') + '</strong>'
+    + (shown ? '' : ', which has none yet') + '. '
+    + earlier.toLocaleString() + ' earlier result' + (earlier === 1 ? '' : 's')
+    + ' not shown. '
+    + '<button class="note-link" onclick="schedToggleSeasons()">'
+    + 'Include every season</button></div>';
+}
+
+// The season the results band means by "recent".
+//
+// Read off the newest game that has actually been played rather than the
+// newest season in the file, so it rolls over on its own: through the summer
+// that is the season just finished, and the first preseason weekend of the
+// next one moves it forward. Taking the highest season id instead would empty
+// the band the moment a league published next year's fixtures.
+function currentScheduleSeason() {
+  if (SCHEDULE.partial != null) return SCHEDULE.partial;
+  if (SCHEDULE.season != null) return SCHEDULE.season;
+  var today = todayISO();
+  var rows = SCHEDULE.rows || [];
+  for (var i = rows.length - 1; i >= 0; i--) {
+    if (rows[i].date < today) { SCHEDULE.season = rows[i].season; return SCHEDULE.season; }
+  }
+  SCHEDULE.season = rows.length ? rows[0].season : null;
+  return SCHEDULE.season;
+}
+
+function schedToggleSeasons() {
+  SCHED.allSeasons = !SCHED.allSeasons;
+  SCHED.recent = SCHED_PAGE;
+  renderSchedule();
+}
+
 function renderSchedule() {
   var content = document.getElementById('schedule-content');
   if (!SCHEDULE.rows) return;
@@ -1468,11 +1520,13 @@ function renderSchedule() {
   }
 
   var today = todayISO();
-  var upcoming = [], recent = [], noResult = 0;
+  var season = currentScheduleSeason();
+  var upcoming = [], recent = [], noResult = 0, earlier = 0;
   // The file arrives sorted by date, so splitting it is a walk, not a sort.
   SCHEDULE.rows.forEach(function(g) {
     if (!schedulePasses(g, classes)) return;
     if (g.date >= today) upcoming.push(g);
+    else if (!SCHED.allSeasons && season != null && g.season !== season) earlier++;
     else {
       recent.push(g);
       if (g.hg == null) noResult++;
@@ -1480,7 +1534,7 @@ function renderSchedule() {
   });
   recent.reverse();
 
-  if (!upcoming.length && !recent.length) {
+  if (!upcoming.length && !recent.length && !earlier) {
     content.innerHTML = '<div class="empty"><div class="icon">📭</div>'
       + 'No games match these filters.</div>';
     return;
@@ -1505,10 +1559,14 @@ function renderSchedule() {
     + '<div class="section-heading"><h2>Recent results</h2><span class="badge">'
     + (recent.length - noResult).toLocaleString() + ' played'
     + (noResult ? ' · ' + noResult.toLocaleString() + ' with no result' : '')
+    + (SCHED.allSeasons || season == null ? '' : ' · ' + escHtml(SEASON_LABELS[season] || ''))
     + '</span></div>'
     + (recent.length
         ? scheduleBand(recent, SCHED.recent, 'recent', today)
-        : '<div class="band-note">Nothing played yet.</div>');
+        : '<div class="band-note">'
+          + (earlier ? 'Nothing played yet this season.' : 'Nothing played yet.')
+          + '</div>')
+    + seasonScopeNote(season, earlier, recent.length);
 
   content.innerHTML = html;
 }
