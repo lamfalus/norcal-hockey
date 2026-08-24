@@ -1066,17 +1066,19 @@ function initSchedule() {
 
     renderSchedule();
   }).catch(function(err) {
-    // schedule.json is newer than the rest of the dataset, so a copy published
-    // before this view existed will not have it. That is a deployment lag
-    // rather than a fault, and it says so: everything else on the page still
-    // works, because every other view reads core.json.
+    // Not missing data -- missing an index. Every one of these games is already
+    // in games/sNN.json and always has been; what an older publish lacks is the
+    // flat cross-season header list this view reads instead of pulling six
+    // three-megabyte files to draw one evening. Say that, rather than implying
+    // the schedule itself has not been collected.
     var missing = /404/.test(err.message);
     document.getElementById('schedule-content').innerHTML =
       '<div class="empty"><div class="icon">' + (missing ? '🗓️' : '⚠️') + '</div>'
       + (missing
-          ? 'This dataset was published before the schedule view existed, so it'
-            + ' has no <code>schedule.json</code> yet. The nightly collection'
-            + ' adds one.<div style="margin-top:8px;font-size:.85rem">'
+          ? 'The games are collected, but this dataset has no'
+            + ' <code>schedule.json</code> — the cross-season index this view'
+            + ' reads. The nightly run writes one.'
+            + '<div style="margin-top:8px;font-size:.85rem">'
             + 'Every other tab reads <code>core.json</code> and is unaffected.</div>'
           : 'Could not load the schedule.<div style="margin-top:8px;font-size:.85rem">'
             + escHtml(err.message) + '</div>')
