@@ -1123,9 +1123,33 @@ function schedAgeOrder(name) {
   return [m ? parseInt(m[1]) : 999, name || ''];
 }
 
+// A division without the sub-section the league split it into. "10U B",
+// "10U B East", "10U B West" and "10U B II" are one division to anybody
+// choosing one, and keeping them apart meant picking "10U B" silently missed
+// 383 games -- a worse failure than a wrong-looking row, because nothing about
+// a short list says it is short.
+//
+// Only these markers are stripped, and only from the end: a tier is part of the
+// name and must survive. "10U BB" is not "10U B", and nothing here touches it.
+// Checked against all 74 division names the six seasons contain: 74 collapse to
+// 48, and the 26 that move are every flight, conference and pool, with no
+// tier, age or Girls/High School division altered.
+var DIVISION_SUBSECTION = /\s+(?:Flight\s+[IVX0-9]+|Pool\s+[A-Z0-9]+|East|West|North|South|I{1,3}|IV)$/;
+
+function coreDivision(name) {
+  if (!name) return '';
+  var previous = null;
+  while (previous !== name) {
+    previous = name;
+    name = name.replace(DIVISION_SUBSECTION, '');
+  }
+  return name;
+}
+
 // What a game counts as, for the division filter: the division each side's
-// team belongs to. Not the game's own level -- that is the section the league
-// filed it under, which for cross-tier play is neither team's division.
+// team belongs to, with any sub-section removed. Not the game's own level --
+// that is the section the league filed it under, which for cross-tier play is
+// neither team's division.
 function schedDivisionsOf(g) {
   var out = [];
   ['home', 'away'].forEach(function(side) {
@@ -1133,7 +1157,8 @@ function schedDivisionsOf(g) {
     if (id == null) return;
     var team = APP.teamByKey[teamKey(g.season, id)];
     var div = team ? APP.divisionById[team.division] : null;
-    if (div && div.name) out.push(div.name);
+    var name = div ? coreDivision(div.name) : '';
+    if (name && out.indexOf(name) < 0) out.push(name);
   });
   return out;
 }
