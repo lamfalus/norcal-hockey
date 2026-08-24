@@ -23,14 +23,15 @@ reads the dataset from `data`, and neither needs a hand.
 |---|---|
 | Seasons | Fall 2021 – Fall 2026 (S27–S31, S33 — the site has no S32) |
 | Leagues | 4 — Norcal, CAHA, SCAHA, PGHL |
-| Games | 13,846, of which 8,113 have a result |
-| Stat lines | 252,381 across 65,680 goals and 52,374 penalties |
-| Teams / clubs | 2,344 team-seasons resolving to 63 clubs |
-| Players | 10,358 in the published dataset |
-| Open review questions | 178 |
+| Games | 14,019, of which 8,130 have a result |
+| Stat lines | 240,901 across 63,631 goals and 49,193 penalties |
+| Teams / clubs | 2,346 team-seasons resolving to 65 clubs |
+| Players | 10,338 in the published dataset |
+| Open review questions | 169 |
 | Schema | v6 |
 
-Counts are a snapshot taken 2026-08-22; the collector adds to them nightly.
+Counts are a snapshot taken 2026-08-24, after the first run on schema v6; the
+collector adds to them nightly.
 
 The viewer opens on the **schedule**: what is on next and what just happened,
 across every league and division at once. Behind that are browse by season, club
@@ -42,14 +43,16 @@ notes are in [The viewer](#the-viewer).
 **What is left**, in the order it is worth doing:
 
 - **`ambiguous_team`, 40 questions.** Same-club-versus-same-club games where
-  neither side could be identified, so **5,261 stat lines belong to no team** and
+  neither side could be identified, so **5,262 stat lines belong to no team** and
   are missing from team totals. The only open category that costs data.
-- The other 138 questions are correct as auto-applied: genuine second children
-  sharing a name, and call-ups playing two age groups.
+- The other 129 questions are correct as auto-applied: genuine second children
+  sharing a name, and call-ups playing two age groups. Two are `new_league`,
+  which is the one category worth reading rather than dismissing.
 - `caha_players_s27-s31.json` is a v1 artifact nothing has written since v1, and
   the legacy exports are switched off. Both can go once nothing points at them.
-- 4,330 orphan player rows — the leftovers of splits that were later undone.
-  Excluded from the export, still in the database.
+- 4,535 orphan player rows — the leftovers of splits that were later undone.
+  Excluded from the export, still in the database. `purge_leagues` deliberately
+  does not sweep them up: they are a separate question from any one purge.
 
 ---
 
@@ -585,7 +588,7 @@ flow, and a club's teams across the years.
 
 **`core.json`** — everything cross-season and aggregate: players with their
 per-season splits, teams, divisions, clubs, leagues, standings. Loaded once,
-and enough on its own for every list and table in the app. 9.1 MB, about 872 KB
+and enough on its own for every list and table in the app. 8.6 MB, about 821 KB
 gzipped.
 
 **`schedule.json`** — every game there has ever been, header only: when,
@@ -594,7 +597,12 @@ the date order the app opens on runs across seasons as well as across leagues,
 so no per-season file can answer it. Sorted by date and then time of day, which
 the app relies on — it shows a day as a block and never sorts. Rows are arrays
 rather than objects, since the same fifteen keys repeated 14,196 times cost
-more than the data does: 3.4 MB as objects, 1.5 MB as arrays, 223 KB gzipped.
+more than the data does: as arrays it is 1.7 MB, 225 KB gzipped.
+
+Two of its columns are there for sides that matched no team row: `homeName` /
+`awayName` carry the name the site printed, and `homeDiv` / `awayDiv` carry the
+division that name states where it states one. See
+[Reading a division off a name](#reading-a-division-off-a-name).
 
 **`logs/pNN.json`** — per-game lines for a player, in 32 buckets chosen by
 `player_id % 32`. The app works out which file to fetch by arithmetic, so there
@@ -607,11 +615,11 @@ games are carried without a score, so a team page is a schedule as much as a
 record — 5,732 games are scheduled rather than final, including every one of
 the current season's.
 
-Six seasons come to 40 files and 72 MB, about 7.5 MB gzipped, which GitHub
+Six seasons come to 40 files and 71 MB, about 7.2 MB gzipped, which GitHub
 serves compressed. Transfer was never the constraint; parse time and memory on
 a phone at a rink is, and that is what loading detail on demand solves. In
-practice a cold load fetches `core.json` and `schedule.json` — 1.1 MB gzipped
-between them — and nothing else until somebody clicks.
+practice a cold load fetches `core.json` and `schedule.json` — 821 KB and
+225 KB gzipped, 1.05 MB between them — and nothing else until somebody clicks.
 
 Note that this is the **export** being split, not the database. The collector
 keeps one SQLite file (94 MB on the Pi) and shards only on the way out, because
@@ -826,9 +834,16 @@ Three things about it are decisions rather than defaults:
   while it is showing.** A fixture list is not a stat total. On the day the
   2026 season opens, 117 of its 120 games are preseason or exhibition, so the
   global default — regular plus playoffs — would have shown three.
-- **Both bands page rather than render.** 8,463 played games is more than any
+- **Both bands page rather than render.** 8,130 played games is more than any
   list wants to hold, and a phone least of all, so each band shows 60 and says
   how many it is holding back.
+- **It works without the index.** `schedule.json` is a convenience, not a
+  precondition: where a published dataset has no index the view reads the newest
+  season's own file instead and says which season it is showing. That season is
+  50 KB against a `core.json` this page has already fetched at 8.6 MB, so
+  refusing to list fixtures the dataset plainly contains was never a good trade.
+  The index earns its keep on the results band, which spans six seasons and
+  15.8 MB of per-season files.
 
 **Browse by Season** — every skater and goalie in a season, narrowed by club
 and division, sortable on any column.
@@ -864,6 +879,28 @@ Two-way players are shown with both stat lines, and birth years appear as
 badges — which is not decoration: a quarter of players share a display name
 with somebody else, so the year is how you tell two children apart.
 
+### Reading a division off a name
+
+503 schedule sides never matched a team row, so they have no division to filter
+on. A third of the time the printed name states one outright — "San Jose Jr
+Sharks Girls 16AAA" is a Girls 16AAA side whether or not anybody matched it —
+and `names.division_from_team_name` reads it off, 207 of the 554 named sides,
+every label naming a division the dataset actually has.
+
+It requires **both** an age and a tier. "San Jose Jr Sharks 10-5" gives an age
+and a club's own numbering, and answering `10U` would file the side somewhere it
+does not belong; saying nothing is the honest answer. A bare "Anaheim Jr Ducks",
+which is most of the remainder, was never recoverable this way.
+
+The viewer therefore answers "what division is this side in" three ways, in
+order of what each is worth: the team's own division where there is a team; else
+the division the name states; else the division the game itself was filed in —
+last, because that describes the fixture rather than the side, and in cross-tier
+play it is nobody's division. For the 92 games where a club plays itself and the
+site prints one name twice it is right 91 times. Between them, every game in the
+schedule is reachable by some division filter; before, 92 were reachable by
+none.
+
 ### Filters
 
 Two pickers sit above the tabs, because both change what counts as a game in
@@ -882,9 +919,24 @@ It is hidden on the Schedule view, along with the note beside it that counts
 player seasons: neither means anything above a fixture list, and a control that
 visibly does nothing is worse than no control. League still applies there.
 
-The Schedule view adds two of its own: **Level** — `12U AA` rather than a
-division, because a division id means nothing outside its own season and this
-list spans six — and **Club**.
+The Schedule view adds three of its own: **Division**, **Club** and **Type**.
+
+**Division** filters on the divisions the two *teams* are in, not on the game's
+own level. Those are different questions and the answer differs for 2,868 of
+27,097 team appearances — 24% in preseason. A 13U AAA team can play a 14U AA
+team in a game the league files under 14U AAA, and that game should be findable
+from either side, so it appears under `13U AAA` and under `14U AA` and not under
+`14U AAA`. The table column still shows the game's **Level**; two different
+words for two different things is the point.
+
+Divisions are listed by name, because an id means nothing outside its own season
+and the list spans six of them. A trailing flight, conference, pool or roman
+numeral is folded into the division it belongs to — `10U B`, `10U B East`,
+`10U B West` and `10U B II` are one entry, which takes the picker from 62 to 43.
+Keeping them apart meant choosing `10U B` silently missed 383 games, and a short
+list says nothing about being short. Only those markers are stripped and only
+from the end: a tier is part of the name, so `10U BB` is not `10U B`, and
+`tests/test_viewer.py` reads the rule back out of the shipped file to say so.
 
 ### Where the numbers came from
 
