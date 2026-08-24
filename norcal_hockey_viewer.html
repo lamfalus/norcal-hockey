@@ -822,8 +822,8 @@ function indexCore(core) {
 // ── Filters ───────────────────────────────────────────────────────────────
 // Every stat line is tagged with the class of game it came from. Preseason and
 // exhibition games are a third of all lines, so folding them into a season
-// total quietly inflates it -- the filter decides what counts, and defaults to
-// the games a standings table would count.
+// total inflates it against the league's published figure -- the boxes decide
+// what counts, and start with all of it counted.
 
 //: What "Games counted" has ticked. ``null`` until the boxes are built, which
 //: is before the first buildEntries() -- and means everything, the same as
@@ -1973,6 +1973,69 @@ function renderClubOverview(club, content) {
   `;
 }
 
+// Each team's record under the filters above.
+//
+// Not the league's standings row, which is what the team page shows: that
+// table counts the regular season and nothing else, so it cannot answer a
+// question asked with preseason ticked, or with only playoffs ticked, or with
+// one league picked out of a club that plays in two. Counted off the games
+// themselves instead, and only off games that were actually given a result --
+// 5,375 past fixtures never were, and a team is not owed a loss for them.
+//
+// The season file is a fetch, so the cards render with the count they already
+// have and the record arrives into them.
+function fillClubRecords(club, season, teams) {
+  var hosts = document.querySelectorAll('#club-content .ctc-record');
+  if (!hosts.length) return;
+
+  loadSeasonGames(season).then(function(games) {
+    // The reader may have moved to another club or season while it loaded.
+    if (document.getElementById('sel-club').value !== club) return;
+    if (parseInt(document.getElementById('sel-club-season').value) !== season) return;
+
+    var classes = classFilter();
+    var league = FILTERS.league ? parseInt(FILTERS.league) : null;
+    var record = {};
+    teams.forEach(function(t) { record[t.teamId] = { w: 0, l: 0, t: 0, gp: 0 }; });
+
+    Object.keys(games).forEach(function(id) {
+      var g = games[id];
+      if (g.hg == null || g.ag == null) return;
+      if (classes && !classes[g['class']]) return;
+      if (league && g.league !== league) return;
+      [[g.home, g.hg, g.ag], [g.away, g.ag, g.hg]].forEach(function(side) {
+        var r = record[side[0]];
+        if (!r) return;
+        r.gp++;
+        if (side[1] > side[2]) r.w++;
+        else if (side[1] < side[2]) r.l++;
+        else r.t++;
+      });
+    });
+
+    document.querySelectorAll('#club-content .ctc-record').forEach(function(host) {
+      var r = record[parseInt(host.dataset.teamId)];
+      var value = host.querySelector('strong');
+      if (!r || !r.gp) {
+        // A team with fixtures but no results yet is not 0-0-0; it has not
+        // played, and a zeroed record reads as though it had.
+        value.textContent = '—';
+        value.style.color = 'var(--muted)';
+        host.title = 'No games with a result under these filters';
+        return;
+      }
+      value.textContent = r.t ? r.w + '-' + r.l + '-' + r.t : r.w + '-' + r.l;
+      host.title = r.gp + (r.gp === 1 ? ' game' : ' games') + ' with a result';
+      host.querySelector('small').textContent = r.t ? 'W-L-T' : 'W-L';
+    });
+  }).catch(function() {
+    document.querySelectorAll('#club-content .ctc-record').forEach(function(host) {
+      host.querySelector('strong').textContent = '—';
+      host.title = 'Could not load the games for this season';
+    });
+  });
+}
+
 function renderClubSeason(club, season, teams, content) {
   const skaters = [];
   teams.forEach(t => t.entries.forEach(e => { if (e.type === 'skater') skaters.push(e); }));
@@ -1987,6 +2050,7 @@ function renderClubSeason(club, season, teams, content) {
       <div class="ctc-div"><span class="div-badge">${escHtml(t.division)}</span>${league ? ` <span class="div-badge">${escHtml(league.name)}</span>` : ''}</div>
       <div class="ctc-stats">
         <span class="ctc-stat"><strong>${tPlayers.size}</strong><small>Players</small></span>
+        <span class="ctc-stat ctc-record" data-team-id="${t.teamId}"><strong>·</strong><small>Record</small></span>
       </div>
     </div>`;
   }).join('');
@@ -2008,6 +2072,8 @@ function renderClubSeason(club, season, teams, content) {
     </div>
     <div id="club-roster-panel"></div>
   `;
+
+  fillClubRecords(club, season, teams);
 }
 
 function showTeamRoster(key) {

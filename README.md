@@ -924,6 +924,22 @@ grouped by identity, never by name: in the older seasons the site gives every
 one of a club's teams the same name, and eighteen different squads are all
 called "Anaheim Jr Ducks" in 2021.
 
+Each team card carries its **record** beside the player count, counted under
+whatever the filters above are set to. Not the league's standings row — that is
+what the team page shows, and it counts the regular season and nothing else, so
+it cannot answer a question asked with preseason ticked, or only playoffs, or
+with one league picked out of a club that plays in two. It is counted off the
+games themselves, and only off games that were given a result: 5,375 past
+fixtures never were, and a team is not owed a loss for them.
+
+Set **Game Type** to Regular alone and the two agree, which is the check that
+says the arithmetic is right — seven of Cupertino's eight teams in `'24-'25`
+match their published row exactly. The eighth is the interesting one, and the
+games are the ones telling the truth: `Cupertino Cougars 14A` played ten
+regular CAHA games with results, while its standings row covers three. That is
+[the CAHA rounds rolling up](#one-source-the-leagues-that-matter) — the row
+belongs to one round, the games span several.
+
 **Player Lookup** — a career, **newest season first**, each section with a
 collapsible **game log**: date, opponent, home or away, result, goals, assists,
 points, penalty minutes, and power-play or short-handed marks. One fetch of the
