@@ -448,6 +448,32 @@ class TestDroppingTheChampionships(LeagueDbTestCase):
         self.assertEqual(gone["teams"], 1, "701 is re-pointed, not removed")
         self.assertEqual(gone["players"], 1)
 
+    def test_it_upgrades_a_database_that_predates_the_new_columns(self):
+        """The shape every real upgrade actually has.
+
+        ``init`` runs schema.sql *before* ADDED_COLUMNS, so a statement in that
+        script touching a column the script itself cannot add will fail on every
+        existing database -- and, because ``connect`` calls ``init``, fail every
+        command rather than just the migration. Seeding the roll-up from Python
+        after the columns are added is what keeps this working; this is the test
+        that says so.
+        """
+        self.conn.execute("ALTER TABLE leagues DROP COLUMN parent_id")
+        self.conn.execute("ALTER TABLE leagues DROP COLUMN stage")
+        self.conn.commit()
+        columns = {r[1] for r in self.conn.execute("PRAGMA table_info(leagues)")}
+        self.assertNotIn("parent_id", columns, "the fixture must start without it")
+
+        self._run_migration()
+
+        columns = {r[1] for r in self.conn.execute("PRAGMA table_info(leagues)")}
+        self.assertIn("parent_id", columns)
+        self.assertEqual(
+            db.scalar(self.conn, "SELECT parent_id FROM leagues WHERE league_id = 16"), 5)
+        self.assertEqual(
+            db.scalar(self.conn, "SELECT stage FROM leagues WHERE league_id = 24"),
+            "Playoffs")
+
     def test_the_caha_roll_up_is_applied_to_an_existing_database(self):
         # INSERT OR IGNORE cannot update rows that are already there, which is
         # exactly the case this migration exists for.

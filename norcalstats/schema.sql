@@ -126,12 +126,10 @@ INSERT OR IGNORE INTO leagues (league_id, name, priority, kind, note) VALUES
     -- Its "Championship" and "Consolation" games are the tournament's own
     -- bracket, not a league playoff.
     (40, 'MLK Weekend Tournament', 223, 'event', 'mid-season holiday tournament');
--- The CAHA family is four ids for one competition. Set after the insert
--- rather than in it, so the roll-up can be corrected on a database that was
--- seeded before it existed without touching the rows themselves.
-UPDATE leagues SET parent_id = 5, stage = 'Preseason' WHERE league_id = 16;
-UPDATE leagues SET parent_id = 5, stage = 'Weekends'  WHERE league_id = 17;
-UPDATE leagues SET parent_id = 5, stage = 'Playoffs'  WHERE league_id = 24;
+-- The CAHA family is four ids for one competition, and the rounds point at the
+-- main league. That is applied in db.py rather than here: parent_id and stage
+-- arrive through ADDED_COLUMNS, which runs *after* this script, so a database
+-- created before those columns existed has no parent_id for this file to set.
 
 CREATE TABLE IF NOT EXISTS divisions (
     division_id INTEGER PRIMARY KEY AUTOINCREMENT,

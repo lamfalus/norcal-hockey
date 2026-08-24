@@ -70,6 +70,10 @@ def init(conn: sqlite3.Connection) -> None:
     existing = _stored_version(conn)
     conn.executescript(_SCHEMA_PATH.read_text(encoding="utf-8"))
     _add_missing_columns(conn)
+    # After the columns, never inside the schema script: parent_id and stage
+    # arrive through ADDED_COLUMNS, so a database made before they existed
+    # cannot be updated until _add_missing_columns has run.
+    _seed_league_rollup(conn)
 
     if existing is not None and existing > SCHEMA_VERSION:
         raise RuntimeError(
@@ -81,6 +85,25 @@ def init(conn: sqlite3.Connection) -> None:
         _migrate(conn, existing)
     set_meta(conn, "schema_version", str(SCHEMA_VERSION))
     conn.commit()
+
+
+#: Which league each round of a multi-part competition is shown as, and what
+#: to call the round. CAHA runs its tier competition under four ids on the
+#: site; they are collected separately because that is how the pages are
+#: fetched, and presented as one because that is what they are.
+LEAGUE_ROLLUP: dict[int, tuple[int, str]] = {
+    16: (5, "Preseason"),
+    17: (5, "Weekends"),
+    24: (5, "Playoffs"),
+}
+
+
+def _seed_league_rollup(conn: sqlite3.Connection) -> None:
+    """Point each round at its parent. Idempotent, and safe on a new database."""
+    for league_id, (parent_id, stage) in LEAGUE_ROLLUP.items():
+        conn.execute(
+            "UPDATE leagues SET parent_id = ?, stage = ? WHERE league_id = ?",
+            (parent_id, stage, league_id))
 
 
 def _stored_version(conn: sqlite3.Connection) -> Optional[int]:
@@ -266,10 +289,7 @@ def _migrate_v6_drop_out_of_state_championships(conn: sqlite3.Connection) -> Non
     league, so a reader picking a league picks CAHA once, and which round a game
     belonged to rides on the game as a label.
     """
-    for league_id, stage in ((16, "Preseason"), (17, "Weekends"), (24, "Playoffs")):
-        conn.execute(
-            "UPDATE leagues SET parent_id = 5, stage = ? WHERE league_id = ?",
-            (stage, league_id))
+    _seed_league_rollup(conn)
 
     marks = ",".join("?" for _ in DROPPED_LEAGUES)
     conn.execute(
