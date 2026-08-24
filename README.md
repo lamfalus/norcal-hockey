@@ -867,6 +867,30 @@ The Schedule view adds two of its own: **Level** — `12U AA` rather than a
 division, because a division id means nothing outside its own season and this
 list spans six — and **Club**.
 
+### Where the numbers came from
+
+A footer on every page carries the two dates that are easy to confuse, because
+a stale dataset behind a fresh viewer looks exactly like a working one:
+
+```
+Data collected Aug 23, 2026 (today)  ·  Viewer 2026.08.23
+```
+
+**Data collected** is `core.json`'s `metadata.generated` — when the collector
+last ran and published. The collector runs unattended, so the way it fails is
+by going quiet; two days without a publish is not a slow night, and past that
+the line turns amber and says so. Nothing else on the page would show it.
+
+**Viewer** is this file's own version, and it is a calendar date on purpose:
+the version *is* the release date, so there is one fact to keep true rather
+than two that can disagree. It is hand-maintained, because there is no build
+step to stamp it — that is a property of a single self-contained file, not an
+oversight. `tests/test_viewer.py` compares it against the file's last commit
+date and fails when an edit lands without a bump.
+
+The viewer version still shows when the dataset cannot be loaded at all, which
+is exactly the moment somebody needs to quote it.
+
 ### What it deliberately does not do
 
 Identity is settled by the collector, never in the browser. Players and teams

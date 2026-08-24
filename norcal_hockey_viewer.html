@@ -76,6 +76,17 @@
               font-size:.85rem;margin-top:12px;}
   .sched-more:hover{color:var(--text);border-color:var(--accent);}
   .band-note{color:var(--muted);font-size:.8rem;margin:-8px 0 14px;}
+  /* Provenance. At the foot because it is something you go and look for, not
+     something you should have to read past -- and in the flow rather than the
+     header, which on a phone has no room and hides its status line entirely. */
+  footer{max-width:1200px;margin:32px auto 0;padding:16px 20px 30px;
+         border-top:1px solid var(--border);color:var(--muted);font-size:.75rem;
+         display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;}
+  .foot-sep{opacity:.45;}
+  .foot-strong{color:var(--text);}
+  /* The collector runs unattended, so the way it fails is by going quiet. An
+     ageing dataset is the only symptom that reaches this page. */
+  .foot-stale{color:var(--accent2);}
   .period-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:8px;}
   .period-cell{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center;}
   .period-cell .pc-lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
@@ -511,6 +522,12 @@
 </div>
 
 </main>
+
+<footer>
+  <span id="foot-data">Loading the dataset&hellip;</span>
+  <span class="foot-sep">·</span>
+  <span id="foot-viewer"></span>
+</footer>
 
 <!-- The box score opens over whatever you were looking at, because you always
      arrive from a schedule or a game log and want to go back to it. -->
@@ -979,12 +996,44 @@ function showView(v, btn) {
 // 14,196 of them. Events stay behind the click: opening a box score still
 // fetches the season shard.
 
+//: The viewer's own version, as a calendar date. The version *is* the release
+//: date, so there is one thing to change when this file changes rather than two
+//: that can quietly disagree. There is no build step to derive it from -- that
+//: is a deliberate property of this file, not an oversight.
+var VIEWER_VERSION = '2026.08.23';
+
 var SCHEDULE = { rows: null, loading: null };
 
 // How many games a band shows before asking. 8,463 played games is more than
 // any list wants to hold, and a phone least of all.
 var SCHED_PAGE = 60;
 var SCHED = { level: '', club: '', cls: 'all', upcoming: SCHED_PAGE, recent: SCHED_PAGE };
+
+// ── Provenance ────────────────────────────────────────────────────────────
+// Two different dates, and conflating them is the whole reason this exists:
+// when the numbers were collected, and when the page showing them was written.
+// A stale dataset behind a fresh viewer looks identical to a working one.
+function renderFooter(generatedISO) {
+  document.getElementById('foot-viewer').innerHTML =
+    'Viewer <span class="foot-strong">' + escHtml(VIEWER_VERSION) + '</span>';
+
+  var host = document.getElementById('foot-data');
+  var when = generatedISO ? new Date(generatedISO) : null;
+  if (!when || isNaN(when)) {
+    host.textContent = 'Dataset date unknown';
+    return;
+  }
+  var days = Math.floor((Date.now() - when) / 86400000);
+  var ago = days <= 0 ? 'today' : days === 1 ? 'yesterday' : days + ' days ago';
+  // The collector publishes nightly, so two days without one is not a slow
+  // night -- it has stopped, and nothing else on this page would show it.
+  var stale = days >= 2;
+  host.innerHTML = 'Data collected <span class="foot-strong">'
+    + escHtml(when.toLocaleDateString(undefined,
+        { day: 'numeric', month: 'short', year: 'numeric' }))
+    + '</span> <span class="' + (stale ? 'foot-stale' : 'foot-sep') + '">(' + ago
+    + (stale ? ' — the nightly collection may have stopped' : '') + ')</span>';
+}
 
 function todayISO() {
   var d = new Date();
@@ -2370,11 +2419,15 @@ function boot() {
     watchForTables();
     status.textContent = '✓ ' + core.metadata.counts.players.toLocaleString() + ' players · '
       + SEASONS.length + ' seasons · ' + core.metadata.counts.teams.toLocaleString() + ' teams';
+    renderFooter(core.metadata && core.metadata.generated);
     history.replaceState(captureAppState(), '');
     document.documentElement.style.setProperty(
       '--header-h', document.querySelector('header').offsetHeight + 'px');
   }).catch(function(err) {
     status.textContent = '✗ ' + err.message;
+    // The viewer's own version is knowable without the dataset, and is exactly
+    // what somebody reporting a broken page needs to quote.
+    renderFooter(null);
     document.getElementById('schedule-content').innerHTML =
       '<div class="empty"><div class="icon">⚠️</div>Could not load the dataset from <code>'
       + escHtml(APP.base || APP_DATA_SOURCES.join(' or ')) + '</code>.'
