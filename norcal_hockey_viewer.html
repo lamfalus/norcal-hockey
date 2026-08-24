@@ -1002,7 +1002,7 @@ function showView(v, btn) {
 //: is a deliberate property of this file, not an oversight.
 var VIEWER_VERSION = '2026.08.23';
 
-var SCHEDULE = { rows: null, loading: null };
+var SCHEDULE = { rows: null, loading: null, partial: null };
 
 // How many games a band shows before asking. 8,463 played games is more than
 // any list wants to hold, and a phone least of all.
@@ -1060,8 +1060,54 @@ function loadSchedule() {
       };
     });
     return SCHEDULE.rows;
-  });
+  }).catch(scheduleFromSeasonFile);
   return SCHEDULE.loading;
+}
+
+// No index in this dataset -- read the newest season's own file instead.
+//
+// The index exists because the results band spans six seasons, which is 15.8 MB
+// of per-season files. What is *on next* does not: it is one season, and that
+// season is 50 KB next to a core.json this page has already fetched at 8.7 MB.
+// Refusing to show fixtures the dataset plainly contains, because a convenience
+// file was not published alongside them, was the wrong trade and this undoes it.
+//
+// So the view degrades rather than stopping: everything about this season, and
+// a line saying that is what you are looking at.
+function scheduleFromSeasonFile() {
+  var season = SEASONS.length ? SEASONS[SEASONS.length - 1] : null;
+  if (season == null) { SCHEDULE.rows = []; return SCHEDULE.rows; }
+  return loadSeasonGames(season).then(function(games) {
+    SCHEDULE.partial = season;
+    SCHEDULE.rows = Object.keys(games).map(function(id) {
+      var g = games[id];
+      return {
+        season: season, id: parseInt(id), date: g.date, time: g.time,
+        league: g.league, division: g.division,
+        home: g.home, away: g.away,
+        hg: g.hg == null ? null : g.hg, ag: g.ag == null ? null : g.ag,
+        rink: g.rink, level: g.level, cls: g['class'],
+        homeName: g.homeName, awayName: g.awayName, stage: g.stage
+      };
+    }).sort(function(a, b) {
+      return (a.date || '').localeCompare(b.date || '')
+          || minuteOfDay(a.time) - minuteOfDay(b.time) || a.id - b.id;
+    });
+    return SCHEDULE.rows;
+  });
+}
+
+// The collector sorts the index by date then time of day, and this has to match
+// it: the view shows a day as a block and never sorts. Two spellings on 14,196
+// games, "7:45 PM" and "12 Noon"; anything else sorts to the end of its day
+// rather than the start, so a new one is visible instead of silently at midnight.
+function minuteOfDay(text) {
+  text = (text || '').trim();
+  if (/^(12 )?noon$/i.test(text)) return 12 * 60;
+  var m = /^(\d{1,2}):(\d{2})\s*([AP])M$/i.exec(text);
+  if (!m) return 24 * 60;
+  return (parseInt(m[1]) % 12 + (m[3].toUpperCase() === 'P' ? 12 : 0)) * 60
+       + parseInt(m[2]);
 }
 
 // ── Filling the two dropdowns the view owns ───────────────────────────────
@@ -1115,23 +1161,12 @@ function initSchedule() {
 
     renderSchedule();
   }).catch(function(err) {
-    // Not missing data -- missing an index. Every one of these games is already
-    // in games/sNN.json and always has been; what an older publish lacks is the
-    // flat cross-season header list this view reads instead of pulling six
-    // three-megabyte files to draw one evening. Say that, rather than implying
-    // the schedule itself has not been collected.
-    var missing = /404/.test(err.message);
+    // A missing index is no longer an error -- loadSchedule falls back to the
+    // season file. Reaching here means the season file failed too.
     document.getElementById('schedule-content').innerHTML =
-      '<div class="empty"><div class="icon">' + (missing ? '🗓️' : '⚠️') + '</div>'
-      + (missing
-          ? 'The games are collected, but this dataset has no'
-            + ' <code>schedule.json</code> — the cross-season index this view'
-            + ' reads. The nightly run writes one.'
-            + '<div style="margin-top:8px;font-size:.85rem">'
-            + 'Every other tab reads <code>core.json</code> and is unaffected.</div>'
-          : 'Could not load the schedule.<div style="margin-top:8px;font-size:.85rem">'
-            + escHtml(err.message) + '</div>')
-      + '</div>';
+      '<div class="empty"><div class="icon">⚠️</div>Could not load the schedule.'
+      + '<div style="margin-top:8px;font-size:.85rem">'
+      + escHtml(err.message) + '</div></div>';
   });
 }
 
@@ -1312,7 +1347,15 @@ function renderSchedule() {
     return;
   }
 
-  var html = '<div class="section-heading"><h2>Next up</h2><span class="badge">'
+  var html = '';
+  if (SCHEDULE.partial != null) {
+    html += '<div class="band-note">Showing <strong>'
+      + escHtml(SEASON_LABELS[SCHEDULE.partial] || ('season ' + SCHEDULE.partial))
+      + '</strong> only. This dataset has no <code>schedule.json</code>, the'
+      + ' cross-season index, so earlier seasons are not listed here — they are'
+      + ' still on every team and player page. The nightly run writes one.</div>';
+  }
+  html += '<div class="section-heading"><h2>Next up</h2><span class="badge">'
     + (upcoming.length ? upcoming.length.toLocaleString() + ' scheduled' : 'nothing scheduled')
     + '</span></div>'
     + (upcoming.length
