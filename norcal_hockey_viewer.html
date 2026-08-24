@@ -374,9 +374,13 @@
   <details class="filter-panel" id="sched-filters" open>
     <summary id="sched-filter-summary">Filters</summary>
   <div class="controls">
-    <label>Level
-      <select id="sel-sched-level" onchange="renderSchedule()">
-        <option value="">&mdash; all levels &mdash;</option>
+    <!-- The teams' divisions, not the game's level. Those are different
+         things and the column still shows the other one: a 13U AAA team can
+         play a 14U AA team in a game the league files under 14U AAA, and
+         picking a division should find that game from either side. -->
+    <label>Division
+      <select id="sel-sched-div" onchange="renderSchedule()">
+        <option value="">&mdash; all divisions &mdash;</option>
       </select>
     </label>
     <label>Club
@@ -901,7 +905,7 @@ function captureAppState(viewOverride) {
   var v = viewOverride || views.find(function(v){ return document.getElementById('view-'+v).classList.contains('active'); }) || 'schedule';
   var s = {view: v};
   if (v === 'schedule') {
-    s.level = SCHED.level;
+    s.div   = SCHED.div;
     s.club  = SCHED.club;
     s.cls   = SCHED.cls;
   } else if (v === 'browse') {
@@ -941,7 +945,7 @@ function applyAppState(s) {
   if (s.view === 'schedule') {
     // The dropdowns may not be filled yet if the back button lands here before
     // the schedule has loaded; initSchedule renders once it is.
-    if (s.level != null) document.getElementById('sel-sched-level').value = s.level;
+    if (s.div   != null) document.getElementById('sel-sched-div').value = s.div;
     if (s.club  != null) document.getElementById('sel-sched-club').value = s.club;
     if (s.cls)           document.getElementById('sel-sched-class').value = s.cls;
     renderSchedule();
@@ -1007,7 +1011,7 @@ var SCHEDULE = { rows: null, loading: null, partial: null };
 // How many games a band shows before asking. 8,463 played games is more than
 // any list wants to hold, and a phone least of all.
 var SCHED_PAGE = 60;
-var SCHED = { level: '', club: '', cls: 'all', upcoming: SCHED_PAGE, recent: SCHED_PAGE };
+var SCHED = { div: '', club: '', cls: 'all', upcoming: SCHED_PAGE, recent: SCHED_PAGE };
 
 // ── Provenance ────────────────────────────────────────────────────────────
 // Two different dates, and conflating them is the whole reason this exists:
@@ -1111,11 +1115,27 @@ function minuteOfDay(text) {
 }
 
 // ── Filling the two dropdowns the view owns ───────────────────────────────
-// A level ("12U AA") rather than a division, because a division id means
-// nothing outside its own season and this list spans six of them.
-function schedLevelOrder(level) {
-  var m = /^(\d+)/.exec(level || '');
-  return [m ? parseInt(m[1]) : 999, level || ''];
+// Divisions are listed by name rather than by id: an id means nothing outside
+// its own season and this list spans six of them, while "12U AA" means the
+// same thing in all of them.
+function schedAgeOrder(name) {
+  var m = /^(\d+)/.exec(name || '');
+  return [m ? parseInt(m[1]) : 999, name || ''];
+}
+
+// What a game counts as, for the division filter: the division each side's
+// team belongs to. Not the game's own level -- that is the section the league
+// filed it under, which for cross-tier play is neither team's division.
+function schedDivisionsOf(g) {
+  var out = [];
+  ['home', 'away'].forEach(function(side) {
+    var id = side === 'home' ? g.home : g.away;
+    if (id == null) return;
+    var team = APP.teamByKey[teamKey(g.season, id)];
+    var div = team ? APP.divisionById[team.division] : null;
+    if (div && div.name) out.push(div.name);
+  });
+  return out;
 }
 
 function initSchedule() {
@@ -1129,10 +1149,10 @@ function initSchedule() {
   });
 
   loadSchedule().then(function(rows) {
-    var levels = {}, clubs = {};
+    var divisions = {}, clubs = {};
     rows.forEach(function(g) {
       if (isEmptyBracket(g)) return;
-      if (g.level) levels[g.level] = true;
+      schedDivisionsOf(g).forEach(function(name) { divisions[name] = true; });
       [g.home, g.away].forEach(function(id) {
         if (id == null) return;
         var team = APP.teamByKey[teamKey(g.season, id)];
@@ -1140,14 +1160,14 @@ function initSchedule() {
       });
     });
 
-    var levelSel = document.getElementById('sel-sched-level');
-    Object.keys(levels).sort(function(a, b) {
-      var x = schedLevelOrder(a), y = schedLevelOrder(b);
+    var divSel = document.getElementById('sel-sched-div');
+    Object.keys(divisions).sort(function(a, b) {
+      var x = schedAgeOrder(a), y = schedAgeOrder(b);
       return x[0] - y[0] || x[1].localeCompare(y[1]);
-    }).forEach(function(l) {
+    }).forEach(function(name) {
       var o = document.createElement('option');
-      o.value = l; o.textContent = l;
-      levelSel.appendChild(o);
+      o.value = name; o.textContent = name;
+      divSel.appendChild(o);
     });
 
     var clubSel = document.getElementById('sel-sched-club');
@@ -1198,7 +1218,9 @@ function schedulePasses(g, classes) {
   if (isEmptyBracket(g)) return false;
   if (FILTERS.league && g.league !== parseInt(FILTERS.league)) return false;
   if (classes && !classes[g.cls]) return false;
-  if (SCHED.level && g.level !== SCHED.level) return false;
+  // Either side is enough: a game is in your division if one of the teams
+  // playing it is, which is how somebody following a division thinks about it.
+  if (SCHED.div && schedDivisionsOf(g).indexOf(SCHED.div) < 0) return false;
   if (SCHED.club && schedClubOf(g, 'home') !== SCHED.club
                  && schedClubOf(g, 'away') !== SCHED.club) return false;
   return true;
@@ -1297,7 +1319,7 @@ function schedMore(band) {
 function updateSchedSummary() {
   var el = document.getElementById('sched-filter-summary');
   if (!el) return;
-  var parts = [SCHED.level || 'All levels'];
+  var parts = [SCHED.div || 'All divisions'];
   if (SCHED.club) parts.push(clubDisplayName(SCHED.club));
   if (SCHED.cls !== 'all') {
     var preset = GAME_CLASS_PRESETS.filter(function(p) { return p.id === SCHED.cls; })[0];
@@ -1310,15 +1332,15 @@ function renderSchedule() {
   var content = document.getElementById('schedule-content');
   if (!SCHEDULE.rows) return;
 
-  var level = document.getElementById('sel-sched-level').value;
+  var div = document.getElementById('sel-sched-div').value;
   var club = document.getElementById('sel-sched-club').value;
   var cls = document.getElementById('sel-sched-class').value;
   // Any change to what is being asked for starts the bands over. Keeping a
   // reader 300 rows deep after they narrow to one club shows them nothing.
-  if (level !== SCHED.level || club !== SCHED.club || cls !== SCHED.cls) {
+  if (div !== SCHED.div || club !== SCHED.club || cls !== SCHED.cls) {
     SCHED.upcoming = SCHED.recent = SCHED_PAGE;
   }
-  SCHED.level = level; SCHED.club = club; SCHED.cls = cls;
+  SCHED.div = div; SCHED.club = club; SCHED.cls = cls;
   updateSchedSummary();
 
   var preset = GAME_CLASS_PRESETS.filter(function(p) { return p.id === SCHED.cls; })[0];
