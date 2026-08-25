@@ -24,26 +24,28 @@
   .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px;}
   .panel-title{font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:14px;}
   .controls{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:24px;}
-  .global-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;padding-bottom:18px;margin-bottom:22px;border-bottom:1px solid var(--border);}
-  .global-filters select{min-width:170px;}
+  #filter-controls{padding-bottom:18px;margin-bottom:22px;border-bottom:1px solid var(--border);}
+  #filter-controls select{min-width:170px;}
+  /* Every filter any view uses lives in the one row; each says which views it
+     belongs to and appears in those alone. One rule rather than a hiding rule
+     per control, so a new filter is scoped by its markup and cannot be added
+     to the row without saying where it applies. */
+  #filter-controls > [data-views]{display:none;}
+  body[data-view="schedule"] #filter-controls > [data-views~="schedule"],
+  body[data-view="browse"]   #filter-controls > [data-views~="browse"],
+  body[data-view="club"]     #filter-controls > [data-views~="club"],
+  body[data-view="player"]   #filter-controls > [data-views~="player"]{display:flex;}
+  body[data-view="team"]     #filter-controls > [data-views~="club"]{display:flex;}
   .filter-note{font-size:.78rem;color:var(--muted);margin-left:auto;align-self:center;}
-  /* "Games counted" decides what a stat total counts, and the note beside it
-     counts player seasons. The schedule is a fixture list rather than a total
-     and has its own Type filter, so both are hidden there -- a control that
-     visibly does nothing is worse than no control, and on a phone the pair of
-     them is 68px of a screen that has none to spare. */
-  body[data-view="schedule"] #lbl-gameclass,
-  body[data-view="schedule"] .filter-note{display:none;}
+  body[data-view="browse"] #filter-controls > .filter-note,
+  body[data-view="club"]   #filter-controls > .filter-note,
+  body[data-view="player"] #filter-controls > .filter-note{display:block;}
+  /* Player Flow reads every season at once and has nothing to narrow. */
+  body[data-view="migration"] #filters{display:none;}
   /* A player page asks about one child, where "which league" is a question
-     about everybody else. It carries a list of that player's own teams
-     instead, and the page ignores the league filter entirely rather than
-     letting it drop a team the list is still showing. */
-  body[data-view="player"] #lbl-league{display:none;}
-  /* The schedule's season sits up here rather than in the panel below, because
-     it is what both of that view's bands are cut from and the panel collapses
-     on a phone. Every other view starts from a season of its own. */
-  #lbl-sched-season{display:none;}
-  body[data-view="schedule"] #lbl-sched-season{display:flex;}
+     about everybody else, so League is not among the views that control names.
+     The page ignores the filter entirely too, rather than letting it drop a
+     team from the list of the player's own teams. */
   /* The browse filters collapse on a small screen; on a desktop the summary is
      redundant, so it is hidden and the panel is simply always open. */
   .filter-panel > summary{display:none;}
@@ -309,15 +311,15 @@
     .controls{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;
               margin-bottom:16px;}
     .controls label{width:auto;min-width:0;font-size:.72rem;gap:3px;}
-    .global-filters{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;
-                    padding-bottom:12px;margin-bottom:14px;}
-    .global-filters label{font-size:.72rem;gap:3px;}
+    #filter-controls{padding-bottom:12px;margin-bottom:14px;}
+    /* Two to a row on a phone. The grid has to name the shown ones, since the
+       hidden controls are still children of it. */
+    #filter-controls > [data-views]{width:auto;min-width:0;}
     .filter-note{grid-column:1 / -1;margin-left:0;font-size:.72rem;}
     select,input[type=text]{min-width:0;width:100%;font-size:16px;padding:7px 9px;}
     .search-wrap{width:100%;}
     /* A label long enough to wrap would push its row taller than its neighbour. */
-    .controls label,.global-filters label{white-space:nowrap;overflow:hidden;
-                                          text-overflow:ellipsis;}
+    .controls label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
     /* Tables — let the columns take the width they need and scroll sideways,
        rather than squeezing thirteen of them into 350px and giving a player's
@@ -426,100 +428,95 @@
 </header>
 <main>
 
-<!-- These change what counts as a game in the views below, which is why they
-     sit above the tabs instead of inside any one of them. Not every one means
-     something in every view, so the stylesheet shows and hides them by
-     data-view: a control that visibly does nothing is worse than no control,
-     and one that is doing something invisibly is worse than either. -->
-<div class="global-filters">
-  <label id="lbl-sched-season">Season
-    <select id="sel-sched-season" onchange="onSchedSeasonChange()"></select>
-  </label>
-  <label id="lbl-league">League
-    <select id="sel-league" onchange="onFilterChange()">
-      <option value="">— all leagues —</option>
-    </select>
-  </label>
-  <div id="lbl-gameclass" class="filter-group">Game Type
-    <details class="type-menu" id="gameclass-menu">
-      <summary id="gameclass-summary">All types</summary>
-      <div class="type-list" id="gameclass-boxes"></div>
-    </details>
-  </div>
-  <span class="filter-note" id="filter-note"></span>
-</div>
+<!-- One filter row, directly under the tabs, holding every filter any view
+     uses. Not every one means something in every view, so each carries the
+     views it belongs to and the stylesheet shows it there and nowhere else:
+     a control that visibly does nothing is worse than no control, and one
+     doing something invisibly is worse than either.
 
-<!-- VIEW 0: Schedule. The landing view, and the only one that reads across
-     leagues, divisions and seasons at once -- everything else in the app starts
-     from a season, a club or a name, and this starts from a date. -->
-<div class="view active" id="view-schedule">
-  <details class="filter-panel" id="sched-filters" open>
-    <summary id="sched-filter-summary">Filters</summary>
-  <div class="controls">
-    <!-- The teams' divisions, not the game's level. Those are different
-         things and the column still shows the other one: a 13U AAA team can
-         play a 14U AA team in a game the league files under 14U AAA, and
-         picking a division should find that game from either side. -->
-    <label>Division
-      <select id="sel-sched-div" onchange="renderSchedule()">
-        <option value="">&mdash; all divisions &mdash;</option>
+     The order is fixed -- season, league, game type, then whatever the view
+     asks for itself -- so the same question is always in the same place. -->
+<details class="filter-panel" id="filters" open>
+  <summary id="filter-summary">Filters</summary>
+  <div class="controls" id="filter-controls">
+
+    <label data-views="schedule">Season
+      <select id="sel-sched-season" onchange="onSchedSeasonChange()"></select>
+    </label>
+    <label data-views="browse">Season
+      <select id="sel-season" onchange="onSeasonChange()">
+        <option value="">&mdash; select &mdash;</option>
       </select>
     </label>
-    <label>Club
-      <select id="sel-sched-club" onchange="renderSchedule()">
-        <option value="">&mdash; all clubs &mdash;</option>
+    <label data-views="club">Season
+      <select id="sel-club-season" onchange="onClubSeasonChange()">
+        <option value="">&mdash; all seasons &mdash;</option>
       </select>
     </label>
-    <!-- Its own, not the "Games counted" filter above. That one decides what a
-         stat total counts and defaults to league games; a fixture list is not
-         a total, and on the day the new season opens 117 of its 120 games are
-         preseason or exhibition. Defaulting to those rules would show three. -->
-    <div class="filter-group">Game Type
+
+    <label data-views="schedule browse club">League
+      <select id="sel-league" onchange="onFilterChange()">
+        <option value="">&mdash; all leagues &mdash;</option>
+      </select>
+    </label>
+
+    <!-- The schedule asks the neighbouring question -- what kind of fixture to
+         list, not what a total should count -- so it keeps a set of its own in
+         the same slot under the same name. -->
+    <div class="filter-group" data-views="schedule">Game Type
       <details class="type-menu" id="sched-type-menu">
         <summary id="sched-type-summary">All types</summary>
         <div class="type-list" id="sched-type-boxes"></div>
       </details>
     </div>
-  </div>
-  </details>
-  <div id="schedule-content">
-    <div class="empty"><div class="icon">📅</div>Loading the schedule&hellip;</div>
-  </div>
-</div>
+    <div class="filter-group" data-views="browse club player">Game Type
+      <details class="type-menu" id="gameclass-menu">
+        <summary id="gameclass-summary">All types</summary>
+        <div class="type-list" id="gameclass-boxes"></div>
+      </details>
+    </div>
 
-<!-- VIEW 1: Stats by Season -->
-<div class="view" id="view-browse">
-  <!-- Five dropdowns are 175px of a phone's screen even two to a row, and most
-       of the time they are showing what you already chose. Collapsed on a small
-       screen, with the summary saying what is set; always open on a desktop,
-       where the room is there anyway. -->
-  <details class="filter-panel" id="browse-filters" open>
-    <summary id="browse-filter-summary">Filters</summary>
-  <div class="controls">
-    <label>Season
-      <select id="sel-season" onchange="onSeasonChange()">
-        <option value="">— select —</option>
+    <!-- The teams' divisions, not the game's level. Those are different
+         things and the column still shows the other one: a 13U AAA team can
+         play a 14U AA team in a game the league files under 14U AAA, and
+         picking a division should find that game from either side. -->
+    <label data-views="schedule">Division
+      <select id="sel-sched-div" onchange="renderSchedule()">
+        <option value="">&mdash; all divisions &mdash;</option>
+      </select>
+    </label>
+    <label data-views="schedule">Club
+      <select id="sel-sched-club" onchange="renderSchedule()">
+        <option value="">&mdash; all clubs &mdash;</option>
       </select>
     </label>
 
-    <label id="lbl-club-browse">Club
+    <label data-views="club">Club
+      <select id="sel-club" onchange="onClubChange()">
+        <option value="">&mdash; select a club &mdash;</option>
+      </select>
+    </label>
+
+    <label id="lbl-club-browse" data-views="browse">Club
       <select id="sel-club-browse" onchange="onClubBrowseChange()">
-        <option value="">— all —</option>
+        <option value="">&mdash; all &mdash;</option>
       </select>
     </label>
-    <label id="lbl-div-browse">Division
+    <label id="lbl-div-browse" data-views="browse">Division
       <select id="sel-div-browse" onchange="onBrowseRender()">
-        <option value="">— all —</option>
+        <option value="">&mdash; all &mdash;</option>
       </select>
     </label>
-    <label>Type
+    <!-- "Type" here meant skaters or goalies, one slot away from a Game Type
+         that means something else entirely. It is a position. -->
+    <label data-views="browse">Position
       <select id="sel-type" onchange="onBrowseRender()">
         <option value="skater">Skaters</option>
         <option value="goalie">Goalies</option>
-        <option value="all" selected>— all —</option>
+        <option value="all" selected>&mdash; all &mdash;</option>
       </select>
     </label>
-    <label>Min GP
+    <label data-views="browse">Min GP
       <select id="sel-min-gp" onchange="onBrowseRender()">
         <option value="1">1+</option>
         <option value="2">2+</option>
@@ -532,8 +529,24 @@
         <option value="9">9+</option>
       </select>
     </label>
+
+    <span class="filter-note" id="filter-note" data-views="browse club player"></span>
   </div>
-  </details>
+</details>
+
+<!-- VIEW 0: Schedule. The landing view, and the only one that reads across
+     leagues, divisions and seasons at once -- everything else in the app starts
+     from a season, a club or a name, and this starts from a date. -->
+<div class="view active" id="view-schedule">
+  
+  <div id="schedule-content">
+    <div class="empty"><div class="icon">📅</div>Loading the schedule&hellip;</div>
+  </div>
+</div>
+
+<!-- VIEW 1: Stats by Season -->
+<div class="view" id="view-browse">
+  
   <div id="browse-content">
     <div class="empty"><div class="icon">🏒</div>Select a season above to begin.</div>
   </div>
@@ -541,18 +554,7 @@
 
 <!-- VIEW 2: Club View -->
 <div class="view" id="view-club">
-  <div class="controls">
-    <label>Club
-      <select id="sel-club" onchange="onClubChange()">
-        <option value="">— select a club —</option>
-      </select>
-    </label>
-    <label>Season
-      <select id="sel-club-season" onchange="onClubSeasonChange()">
-        <option value="">— all seasons —</option>
-      </select>
-    </label>
-  </div>
+  
   <div id="club-content">
     <div class="empty"><div class="icon">🏒</div>Select a club above to begin.</div>
   </div>
@@ -1165,6 +1167,9 @@ window.addEventListener('popstate', function(e){ applyAppState(e.state); });
 // in it means something in every view. This is what the stylesheet reads.
 function markActiveView(v) {
   document.body.setAttribute('data-view', v);
+  // One row serving every view means its summary changes with the view, not
+  // only with the controls.
+  updateFilterSummary();
 }
 
 function showView(v, btn) {
@@ -1563,22 +1568,61 @@ function schedMore(band) {
 
 // What the collapsed filter panel says it is showing, on the same terms as the
 // browse one: only what is actually narrowing something gets named.
-function updateSchedSummary() {
-  var el = document.getElementById('sched-filter-summary');
+// What the collapsed bar says it is set to. One row, so one summary -- it
+// reads whichever view is showing, in the order the controls sit in.
+function updateFilterSummary() {
+  var el = document.getElementById('filter-summary');
   if (!el) return;
+  var view = document.body.getAttribute('data-view') || 'schedule';
   var parts = [];
-  if (SCHED.season != null) parts.push(SEASON_LABELS[SCHED.season] || ('Season ' + SCHED.season));
-  parts.push(SCHED.div || 'All divisions');
-  if (SCHED.club) parts.push(clubDisplayName(SCHED.club));
-  var unticked = (APP.gameClasses || []).filter(function(c) {
-    return !SCHED.classes || !SCHED.classes[c];
-  });
-  if (unticked.length) {
-    parts.push((APP.gameClasses || []).filter(function(c) {
-      return SCHED.classes && SCHED.classes[c];
-    }).map(filterClassLabel).join(' + ') || 'no game types');
+  var value = function(id) {
+    var sel = document.getElementById(id);
+    return sel ? sel.value : '';
+  };
+
+  if (view === 'schedule') {
+    if (SCHED.season != null) parts.push(SEASON_LABELS[SCHED.season] || ('Season ' + SCHED.season));
+    parts.push(typeSummaryFor(SCHED.classes));
+    parts.push(SCHED.div || 'all divisions');
+    if (SCHED.club) parts.push(clubDisplayName(SCHED.club));
+  } else if (view === 'browse') {
+    var season = value('sel-season');
+    if (!season) { el.textContent = 'Choose a season'; return; }
+    parts.push(SEASON_LABELS[parseInt(season)] || season);
+    parts.push(typeSummaryFor(FILTERS.classes));
+    parts.push(value('sel-club-browse') ? clubDisplayName(value('sel-club-browse')) : 'all clubs');
+    if (value('sel-div-browse')) parts.push(value('sel-div-browse'));
+    if (value('sel-type') === 'skater') parts.push('skaters');
+    if (value('sel-type') === 'goalie') parts.push('goalies');
+    var minGP = parseInt(value('sel-min-gp')) || 1;
+    if (minGP > 1) parts.push(minGP + '+ GP');
+  } else if (view === 'club' || view === 'team') {
+    var cs = value('sel-club-season');
+    parts.push(cs ? (SEASON_LABELS[parseInt(cs)] || cs) : 'all seasons');
+    parts.push(typeSummaryFor(FILTERS.classes));
+    parts.push(value('sel-club') ? clubDisplayName(value('sel-club')) : 'no club chosen');
+  } else if (view === 'player') {
+    // Nothing else is set here, so the one control has to carry the line --
+    // and a collapsed bar saying nothing reads as a bar with nothing in it.
+    parts.push(typeSummaryFor(FILTERS.classes) || 'all game types');
   }
-  el.textContent = parts.join(' · ');
+
+  var leagueSel = document.getElementById('sel-league');
+  if (view !== 'player' && leagueSel && leagueSel.value) {
+    var league = APP.leagueById[parseInt(leagueSel.value)];
+    if (league) parts.splice(1, 0, league.name);
+  }
+  el.textContent = parts.filter(Boolean).join(' · ') || 'Filters';
+}
+
+// Only worth naming when it is not the default; "all types" in a summary line
+// is a word spent saying nothing was narrowed.
+function typeSummaryFor(classes) {
+  var all = APP.gameClasses || [];
+  var ticked = all.filter(function(c) { return classes && classes[c]; });
+  if (ticked.length === all.length) return '';
+  if (!ticked.length) return 'no game types';
+  return ticked.map(filterClassLabel).join(' + ');
 }
 
 function readSchedTypes() {
@@ -1640,7 +1684,7 @@ function renderSchedule() {
     SCHED.upcoming = SCHED.recent = SCHED_PAGE;
   }
   SCHED.div = div; SCHED.club = club;
-  updateSchedSummary();
+  updateFilterSummary();
 
   var classes = schedClassFilter();
   var today = todayISO();
@@ -1740,23 +1784,8 @@ function onClubBrowseChange(){
 // What the collapsed filter panel says it is showing. Only the season is
 // always named; the rest appear when they are actually narrowing something, so
 // the line stays short enough to read on a phone.
-function updateBrowseSummary(){
-  const el=document.getElementById('browse-filter-summary');
-  if(!el)return;
-  const season=document.getElementById('sel-season').value;
-  const club=document.getElementById('sel-club-browse').value;
-  const div=document.getElementById('sel-div-browse').value;
-  const type=document.getElementById('sel-type').value;
-  const minGP=parseInt(document.getElementById('sel-min-gp').value)||1;
-  if(!season){el.textContent='Choose a season';return;}
-  const parts=[SEASON_LABELS[parseInt(season)]||season];
-  parts.push(club?clubDisplayName(club):'all clubs');
-  if(div)parts.push(div);
-  if(type==='skater')parts.push('skaters');
-  else if(type==='goalie')parts.push('goalies');
-  if(minGP>1)parts.push(minGP+'+ GP');
-  el.textContent=parts.join(' · ');
-}
+function updateBrowseSummary(){ updateFilterSummary(); }
+
 
 function onBrowseRender(){
   updateBrowseSummary();
@@ -2016,6 +2045,7 @@ function renderClub() {
   const club = document.getElementById('sel-club').value;
   const season = parseInt(document.getElementById('sel-club-season').value);
   const content = document.getElementById('club-content');
+  updateFilterSummary();
 
   if (!club) {
     content.innerHTML = '<div class="empty"><div class="icon">🏒</div>Select a club above to begin.</div>';
@@ -2966,6 +2996,7 @@ function onFilterChange() {
   readGameClasses();
   buildEntries();
   updateFilterNote();
+  updateFilterSummary();
   refreshClubOptions();
 
   var active = ['schedule', 'browse', 'club', 'player', 'migration'].filter(function(v) {
@@ -2999,10 +3030,8 @@ function boot() {
     // only where the screen is small enough to need it. Once at boot: after
     // that it is the reader's to open and leave open.
     if (isNarrow()) {
-      ['browse-filters', 'sched-filters'].forEach(function(id) {
-        var filters = document.getElementById(id);
-        if (filters) filters.open = false;
-      });
+      var filters = document.getElementById('filters');
+      if (filters) filters.open = false;
     }
     watchForTables();
     status.textContent = '✓ ' + core.metadata.counts.players.toLocaleString() + ' players · '

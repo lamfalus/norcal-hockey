@@ -1012,13 +1012,39 @@ none.
 
 ### Filters
 
-Two pickers sit above the tabs, because both change what counts as a game in
-every view below.
+**One row, directly under the tabs, holding every filter any view uses.** It
+had grown into two tiers and three shapes — season, league and game type above
+the tabs; each view's own below, in a collapsible panel on two views, a bare
+row on a third and nowhere at all on the fourth; and no two views agreeing on
+what order to ask in. A reader who learns where a filter lives on one page
+should not have to learn it again on the next.
 
-**League** — one of the four, or all of them. Hidden on a player page, which
+The order is fixed, and each control names the views it belongs to:
+
+| View | |
+|---|---|
+| **Schedule** | Season · League · Game Type · Division · Club |
+| **Stats by Season** | Season · League · Game Type · Club · Division · Position · Min GP |
+| **Club View** | Season · League · Game Type · Club |
+| **Player Lookup** | Game Type |
+| **Player Flow** | *(none — it reads every season at once)* |
+
+Season is three different pickers sharing one slot, because the three views
+mean different things by it: a schedule season, a stats season, and a club
+season that also accepts *all seasons*. League and Game Type are one control
+each, shown wherever they apply.
+
+`Position` was called `Type`, one slot away from a `Game Type` meaning
+something else entirely. It selects skaters or goalies.
+
+The row collapses behind a summary of what is set on a narrow screen — one
+panel now rather than two, which takes the schedule's chrome from 28% of a
+375px screen to 17%.
+
+**League** — one of the four, or all of them. Absent on a player page, which
 asks about one child where "which league" is a question about everybody else —
-and the page ignores it there rather than letting it drop a team the box list
-is still showing. Its own team boxes narrow that page instead. Four rather than nine: the CAHA
+and the page ignores the filter there rather than letting it drop a team the
+box list is still showing. Its own team boxes narrow that page instead. Four rather than nine: the CAHA
 rounds roll up into CAHA, and the two out-of-state championships are gone. A
 game that came from a round carries its name as a label instead, shown in the
 Type column beside the game's own class — "Regular · Weekends" — and collapsed
@@ -1074,10 +1100,9 @@ straight at the boxes to tick. Only the class filter is explained there: a
 season the **League** picker removed is left out rather than blamed on the
 wrong control.
 
-The Schedule view carries a **Season** of its own, up beside League because it
-is what both of that view's bands are cut from and because the panel below
-collapses on a phone. Every other view starts from a season it picks itself.
-The panel adds **Division**, **Club** and its own **Game Type**.
+The Schedule adds **Division** and **Club** after the shared three, and keeps a
+**Game Type** of its own in the shared slot — it asks the neighbouring
+question, what kind of fixture to list rather than what a total should count.
 
 **Division** filters on the divisions the two *teams* are in, not on the game's
 own level. Those are different questions and the answer differs for 2,868 of
