@@ -1,0 +1,38 @@
+[Unit]
+Description=NorCal hockey goalie scorecards (one older season per night)
+Documentation=https://github.com/lamfalus/norcal-hockey
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=%i
+WorkingDirectory=/home/%i/norcal-hockey
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 deploy/backfill-scorecards.py --config /home/%i/norcal-hockey/norcalstats.json
+
+# One season of scorecards is at most a couple of hours at the polite delay.
+# It must finish well before the 03:30 update so the two never touch the
+# database at once.
+TimeoutStartSec=3h
+
+Nice=10
+IOSchedulingClass=idle
+
+# Hardening mirrors the collector: read the repo, write the data dir, talk to
+# one website.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/%i/norcal-hockey
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

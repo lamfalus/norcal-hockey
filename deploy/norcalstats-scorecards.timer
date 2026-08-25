@@ -1,0 +1,17 @@
+[Unit]
+Description=Nightly NorCal goalie-scorecard backfill (one older season)
+Documentation=https://github.com/lamfalus/norcal-hockey
+
+[Timer]
+# Well before the 03:30 collector, so a season's fetch finishes and closes the
+# database before the update opens it. The newly fetched records go live when
+# that update derives, exports and publishes.
+OnCalendar=*-*-* 00:30:00
+RandomizedDelaySec=20m
+
+# If the Pi was off at 00:30, run once it is back (still before 03:30 on a
+# normal night).
+Persistent=true
+
+[Install]
+WantedBy=timers.target
