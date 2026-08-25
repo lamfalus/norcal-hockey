@@ -15,8 +15,15 @@ Three page types matter:
     The full scoresheet: period scores, both rosters with jerseys and positions,
     goalie changes, every goal with assists, and every penalty.
 
-Every parser takes HTML and returns plain dataclasses. Nothing here touches the
-network or the database, so all of it is testable against saved fixtures.
+``generate-scorecard.php?game_id=G``
+    The printable scorecard, as a PDF. Everything the scoresheet has *plus* the
+    Goaltender Records table -- per-goalie, per-period shots and saves -- which
+    the HTML scoresheet does not carry. That table is the only reason to fetch
+    it, and the one source for real per-goalie goals-against and save%.
+
+Every parser takes HTML (or, for the scorecard, PDF bytes) and returns plain
+dataclasses. Nothing here touches the network or the database, so all of it is
+testable against saved fixtures.
 """
 
 from __future__ import annotations
@@ -26,12 +33,17 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Iterable, Optional
 
+from .. import pdf as _pdf
 from ..htmltable import Table, all_tables, clean, find_tables, to_int
 from ..names import is_placeholder as _is_placeholder
 
 #: Bumped when parsing changes in a way that should trigger a re-parse of
 #: already-archived scoresheets.
 PARSE_VERSION = 2
+
+#: Bumped when scorecard (PDF) parsing changes, to re-parse archived scorecards
+#: independently of the HTML scoresheets.
+SCORECARD_PARSE_VERSION = 1
 
 _MONTHS = {
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
@@ -179,6 +191,49 @@ class Scoresheet:
         return bool(self.home.roster or self.away.roster)
 
 
+@dataclass
+class GoalieRecord:
+    """One goalie's line from the scorecard's Goaltender Records table."""
+    jersey: str
+    shots: dict[str, int] = field(default_factory=dict)   # period -> shots faced
+    saves: dict[str, int] = field(default_factory=dict)   # period -> saves
+
+    @property
+    def total_shots(self) -> Optional[int]:
+        return self.shots.get("Total") if "Total" in self.shots else (
+            sum(v for k, v in self.shots.items() if k != "Total") or None)
+
+    @property
+    def total_saves(self) -> Optional[int]:
+        return self.saves.get("Total") if "Total" in self.saves else (
+            sum(v for k, v in self.saves.items() if k != "Total") or None)
+
+    @property
+    def goals_against(self) -> Optional[int]:
+        s, v = self.total_shots, self.total_saves
+        return None if s is None or v is None else s - v
+
+
+@dataclass
+class Scorecard:
+    """The Goaltender Records table, one list of goalies per side.
+
+    ``reconciles`` is set per side once the game score is known: a side's
+    goalie GA should sum to the goals the *other* side scored. When it does not
+    -- a scorekeeper left the saves column blank, or the figures are internally
+    inconsistent -- that side's records are not trustworthy and the caller
+    should fall back rather than store them.
+    """
+    game_id: Optional[int] = None
+    home: list[GoalieRecord] = field(default_factory=list)
+    away: list[GoalieRecord] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+    @property
+    def is_usable(self) -> bool:
+        return bool(self.home or self.away)
+
+
 # ------------------------------------------------------------------- URLs
 
 
@@ -193,6 +248,10 @@ def team_path(league: int, season: int, team_id: int) -> str:
 
 def scoresheet_path(game_id: int) -> str:
     return f"/oss-scoresheet?game_id={game_id}&mode=display"
+
+
+def scorecard_path(game_id: int) -> str:
+    return f"/generate-scorecard.php?game_id={game_id}"
 
 
 # ------------------------------------------------------- season index parsing
@@ -520,6 +579,148 @@ def _parse_stat_table(table: Table, kind: str) -> list[StatRow]:
 
 
 # --------------------------------------------------------- scoresheet parsing
+
+
+#: Period columns in the Goaltender Records table, and the x-gap within which a
+#: number is taken to belong to a column header above it.
+_SCORECARD_PERIODS = ("1", "2", "3", "OT", "Total")
+_COL_TOLERANCE = 12.0
+#: Left block sits left of this x, right block to its right.
+_BLOCK_SPLIT = 300.0
+
+
+def parse_scorecard(data: bytes, game_id: Optional[int] = None) -> Scorecard:
+    """Read the Goaltender Records table from a scorecard PDF.
+
+    The table has two side-by-side blocks. Which one is the home team is *not*
+    fixed -- an ``On Home``/``On Away`` label row above the header names it, and
+    the order varies from game to game -- so the label is read rather than the
+    position assumed. Within a block each goalie contributes a ``Shots`` row and
+    a ``Saves`` row, with a jersey number on the line between them.
+    """
+    card = Scorecard(game_id=game_id)
+    try:
+        rows = _pdf.rows(_pdf.text_items(data))
+    except Exception as exc:  # a malformed PDF is a fetch problem, not a crash
+        card.warnings.append(f"pdf unreadable: {exc}")
+        return card
+
+    header = next((r for r in rows
+                   if [t.text for t in r].count("Goalie") == 2
+                   and any(t.text == "Total" for t in r)), None)
+    if header is None:
+        card.warnings.append("no goaltender records table")
+        return card
+
+    # Which physical block is which team.
+    block_side = {"L": "home", "R": "away"}
+    for r in rows:
+        labels = {t.text: t.x for t in r}
+        if "On Home" in labels and "On Away" in labels:
+            left_home = labels["On Home"] < labels["On Away"]
+            block_side = {"L": "home" if left_home else "away",
+                          "R": "away" if left_home else "home"}
+            break
+    else:
+        card.warnings.append("no On Home/On Away labels; assuming left is home")
+
+    def block_of(x: float) -> str:
+        return "L" if x < _BLOCK_SPLIT else "R"
+
+    # Period-column x-positions, per block, from the header row. "No" is kept
+    # too, so the jersey column can be told from the period numbers beside it.
+    columns: dict[str, dict[str, float]] = {"L": {}, "R": {}}
+    for t in header:
+        if t.text in _SCORECARD_PERIODS or t.text == "No":
+            columns[block_of(t.x)][t.text] = t.x
+
+    def column_for(block: str, x: float) -> Optional[str]:
+        best, dist = None, _COL_TOLERANCE + 1
+        for period, cx in columns[block].items():
+            if period == "No":
+                continue
+            if abs(cx - x) < dist:
+                best, dist = period, abs(cx - x)
+        return best if dist <= _COL_TOLERANCE else None
+
+    def numbers(row, block: str) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for t in row:
+            if block_of(t.x) != block:
+                continue
+            if re.fullmatch(r"-?\d+", t.text):
+                period = column_for(block, t.x)
+                if period:
+                    out[period] = int(t.text)
+        return out
+
+    # Walk the rows below the header. A "Shots" line opens a goalie; the next
+    # "Saves" line closes it. The jersey sits on a line between them.
+    sides: dict[str, list[GoalieRecord]] = {"home": [], "away": []}
+    for block in ("L", "R"):
+        pending: Optional[GoalieRecord] = None
+        seen_header = False
+        for r in rows:
+            if r is header:
+                seen_header = True
+                continue
+            if not seen_header:
+                continue
+            labels = [t.text for t in r]
+            if header[0].y and r and r[0].y > header[0].y:
+                continue  # above the header on the page
+            has_shots = "Shots" in labels
+            has_saves = "Saves" in labels
+            jersey = _scorecard_jersey(r, block, columns)
+            if has_shots:
+                pending = GoalieRecord(jersey=jersey or "")
+                pending.shots = numbers(r, block)
+            elif has_saves and pending is not None:
+                pending.saves = numbers(r, block)
+                if pending.shots or pending.saves:
+                    sides[block_side[block]].append(pending)
+                pending = None
+            elif jersey and pending is not None and not pending.jersey:
+                pending.jersey = jersey
+    card.home, card.away = sides["home"], sides["away"]
+    if not card.is_usable:
+        card.warnings.append("goaltender records present but empty")
+    return card
+
+
+def _scorecard_jersey(row, block: str,
+                      columns: dict[str, dict[str, float]]) -> Optional[str]:
+    """A bare number sitting under the block's ``No`` column, if any."""
+    no_x = columns[block].get("No")
+    if no_x is None:
+        # The header's No column was not captured; fall back to the block's
+        # far-left number, which is where the jersey is printed.
+        candidates = [t for t in row
+                      if (t.x < _BLOCK_SPLIT) == (block == "L")
+                      and re.fullmatch(r"\d+", t.text)]
+        return candidates[0].text if candidates else None
+    for t in row:
+        if re.fullmatch(r"\d+", t.text) and abs(t.x - no_x) <= 14:
+            return t.text
+    return None
+
+
+def reconcile_scorecard(card: Scorecard, home_goals: Optional[int],
+                        away_goals: Optional[int]) -> dict[str, bool]:
+    """Whether each side's goalie GA sums to the goals the other side scored.
+
+    A side that does not reconcile is left for the caller to reject: the point
+    of the scorecard is to be *right* about goalie GA, and a blank saves column
+    or an inconsistent table is worse than the fallback it would replace.
+    """
+    result = {}
+    for side, records, conceded in (("home", card.home, away_goals),
+                                    ("away", card.away, home_goals)):
+        gas = [r.goals_against for r in records]
+        total = sum(g for g in gas if g is not None)
+        result[side] = bool(records and None not in gas
+                            and conceded is not None and total == conceded)
+    return result
 
 
 def parse_scoresheet(html: str, game_id: Optional[int] = None) -> Scoresheet:

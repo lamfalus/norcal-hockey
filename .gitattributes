@@ -9,3 +9,6 @@ norcalstats-cli text eol=lf
 # Saved pages used as test fixtures: keep them byte-for-byte as fetched, so the
 # parser is always tested against exactly what the site served.
 tests/fixtures/*.html -text
+# PDF scorecards are binary; never touch their bytes (line-ending conversion
+# would corrupt the Flate streams the reader decompresses).
+tests/fixtures/*.pdf binary

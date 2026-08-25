@@ -74,6 +74,10 @@ class Config:
     #: Also re-fetch scoresheets seen within this window, to pick up late
     #: scorekeeper corrections.
     recheck_days: int = 10
+    #: Fetch the PDF scorecard's Goaltender Records (per-goalie shots/saves) for
+    #: the current season. A second request per played game, so it is a
+    #: deliberate opt-in and scoped to the newest season until backfilled.
+    collect_scorecards: bool = True
 
     # -- export / publish ----------------------------------------------
     export_dir: Path = Path(".")

@@ -558,6 +558,24 @@ class TestRequestCeiling(unittest.TestCase):
             self.assertTrue(page.from_cache)
             self.assertEqual(starved.requests_made, 0)
 
+    def test_binary_archive_round_trips_and_serves_from_cache(self):
+        # A PDF must survive the archive intact -- decoding it to text would
+        # corrupt it -- and be served from disk without a request, the same as
+        # the HTML pages.
+        with tempfile.TemporaryDirectory() as tmp:
+            raw = pathlib.Path(tmp)
+            payload = b"%PDF-1.4\n\x00\x01\x02 binary \xff\xfe bytes"
+            fetcher = Fetcher("https://example.invalid", raw_dir=raw, max_requests=99)
+            fetcher._write_raw_bytes("s33/scorecard/1", "", payload, "pdf")
+            self.assertEqual(fetcher.read_raw_bytes("s33/scorecard/1", "pdf"), payload)
+
+            starved = Fetcher("https://example.invalid", raw_dir=raw, max_requests=0)
+            page = starved.get_bytes("/x", key="s33/scorecard/1", ext="pdf",
+                                     use_cache=True)
+            self.assertTrue(page.from_cache)
+            self.assertEqual(page.payload, payload)
+            self.assertEqual(starved.requests_made, 0)
+
     def test_stats_report_an_early_stop(self):
         stats = pipeline.Stats()
         self.assertFalse(stats.stopped_early)

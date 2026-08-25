@@ -87,6 +87,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("derive", help="rebuild identities and stats from stored rows")
 
+    p_cards = sub.add_parser(
+        "scorecards",
+        help="fetch the PDF scorecards (per-goalie shots/saves) for chosen seasons")
+    p_cards.add_argument("--season", type=int, action="append", dest="seasons",
+                         help="season to collect (repeatable; default: newest played)")
+    p_cards.add_argument("--limit", type=int, help="cap scorecards fetched this run")
+    p_cards.add_argument("--offline", action="store_true",
+                         help="re-parse archived scorecards only, no network")
+    p_cards.add_argument("--force", action="store_true",
+                         help="re-fetch even scorecards already read")
+    p_cards.add_argument("--no-derive", action="store_true",
+                         help="do not rebuild stats afterward")
+
     p_export = sub.add_parser("export", help="write JSON exports")
     p_export.add_argument("--out", type=Path, help="output directory")
     p_export.add_argument("--game-logs", action="store_true",
@@ -192,6 +205,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             result = pipeline.Pipeline(conn, config, _fetcher(config)).derive()
             print(f"{result['players']} players from {result['names']} spellings")
             return 0
+        if command == "scorecards":
+            return _cmd_scorecards(conn, config, args)
         if command == "export":
             if getattr(args, "app", None):
                 config._app_dir = args.app
@@ -211,6 +226,47 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     finally:
         conn.close()
     return 1
+
+
+def _cmd_scorecards(conn, config: Config, args) -> int:
+    """Fetch and parse the PDF scorecards for the chosen seasons.
+
+    Defaults to the newest season that has a played game -- the "start with this
+    season" case -- but any season can be named for a deliberate backfill.
+    """
+    offline = getattr(args, "offline", False)
+    pipe = pipeline.Pipeline(conn, config, _fetcher(config, offline=offline))
+
+    seasons = args.seasons
+    if not seasons:
+        row = conn.execute(
+            "SELECT MAX(season_id) AS s FROM games "
+            "WHERE status='final' AND home_goals IS NOT NULL"
+        ).fetchone()
+        if not row or row["s"] is None:
+            print("no played games found", file=sys.stderr)
+            return 1
+        seasons = [row["s"]]
+    print(f"scorecards for season(s): {', '.join('S' + str(s) for s in seasons)}")
+
+    pending = pipe.pending_scorecards(seasons, force=args.force)
+    archive = (set() if (offline or args.force)
+               else pipe.reparsable_scorecards(seasons))
+    reparse = [g for g in pending if g in archive]
+    fetch = [g for g in pending if g not in archive]
+    if reparse:
+        print(f"{len(reparse)} re-parsed from the archive (no requests)")
+        pipe.fetch_scorecards(reparse, use_cache=True, limit=args.limit)
+    print(f"{len(fetch)} to fetch")
+    pipe.fetch_scorecards(fetch, use_cache=offline, limit=args.limit)
+
+    print(f"stored {pipe.stats.scorecards} scorecard(s), "
+          f"{pipe.stats.scorecards_empty} with nothing reconciling, "
+          f"{pipe.stats.errors} error(s)")
+    if not args.no_derive:
+        result = pipe.derive()
+        print(f"derived: {result['players']} players from {result['names']} spellings")
+    return 0
 
 
 def _fetcher(config: Config, *, offline: bool = False) -> Fetcher:

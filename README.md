@@ -300,6 +300,7 @@ or recent enough that a scorekeeper might still correct them.
 | `backfill` | One-time historical crawl (`--from-season`, `--to-season`) |
 | `reparse` | Re-parse the archived pages offline, no network at all |
 | `derive` | Rebuild player identities and stat lines from stored rows |
+| `scorecards` | Fetch the PDF scorecards (per-goalie shots/saves) for a season |
 | `export` | Write the app dataset, and the legacy exports if enabled |
 | `publish` | Push the app dataset, and commit the legacy exports if enabled |
 | `status` | What is in the database |
@@ -329,7 +330,8 @@ cross-checking).
 
 **3 — Fetch scoresheets.** Only for games that need one. This is what makes a
 nightly run cheap: a typical night fetches the handful of games played that day
-rather than the whole season.
+rather than the whole season. For the current season it also fetches each
+played game's **PDF scorecard** — see [Goalie stats](#goalie-stats-come-from-the-pdf-scorecard).
 
 **4 — Derive.** Resolve player identities and materialize per-game stat lines
 from the stored events. No network access, so it can be re-run any time.
@@ -561,9 +563,11 @@ Two things worth knowing about the source data:
   individually (`Regular 1` … `Regular 15`), and its published totals and
   standings exclude preseason, exhibition and playoff games. The database stores
   a `game_class` for exactly this reason.
-- **The shot grid is unreliable.** Scorekeepers routinely leave it half-filled —
-  one 19-goal game in the fixtures has two goals marked. It is recorded and
-  flagged `reliable = 0`, and is never used as a stats source.
+- **The shot-grid on the HTML sheet is unreliable.** Scorekeepers routinely
+  leave it half-filled — one 19-goal game in the fixtures has two goals marked.
+  It is recorded and flagged `reliable = 0`, and is never used as a stats
+  source. Real shots and saves come from the [PDF scorecard](#goalie-stats-come-from-the-pdf-scorecard)
+  instead, which is checked against the score before it is trusted.
 - **A scoresheet is checked against the fixture it was fetched for.** Game ids
   come from the link, never from the printed label, but an earlier parser
   invented one when it could not read it — and asking the site for game 1
@@ -584,6 +588,53 @@ Reconciliation was verified against the league's own numbers: for two fully
 parsed teams, all 28 players matched the published GP, goals and assists
 exactly, derived purely from scoresheets.
 
+### Goalie stats come from the PDF scorecard
+
+The HTML scoresheet names the goalies and when they were changed, but says how
+many shots each faced **only for the team as a whole** — not per goalie. So a
+side that used two goalies could not be split from the scoresheet, and the old
+derivation gave *every* rostered goalie the side's entire goals-against: right
+when one played, doubled when two split the game, and a phantom line for a
+backup who never left the bench.
+
+Every game also has a second link on the site, in the **Scoresheet** column
+rather than the **Game** one: `generate-scorecard.php`, a printable **PDF**.
+That PDF carries a *Goaltender Records* table the HTML does not — per goalie,
+per period, shots and saves. It is the one true source for a goalie's
+goals-against, and for real save percentage and shots faced.
+
+The collector fetches that PDF for the current season's played games, reads the
+table (a small dependency-free PDF reader in [`norcalstats/pdf.py`](norcalstats/pdf.py)),
+and stores per-goalie shots and saves. Three things make it trustworthy rather
+than merely present:
+
+- **It is checked against the score.** A side's goalie goals-against must sum to
+  the goals the other side scored. The table is scorekeeper-entered and
+  sometimes a saves column is left blank; a side that does not reconcile is
+  **rejected**, and that game keeps the derived fallback rather than storing a
+  wrong number. A reason is recorded in `games.scorecard_error`.
+- **The home/away column order is read, not assumed.** The two blocks are
+  labelled `On Home`/`On Away`, and which team is on the left varies game to
+  game — reading position instead of label silently swaps the two goalies'
+  lines.
+- **Where there is no scorecard, nothing changes.** Older seasons keep the
+  derived goals-against untouched until their scorecards are backfilled, so this
+  is additive: `scorecards --season N` collects any season on demand.
+
+The count that flows from this: a goalie who split a game now shows their own
+goals-against, a backup who did not play shows zero rather than the other
+goalie's total, and a real save percentage appears wherever a scorecard was
+read. Reading it was validated against every played game of the 2026-27 season:
+15 of 17 reconciled on the first pass, and the two that did not were a blank
+saves column (correctly rejected) and — before a fix — the one home/away
+ordering the label row exists to settle.
+
+**Cost, and why it is scoped.** A scorecard is a second request per game and
+about 70 KB gzipped, so all ~14,000 games would be ~1 GB of archive and hours
+of polite crawling. It runs for the current season in the nightly (a handful of
+games) and is a deliberate, season-at-a-time backfill for the rest. Turned off
+with `collect_scorecards: false`.
+
 ---
 
 ## Database
@@ -593,7 +644,8 @@ SQLite, at `data/norcal.sqlite3`. The schema is in
 
 Scraped as recorded: `seasons`, `divisions`, `teams`, `standings`, `games`,
 `game_rosters`, `goals`, `penalties`, `goalie_stints`, `period_scores`,
-`shot_marks`, `team_stat_rows`.
+`shot_marks`, `goalie_records` (the PDF scorecard's per-goalie shots/saves),
+`team_stat_rows`.
 
 Derived and rebuildable: `players`, `player_names`, `player_team_seasons`,
 `player_game_stats`, `clubs`.

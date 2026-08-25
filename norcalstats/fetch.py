@@ -50,6 +50,15 @@ class Page:
     status: int = 200
 
 
+@dataclass
+class BinaryPage:
+    url: str
+    payload: bytes
+    sha256: str
+    from_cache: bool = False
+    status: int = 200
+
+
 class Fetcher:
     def __init__(
         self,
@@ -87,7 +96,8 @@ class Fetcher:
             return path
         return f"{self.base_url}/{path.lstrip('/')}"
 
-    def _raw_path(self, url: str, key: Optional[str]) -> Optional[Path]:
+    def _raw_path(self, url: str, key: Optional[str],
+                  ext: str = "html") -> Optional[Path]:
         if not self.raw_dir:
             return None
         if key:
@@ -97,7 +107,7 @@ class Fetcher:
             safe = hashlib.sha1(
                 f"{parts.path}?{parts.query}".encode()
             ).hexdigest()[:20]
-        return self.raw_dir / f"{safe}.html.gz"
+        return self.raw_dir / f"{safe}.{ext}.gz"
 
     # -- archive ---------------------------------------------------------
     def read_raw(self, key: str) -> Optional[str]:
@@ -121,6 +131,30 @@ class Fetcher:
         tmp = path.with_suffix(path.suffix + ".tmp")
         with gzip.open(tmp, "wt", encoding="utf-8") as fh:
             fh.write(html)
+        tmp.replace(path)
+
+    def read_raw_bytes(self, key: str, ext: str) -> Optional[bytes]:
+        """Return an archived binary payload (e.g. a PDF), or None."""
+        path = self._raw_path("", key, ext)
+        if path and path.is_file():
+            try:
+                with gzip.open(path, "rb") as fh:
+                    return fh.read()
+            except OSError as exc:
+                log.warning("unreadable archive %s: %s", path, exc)
+        return None
+
+    def _write_raw_bytes(self, key: Optional[str], url: str,
+                         payload: bytes, ext: str) -> None:
+        if not self.keep_raw:
+            return
+        path = self._raw_path(url, key, ext)
+        if not path:
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        with gzip.open(tmp, "wb") as fh:
+            fh.write(payload)
         tmp.replace(path)
 
     # -- fetching --------------------------------------------------------
@@ -158,6 +192,79 @@ class Fetcher:
         html = self._get_with_retries(url)
         self._write_raw(key, url, html)
         return Page(url, html, _sha(html))
+
+    def get_bytes(
+        self,
+        path: str,
+        *,
+        key: str,
+        ext: str,
+        use_cache: bool = False,
+        force: bool = False,
+    ) -> "BinaryPage":
+        """Fetch a binary payload (a PDF), archiving it gzipped under ``ext``.
+
+        Mirrors :meth:`get` but keeps the bytes intact -- decoding a PDF to text
+        would corrupt it -- and requires a ``key`` so the archive entry is
+        stable and re-parsable offline.
+        """
+        url = self.url_for(path)
+
+        if (use_cache or self.offline) and not force:
+            cached = self.read_raw_bytes(key, ext)
+            if cached is not None:
+                self.cache_hits += 1
+                return BinaryPage(url, cached, _sha_bytes(cached), from_cache=True)
+
+        if self.offline:
+            raise FetchError(f"offline and not archived: {key}")
+
+        if self.requests_made >= self.max_requests:
+            raise RequestCeilingReached(
+                f"request ceiling reached ({self.max_requests}); "
+                "raise max_requests, or re-run to continue where this left off"
+            )
+
+        payload = self._get_bytes_with_retries(url)
+        self._write_raw_bytes(key, url, payload, ext)
+        return BinaryPage(url, payload, _sha_bytes(payload))
+
+    def _get_bytes_with_retries(self, url: str) -> bytes:
+        last: Optional[Exception] = None
+        for attempt in range(1, self.retries + 1):
+            self._throttle()
+            try:
+                self.requests_made += 1
+                return self._get_bytes_once(url)
+            except urllib.error.HTTPError as exc:
+                last = exc
+                if exc.code < 500 and exc.code != 429:
+                    raise FetchError(f"HTTP {exc.code} for {url}") from exc
+                log.warning("HTTP %s for %s (attempt %d/%d)",
+                            exc.code, url, attempt, self.retries)
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                last = exc
+                log.warning("network error for %s (attempt %d/%d): %s",
+                            url, attempt, self.retries, exc)
+            if attempt < self.retries:
+                time.sleep(self.backoff * attempt)
+        raise FetchError(f"giving up on {url}: {last}")
+
+    def _get_bytes_once(self, url: str) -> bytes:
+        request = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": self.user_agent,
+                "Accept": "*/*",
+                "Accept-Encoding": "gzip",
+                "Connection": "close",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            raw = response.read()
+            if response.headers.get("Content-Encoding") == "gzip":
+                raw = gzip.decompress(raw)
+        return raw
 
     def _get_with_retries(self, url: str) -> str:
         last: Optional[Exception] = None
@@ -210,3 +317,7 @@ class Fetcher:
 
 def _sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()
+
+
+def _sha_bytes(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()

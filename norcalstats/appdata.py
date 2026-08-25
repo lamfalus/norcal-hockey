@@ -165,6 +165,8 @@ def build_core(conn: sqlite3.Connection) -> dict:
                SUM(s.points) AS pts, SUM(s.pim) AS pim,
                SUM(s.ppg) AS ppg, SUM(s.shg) AS shg,
                SUM(s.goals_against) AS ga,
+               SUM(s.shots_faced) AS shots, SUM(s.saves) AS saves,
+               COUNT(s.shots_faced) AS shots_games,
                MAX(s.jersey) AS jersey
           FROM player_game_stats s
           JOIN games g ON g.game_id = s.game_id
@@ -178,6 +180,14 @@ def build_core(conn: sqlite3.Connection) -> dict:
             "ppg": r["ppg"] or 0, "shg": r["shg"] or 0,
             "goalie": bool(r["is_goalie"]), "ga": r["ga"],
         })
+        # Measured shots/saves for the games that had a scorecard. shotsGames
+        # says how many games those cover, so the viewer can mark a save
+        # percentage drawn from part of a season as the floor it is.
+        if r["is_goalie"] and r["shots_games"]:
+            entry = splits[r["player_id"]][-1]
+            entry["shots"] = r["shots"] or 0
+            entry["saves"] = r["saves"] or 0
+            entry["shotsGames"] = r["shots_games"]
 
     # The league's own published season totals, kept alongside so the app can
     # show them where scoresheets are missing or disagree.
@@ -270,6 +280,7 @@ def build_player_logs(conn: sqlite3.Connection) -> dict[int, dict]:
     for r in conn.execute("""
         SELECT s.player_id, s.game_id, s.team_id, s.goals, s.assists, s.points,
                s.pim, s.ppg, s.shg, s.is_goalie, s.goals_against,
+               s.shots_faced, s.saves,
                g.season_id, g.date_iso, g.game_class, g.league_id,
                g.home_team_id, g.away_team_id, g.home_goals, g.away_goals, s.side
           FROM player_game_stats s
@@ -294,6 +305,13 @@ def build_player_logs(conn: sqlite3.Connection) -> dict[int, dict]:
         if r["is_goalie"]:
             line["goalie"] = True
             line["ga"] = r["goals_against"]
+            # Real shots faced / saves from the scorecard, when this game had
+            # one; absent otherwise, so the viewer can tell a measured save
+            # percentage from none at all.
+            if r["shots_faced"] is not None:
+                line["shots"] = r["shots_faced"]
+            if r["saves"] is not None:
+                line["saves"] = r["saves"]
         shards[shard_for(r["player_id"])].setdefault(str(r["player_id"]), []).append(line)
 
     return {

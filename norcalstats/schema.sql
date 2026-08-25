@@ -334,6 +334,24 @@ CREATE TABLE IF NOT EXISTS shot_marks (
     PRIMARY KEY (game_id, side)
 );
 
+-- Per-goalie shots and saves from the PDF scorecard's Goaltender Records
+-- table, which the HTML scoresheet does not carry. This is the one true source
+-- for a goalie's goals-against when a side used more than one: the goalie
+-- changes above give who and when, but only this says how many each faced.
+-- Only stored when the side's records reconcile with the score, so a blank or
+-- inconsistent table is left to the derived fallback instead.
+CREATE TABLE IF NOT EXISTS goalie_records (
+    game_id   INTEGER NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
+    side      TEXT NOT NULL,
+    jersey    TEXT NOT NULL,
+    shots     INTEGER,                   -- total shots faced
+    saves     INTEGER,                   -- total saves
+    goals_against INTEGER,               -- shots - saves
+    by_period TEXT,                      -- JSON: {"1":{"shots":n,"saves":n},...}
+    player_id INTEGER REFERENCES players(player_id),
+    PRIMARY KEY (game_id, side, jersey)
+);
+
 -- ------------------------------------------------- site-published aggregates
 
 -- The season-total tables the site publishes per team, kept for cross-checking

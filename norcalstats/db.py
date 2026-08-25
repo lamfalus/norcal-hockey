@@ -12,7 +12,7 @@ from . import names as N
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 
@@ -61,6 +61,14 @@ ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("leagues", "note", "TEXT"),
     ("leagues", "parent_id", "INTEGER"),
     ("leagues", "stage", "TEXT"),
+    # The PDF scorecard: fetch/parse bookkeeping on the game, and real
+    # per-goalie shots/saves on the derived stat line.
+    ("games", "scorecard_sha", "TEXT"),
+    ("games", "scorecard_at", "TEXT"),
+    ("games", "scorecard_error", "TEXT"),
+    ("games", "scorecard_parse_version", "INTEGER"),
+    ("player_game_stats", "shots_faced", "INTEGER"),
+    ("player_game_stats", "saves", "INTEGER"),
 ]
 
 
@@ -139,6 +147,9 @@ def _migrate(conn: sqlite3.Connection, from_version: int) -> None:
         _migrate_v5_drop_foreign_scoresheets(conn)
     if from_version < 6:
         _migrate_v6_drop_out_of_state_championships(conn)
+    # v7 adds the goalie_records table and scorecard bookkeeping columns, all
+    # additive -- CREATE TABLE IF NOT EXISTS and ADDED_COLUMNS handle it, so
+    # there is nothing to do here beyond record the version.
 
 
 #: Leagues dropped in v6, and why. Both are end-of-season championships drawn

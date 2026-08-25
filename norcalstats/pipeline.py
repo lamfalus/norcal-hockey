@@ -48,6 +48,10 @@ class Stats:
     #: Scoresheets that fetched fine but contained no roster. A property of
     #: the data, not a failure of the run.
     empty_sheets: int = 0
+    #: Scorecards (PDFs) with at least one reconciling goalie side stored.
+    scorecards: int = 0
+    #: Scorecards that fetched but reconciled nothing worth storing.
+    scorecards_empty: int = 0
     #: Set when the request ceiling stopped the run before it finished.
     stopped_early: bool = False
 
@@ -55,7 +59,8 @@ class Stats:
         return (f"{self.seasons} seasons, {self.teams} teams, "
                 f"{self.games_seen} games ({self.games_new} new), "
                 f"{self.scoresheets} scoresheets, {self.errors} errors"
-                + (f", {self.empty_sheets} with no roster" if self.empty_sheets else ""))
+                + (f", {self.empty_sheets} with no roster" if self.empty_sheets else "")
+                + (f", {self.scorecards} scorecards" if self.scorecards else ""))
 
 
 class Pipeline:
@@ -730,6 +735,68 @@ class Pipeline:
         """, [*season_list, tts.PARSE_VERSION, recent]).fetchall()
         return {row["game_id"] for row in rows}
 
+    def pending_scorecards(self, seasons: Iterable[int], *, force: bool = False) -> list[int]:
+        """Played games whose PDF scorecard should be fetched, newest first.
+
+        Only games with a final score, since the Goaltender Records table is
+        checked against it. A game qualifies when it has never had a scorecard
+        read, was read by an older scorecard parser, or was played recently
+        enough that the sheet may still be corrected -- the same freshness rule
+        the scoresheets use, so the two stay in step.
+        """
+        season_list = list(seasons)
+        if not season_list:
+            return []
+        placeholders = ",".join("?" for _ in season_list)
+        cutoff = (datetime.now(timezone.utc)
+                  - timedelta(days=self.config.recheck_days)).date().isoformat()
+
+        if force:
+            condition = "1 = 1"
+            params: list = list(season_list)
+        else:
+            condition = """(
+                   g.scorecard_at IS NULL
+                OR g.scorecard_parse_version IS NULL
+                OR g.scorecard_parse_version < ?
+                OR (g.date_iso IS NOT NULL AND g.date_iso >= ?
+                    AND g.scorecard_at < ?)
+            )"""
+            params = [
+                *season_list, tts.SCORECARD_PARSE_VERSION, cutoff,
+                (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(timespec="seconds"),
+            ]
+
+        sql = f"""
+            SELECT g.game_id FROM games g
+             WHERE g.season_id IN ({placeholders})
+               AND g.status = 'final'
+               AND g.has_scoresheet = 1
+               AND g.home_goals IS NOT NULL AND g.away_goals IS NOT NULL
+               AND {condition}
+             ORDER BY g.date_iso DESC, g.game_id DESC
+        """
+        return [row["game_id"] for row in self.conn.execute(sql, params)]
+
+    def reparsable_scorecards(self, seasons: Iterable[int]) -> set[int]:
+        """Scorecards to re-read from the archive rather than re-download."""
+        season_list = list(seasons)
+        if not season_list:
+            return set()
+        placeholders = ",".join("?" for _ in season_list)
+        recent = (datetime.now(timezone.utc)
+                  - timedelta(days=self.config.recheck_days)).date().isoformat()
+        rows = self.conn.execute(f"""
+            SELECT g.game_id FROM games g
+             WHERE g.season_id IN ({placeholders})
+               AND g.status = 'final' AND g.has_scoresheet = 1
+               AND g.scorecard_at IS NOT NULL
+               AND (g.scorecard_parse_version IS NULL
+                    OR g.scorecard_parse_version < ?)
+               AND (g.date_iso IS NULL OR g.date_iso < ?)
+        """, [*season_list, tts.SCORECARD_PARSE_VERSION, recent]).fetchall()
+        return {row["game_id"] for row in rows}
+
     def fetch_scoresheets(
         self, game_ids: Iterable[int], *, use_cache: bool = False, limit: Optional[int] = None
     ) -> None:
@@ -893,6 +960,107 @@ class Pipeline:
                 "INSERT INTO anomalies(kind, game_id, detail, found_at) VALUES (?,?,?,?)",
                 [("scoresheet", game_id, w, now()) for w in sheet.warnings],
             )
+
+    def store_scorecard(self, game_id: int, payload: bytes, sha: str) -> None:
+        """Parse one PDF scorecard's Goaltender Records and store what reconciles.
+
+        Only a side whose goalie goals-against sum to the score is kept. A blank
+        saves column or an inconsistent table is worse than the derived fallback
+        it would replace, so it is recorded as an error and the fallback stands.
+        """
+        import json
+
+        card = tts.parse_scorecard(payload, game_id)
+        row = self.conn.execute(
+            "SELECT home_goals, away_goals FROM games WHERE game_id = ?", (game_id,)
+        ).fetchone()
+        home_goals = row["home_goals"] if row else None
+        away_goals = row["away_goals"] if row else None
+        ok = tts.reconcile_scorecard(card, home_goals, away_goals)
+
+        self.conn.execute("DELETE FROM goalie_records WHERE game_id = ?", (game_id,))
+        kept = 0
+        problems = list(card.warnings)
+        for side_name, records in (("home", card.home), ("away", card.away)):
+            if not records:
+                continue
+            if not ok[side_name]:
+                problems.append(f"{side_name} goalie records do not reconcile with the score")
+                continue
+            for rec in records:
+                by_period = {
+                    p: {"shots": rec.shots.get(p), "saves": rec.saves.get(p)}
+                    for p in sorted(set(rec.shots) | set(rec.saves))
+                    if p != "Total"
+                }
+                self.conn.execute(
+                    "INSERT INTO goalie_records(game_id, side, jersey, shots, saves, "
+                    "goals_against, by_period) VALUES (?,?,?,?,?,?,?)",
+                    (game_id, side_name, rec.jersey, rec.total_shots, rec.total_saves,
+                     rec.goals_against, json.dumps(by_period)),
+                )
+                kept += 1
+
+        self.conn.execute(
+            "UPDATE games SET scorecard_sha = ?, scorecard_at = ?, "
+            "scorecard_parse_version = ?, scorecard_error = ?, updated_at = ? "
+            "WHERE game_id = ?",
+            (sha, now(), tts.SCORECARD_PARSE_VERSION,
+             "; ".join(problems)[:300] if problems else None, now(), game_id),
+        )
+        if kept:
+            self.stats.scorecards += 1
+        else:
+            self.stats.scorecards_empty += 1
+
+    def fetch_scorecards(
+        self,
+        game_ids: Iterable[int],
+        *,
+        use_cache: bool = False,
+        limit: Optional[int] = None,
+    ) -> None:
+        """Fetch and store the PDF scorecard for each game."""
+        game_ids = list(game_ids)
+        if limit:
+            game_ids = game_ids[:limit]
+        total = len(game_ids)
+        log.info("fetching %d scorecard(s)", total)
+
+        for i, game_id in enumerate(game_ids, 1):
+            row = self.conn.execute(
+                "SELECT season_id FROM games WHERE game_id = ?", (game_id,)
+            ).fetchone()
+            season_id = row["season_id"] if row else 0
+            try:
+                page = self.fetcher.get_bytes(
+                    tts.scorecard_path(game_id),
+                    key=f"s{season_id}/scorecard/{game_id}",
+                    ext="pdf",
+                    use_cache=use_cache,
+                )
+            except RequestCeilingReached as exc:
+                log.warning("%s", exc)
+                log.warning("stopped after %d of %d scorecard(s); "
+                            "re-run the same command to continue", i - 1, total)
+                self.conn.commit()
+                self.stats.stopped_early = True
+                return
+            except FetchError as exc:
+                log.error("game %s scorecard: %s", game_id, exc)
+                self.conn.execute(
+                    "UPDATE games SET scorecard_error = ?, updated_at = ? WHERE game_id = ?",
+                    (str(exc)[:300], now(), game_id),
+                )
+                self.stats.errors += 1
+                self.conn.commit()
+                continue
+
+            self.store_scorecard(game_id, page.payload, page.sha256)
+            if i % 25 == 0 or i == total:
+                log.info("  %d/%d scorecards", i, total)
+                self.conn.commit()
+        self.conn.commit()
 
     # ------------------------------------------------------------- derive
     def derive(self) -> dict[str, int]:
@@ -1218,6 +1386,79 @@ def rebuild_player_game_stats(conn: sqlite3.Connection) -> None:
                  GROUP BY game_id, player_id
           ) pen ON pen.game_id = r.game_id AND pen.pid = r.player_id
     """)
+    _apply_goalie_records(conn)
+
+
+def _apply_goalie_records(conn: sqlite3.Connection) -> None:
+    """Override goalie goals-against with the scorecard's real per-goalie figure.
+
+    Without the scorecard, ``rebuild_player_game_stats`` gives every goalie who
+    dressed the *side's whole* goals-against -- right when one goalie played,
+    doubled when two split the game, and a phantom line for a backup who never
+    took the net. The scorecard's Goaltender Records table says exactly how many
+    shots each faced and saved, and only reconciling records were stored, so
+    where one exists it is the truth and replaces the derived count. Where none
+    exists -- most of history, until the scorecards are backfilled -- the
+    derived value stands untouched.
+    """
+    # Resolve each record to a player through the roster's jersey on that side.
+    conn.execute("UPDATE goalie_records SET player_id = NULL")
+    conn.execute("""
+        UPDATE goalie_records
+           SET player_id = (
+                SELECT r.player_id FROM game_rosters r
+                 WHERE r.game_id = goalie_records.game_id
+                   AND r.side = goalie_records.side
+                   AND r.jersey = goalie_records.jersey
+                   AND r.player_id IS NOT NULL
+                 LIMIT 1)
+    """)
+
+    # A backup who never took the net has a record with 0 shots (or none at
+    # all); the reconciling side still lists only goalies who actually played,
+    # so a stat line with no matching record but is_goalie=1 keeps its derived
+    # value. Override only the lines we have a record for.
+    conn.execute("""
+        UPDATE player_game_stats
+           SET goals_against = (
+                SELECT gr.goals_against FROM goalie_records gr
+                 WHERE gr.game_id = player_game_stats.game_id
+                   AND gr.player_id = player_game_stats.player_id),
+               shots_faced = (
+                SELECT gr.shots FROM goalie_records gr
+                 WHERE gr.game_id = player_game_stats.game_id
+                   AND gr.player_id = player_game_stats.player_id),
+               saves = (
+                SELECT gr.saves FROM goalie_records gr
+                 WHERE gr.game_id = player_game_stats.game_id
+                   AND gr.player_id = player_game_stats.player_id)
+         WHERE is_goalie = 1
+           AND EXISTS (
+                SELECT 1 FROM goalie_records gr
+                 WHERE gr.game_id = player_game_stats.game_id
+                   AND gr.player_id = player_game_stats.player_id)
+    """)
+
+    # A goalie the scorecard lists who was NOT credited a stat line -- a backup
+    # dressed but the derive dropped them for zero appearances -- is already
+    # absent, which is correct. But a goalie who dressed, got a derived line
+    # with the side's full GA, and did NOT play (no reconciling record naming
+    # them) must not keep that phantom GA when a co-goalie's record proves the
+    # side's goals were the other goalie's. Zero those out.
+    conn.execute("""
+        UPDATE player_game_stats
+           SET goals_against = 0, shots_faced = 0, saves = 0
+         WHERE is_goalie = 1
+           AND goals_against IS NOT NULL
+           AND NOT EXISTS (
+                SELECT 1 FROM goalie_records gr
+                 WHERE gr.game_id = player_game_stats.game_id
+                   AND gr.player_id = player_game_stats.player_id)
+           AND EXISTS (
+                SELECT 1 FROM goalie_records gr
+                 WHERE gr.game_id = player_game_stats.game_id
+                   AND gr.side = player_game_stats.side)
+    """)
 
 
 def audit(conn: sqlite3.Connection) -> None:
@@ -1495,6 +1736,24 @@ def run(
             pipeline.fetch_scoresheets(ordered, use_cache=True, limit=limit)
         log.info("%d scoresheet(s) to fetch", len(to_fetch))
         pipeline.fetch_scoresheets(to_fetch, use_cache=use_cache or offline, limit=limit)
+
+        # Scorecards (the PDF Goaltender Records) are collected for the current
+        # season only for now: the table is the one source of real per-goalie
+        # goals-against, but it is a second request per game, so older seasons
+        # are a deliberate, separate backfill rather than part of the nightly.
+        if config.collect_scorecards and targets:
+            card_seasons = [max(targets)]
+            card_pending = pipeline.pending_scorecards(card_seasons, force=force_scoresheets)
+            card_archive = (set() if (use_cache or offline or force_scoresheets)
+                            else pipeline.reparsable_scorecards(card_seasons))
+            card_fetch = [g for g in card_pending if g not in card_archive]
+            card_reparse = [g for g in card_pending if g in card_archive]
+            if card_reparse:
+                log.info("%d scorecard(s) re-parsed from the archive (no requests)",
+                         len(card_reparse))
+                pipeline.fetch_scorecards(card_reparse, use_cache=True, limit=limit)
+            log.info("%d scorecard(s) to fetch", len(card_fetch))
+            pipeline.fetch_scorecards(card_fetch, use_cache=use_cache or offline, limit=limit)
 
         pipeline.derive()
 
