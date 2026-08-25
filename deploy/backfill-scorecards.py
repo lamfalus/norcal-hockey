@@ -34,10 +34,16 @@ log = logging.getLogger("backfill-scorecards")
 
 
 def _remaining(conn, season: int) -> int:
-    """Played games in a season not yet attempted at all."""
+    """Games in a season a scorecard could still be fetched for.
+
+    Must match ``pending_scorecards``' own filter -- notably ``has_scoresheet``:
+    a game with a final score but no scoresheet posted has no scorecard either,
+    so it is not "remaining" and must not pin the backfill on this season
+    forever.
+    """
     return conn.execute(
         "SELECT COUNT(*) FROM games "
-        " WHERE season_id = ? AND status = 'final'"
+        " WHERE season_id = ? AND status = 'final' AND has_scoresheet = 1"
         "   AND home_goals IS NOT NULL AND away_goals IS NOT NULL"
         "   AND scorecard_at IS NULL AND scorecard_error IS NULL",
         (season,),
