@@ -12,7 +12,7 @@ from . import names as N
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 
@@ -150,6 +150,8 @@ def _migrate(conn: sqlite3.Connection, from_version: int) -> None:
     # v7 adds the goalie_records table and scorecard bookkeeping columns, all
     # additive -- CREATE TABLE IF NOT EXISTS and ADDED_COLUMNS handle it, so
     # there is nothing to do here beyond record the version.
+    if from_version < 8:
+        _migrate_v8_rekey_goalie_records(conn)
 
 
 #: Leagues dropped in v6, and why. Both are end-of-season championships drawn
@@ -324,6 +326,36 @@ def _migrate_v6_drop_out_of_state_championships(conn: sqlite3.Connection) -> Non
         log.info("dropped leagues %s: %s",
                  ", ".join(str(l) for l in DROPPED_LEAGUES),
                  ", ".join(f"{n} {table}" for table, n in gone.items() if n))
+
+
+def _migrate_v8_rekey_goalie_records(conn: sqlite3.Connection) -> None:
+    """v7 -> v8: re-key goalie_records on the goalie's order, not jersey.
+
+    The v7 table keyed on (game_id, side, jersey), but an old scorecard often
+    prints no jersey number, so two goalies who split a game both arrive with a
+    blank jersey and collide. The table is rebuilt keyed on (game_id, side, seq)
+    and emptied; setting ``scorecard_parse_version`` back to NULL marks every
+    scorecard already fetched for a re-parse from the archive -- no refetch --
+    so the table repopulates with the new keys on the next run.
+    """
+    conn.execute("DROP TABLE IF EXISTS goalie_records")
+    conn.execute("""
+        CREATE TABLE goalie_records (
+            game_id   INTEGER NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
+            side      TEXT NOT NULL,
+            seq       INTEGER NOT NULL,
+            jersey    TEXT,
+            shots     INTEGER,
+            saves     INTEGER,
+            goals_against INTEGER,
+            by_period TEXT,
+            player_id INTEGER REFERENCES players(player_id),
+            PRIMARY KEY (game_id, side, seq)
+        )
+    """)
+    conn.execute(
+        "UPDATE games SET scorecard_parse_version = NULL WHERE scorecard_at IS NOT NULL")
+    conn.commit()
 
 
 def _migrate_v5_drop_foreign_scoresheets(conn: sqlite3.Connection) -> None:

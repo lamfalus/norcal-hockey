@@ -81,10 +81,20 @@ def main(argv=None) -> int:
 
         pipe = pipeline.Pipeline(conn, config, _fetcher(config))
         pending = pipe.pending_scorecards([target])
-        log.info("backfilling S%d: %d scorecard(s) pending (%d never attempted)",
-                 target, len(pending), _remaining(conn, target))
+        # Anything already archived but flagged for re-parse (a parser-version
+        # bump) is read from disk, not re-downloaded -- only genuinely new games
+        # cost a request.
+        from_archive = pipe.reparsable_scorecards([target])
+        reparse = [g for g in pending if g in from_archive]
+        fetch = [g for g in pending if g not in from_archive]
+        log.info("backfilling S%d: %d pending (%d re-parsed from archive, "
+                 "%d to fetch; %d never attempted)",
+                 target, len(pending), len(reparse), len(fetch),
+                 _remaining(conn, target))
         # Fetch only; the nightly update derives, exports and publishes.
-        pipe.fetch_scorecards(pending, use_cache=False, limit=args.limit)
+        if reparse:
+            pipe.fetch_scorecards(reparse, use_cache=True, limit=args.limit)
+        pipe.fetch_scorecards(fetch, use_cache=False, limit=args.limit)
         log.info("S%d: stored %d, %d with nothing reconciling, %d error(s); "
                  "%d still unattempted",
                  target, pipe.stats.scorecards, pipe.stats.scorecards_empty,

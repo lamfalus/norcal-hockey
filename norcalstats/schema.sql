@@ -340,16 +340,20 @@ CREATE TABLE IF NOT EXISTS shot_marks (
 -- changes above give who and when, but only this says how many each faced.
 -- Only stored when the side's records reconcile with the score, so a blank or
 -- inconsistent table is left to the derived fallback instead.
+-- Keyed by the goalie's order within its side (seq), not jersey: old
+-- scorecards often print no jersey number, so two goalies who split a game
+-- both arrive with a blank jersey and only their order distinguishes them.
 CREATE TABLE IF NOT EXISTS goalie_records (
     game_id   INTEGER NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
     side      TEXT NOT NULL,
-    jersey    TEXT NOT NULL,
+    seq       INTEGER NOT NULL,
+    jersey    TEXT,                       -- may be blank on older sheets
     shots     INTEGER,                   -- total shots faced
     saves     INTEGER,                   -- total saves
     goals_against INTEGER,               -- shots - saves
     by_period TEXT,                      -- JSON: {"1":{"shots":n,"saves":n},...}
     player_id INTEGER REFERENCES players(player_id),
-    PRIMARY KEY (game_id, side, jersey)
+    PRIMARY KEY (game_id, side, seq)
 );
 
 -- ------------------------------------------------- site-published aggregates

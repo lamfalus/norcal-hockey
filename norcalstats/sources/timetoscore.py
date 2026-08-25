@@ -43,7 +43,8 @@ PARSE_VERSION = 2
 
 #: Bumped when scorecard (PDF) parsing changes, to re-parse archived scorecards
 #: independently of the HTML scoresheets.
-SCORECARD_PARSE_VERSION = 1
+#: v2: goalie records keyed by order, not jersey (old sheets omit jersey).
+SCORECARD_PARSE_VERSION = 2
 
 _MONTHS = {
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
@@ -193,8 +194,15 @@ class Scoresheet:
 
 @dataclass
 class GoalieRecord:
-    """One goalie's line from the scorecard's Goaltender Records table."""
+    """One goalie's line from the scorecard's Goaltender Records table.
+
+    ``seq`` is the goalie's order within its side's block, and is what a record
+    is keyed by: an old scorecard often prints no jersey number at all, so two
+    goalies who split a game both come through with a blank jersey and only
+    their order tells them apart.
+    """
     jersey: str
+    seq: int = 0
     shots: dict[str, int] = field(default_factory=dict)   # period -> shots faced
     saves: dict[str, int] = field(default_factory=dict)   # period -> saves
 
@@ -678,7 +686,9 @@ def parse_scorecard(data: bytes, game_id: Optional[int] = None) -> Scorecard:
             elif has_saves and pending is not None:
                 pending.saves = numbers(r, block)
                 if pending.shots or pending.saves:
-                    sides[block_side[block]].append(pending)
+                    team = block_side[block]
+                    pending.seq = len(sides[team])
+                    sides[team].append(pending)
                 pending = None
             elif jersey and pending is not None and not pending.jersey:
                 pending.jersey = jersey

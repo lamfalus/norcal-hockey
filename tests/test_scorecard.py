@@ -94,6 +94,16 @@ class TestScorecardParse(unittest.TestCase):
         self.assertFalse(ok["home"])
         self.assertFalse(ok["away"])
 
+    def test_two_blank_jersey_goalies_are_kept_apart_by_order(self):
+        # Game 28622: an old sheet prints no jersey numbers, so both home
+        # goalies come through blank. They are distinct records, told apart by
+        # seq -- keying on jersey would collide them (the bug that stopped a
+        # backfill run mid-season).
+        card = tts.parse_scorecard(card_bytes(28622), 28622)
+        self.assertEqual(len(card.home), 2)
+        self.assertEqual([g.jersey for g in card.home], ["", ""])
+        self.assertEqual([g.seq for g in card.home], [0, 1])
+
     def test_a_non_pdf_is_handled_not_crashed(self):
         card = tts.parse_scorecard(b"not a pdf at all", 1)
         self.assertFalse(card.is_usable)
@@ -112,6 +122,9 @@ class TestScorecardStorage(unittest.TestCase):
         self.conn.execute(
             "INSERT INTO seasons(season_id, label, start_year, first_seen_at) "
             "VALUES (33, 'Fall 2026', 2026, '2026-08-01')")
+        self.conn.execute(
+            "INSERT INTO seasons(season_id, label, start_year, first_seen_at) "
+            "VALUES (27, 'Fall 2021', 2021, '2021-08-01')")
         # Two rostered goalies per side per game, so the split and the phantom
         # backup are both exercised. Jerseys match the fixtures.
         rosters = {
@@ -161,6 +174,19 @@ class TestScorecardStorage(unittest.TestCase):
         self.assertEqual(got[("home", "1")], (3, 18, 15))
         self.assertEqual(got[("home", "72")], (3, 23, 20))
         self.assertEqual(got[("away", "90")], (4, 23, 19))
+
+    def test_two_blank_jersey_goalies_store_without_colliding(self):
+        # The exact crash: two home goalies, both blank jersey, keyed by seq so
+        # they no longer collide on the primary key.
+        self.conn.execute(
+            "INSERT INTO games(game_id, season_id, status, has_scoresheet, "
+            "home_goals, away_goals, date_iso) "
+            "VALUES (28622, 27, 'final', 1, 5, 3, '2021-11-01')")
+        self.pipe.store_scorecard(28622, card_bytes(28622), "sha")
+        rows = self.conn.execute(
+            "SELECT seq, jersey, goals_against FROM goalie_records "
+            "WHERE game_id=28622 AND side='home' ORDER BY seq").fetchall()
+        self.assertEqual([(r["seq"], r["jersey"]) for r in rows], [(0, ""), (1, "")])
 
     def test_non_reconciling_side_is_rejected_with_a_reason(self):
         self.pipe.store_scorecard(56743, card_bytes(56743), "sha")

@@ -994,10 +994,10 @@ class Pipeline:
                     if p != "Total"
                 }
                 self.conn.execute(
-                    "INSERT INTO goalie_records(game_id, side, jersey, shots, saves, "
-                    "goals_against, by_period) VALUES (?,?,?,?,?,?,?)",
-                    (game_id, side_name, rec.jersey, rec.total_shots, rec.total_saves,
-                     rec.goals_against, json.dumps(by_period)),
+                    "INSERT INTO goalie_records(game_id, side, seq, jersey, shots, "
+                    "saves, goals_against, by_period) VALUES (?,?,?,?,?,?,?,?)",
+                    (game_id, side_name, rec.seq, rec.jersey, rec.total_shots,
+                     rec.total_saves, rec.goals_against, json.dumps(by_period)),
                 )
                 kept += 1
 
@@ -1445,6 +1445,11 @@ def _apply_goalie_records(conn: sqlite3.Connection) -> None:
     # with the side's full GA, and did NOT play (no reconciling record naming
     # them) must not keep that phantom GA when a co-goalie's record proves the
     # side's goals were the other goalie's. Zero those out.
+    #
+    # Only when the side's records were actually attributed to players, though.
+    # An old scorecard with blank jerseys stores records that match no roster
+    # row (player_id NULL); zeroing every goalie against those would wrongly
+    # wipe a real goalie's line, so such a side keeps the derived fallback.
     conn.execute("""
         UPDATE player_game_stats
            SET goals_against = 0, shots_faced = 0, saves = 0
@@ -1457,7 +1462,8 @@ def _apply_goalie_records(conn: sqlite3.Connection) -> None:
            AND EXISTS (
                 SELECT 1 FROM goalie_records gr
                  WHERE gr.game_id = player_game_stats.game_id
-                   AND gr.side = player_game_stats.side)
+                   AND gr.side = player_game_stats.side
+                   AND gr.player_id IS NOT NULL)
     """)
 
 
