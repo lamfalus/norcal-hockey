@@ -30,7 +30,7 @@ from typing import Iterable, Optional
 from . import clubs as clubs_mod, identity, names as N, review
 from .config import Config
 from .db import Run, get_meta, now, set_meta, upsert
-from .fetch import Fetcher, FetchError, RequestCeilingReached
+from .fetch import Fetcher, FetchError, RateLimited, RequestCeilingReached
 from .sources import timetoscore as tts
 
 log = logging.getLogger(__name__)
@@ -817,7 +817,7 @@ class Pipeline:
                     key=f"s{season_id}/game/{game_id}",
                     use_cache=use_cache,
                 )
-            except RequestCeilingReached as exc:
+            except (RequestCeilingReached, RateLimited) as exc:
                 # Not a problem with this game: stop, keeping what was already
                 # collected. Re-running continues from here.
                 log.warning("%s", exc)
@@ -1039,10 +1039,14 @@ class Pipeline:
                     ext="pdf",
                     use_cache=use_cache,
                 )
-            except RequestCeilingReached as exc:
+            except (RequestCeilingReached, RateLimited) as exc:
+                # Both mean stop, not fail. The site is asking us to back off (or
+                # we hit our own ceiling); the games not yet reached stay
+                # never-attempted, so the next run resumes this season rather
+                # than skipping past what it never fetched.
                 log.warning("%s", exc)
                 log.warning("stopped after %d of %d scorecard(s); "
-                            "re-run the same command to continue", i - 1, total)
+                            "re-run to continue", i - 1, total)
                 self.conn.commit()
                 self.stats.stopped_early = True
                 return

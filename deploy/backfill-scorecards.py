@@ -32,6 +32,12 @@ from norcalstats.config import Config  # noqa: E402
 
 log = logging.getLogger("backfill-scorecards")
 
+#: Most network fetches to attempt in one night. The site started returning 429
+#: at roughly 1,400 requests in a run, so this stays comfortably under -- a
+#: bigger season simply finishes over two nights. Re-parsing already-archived
+#: scorecards does not count: those are read from disk, not fetched.
+FETCH_CAP = 1100
+
 
 def _remaining(conn, season: int) -> int:
     """Games in a season a scorecard could still be fetched for.
@@ -98,9 +104,15 @@ def main(argv=None) -> int:
                  target, len(pending), len(reparse), len(fetch),
                  _remaining(conn, target))
         # Fetch only; the nightly update derives, exports and publishes.
+        # Re-parsing from the archive is free (no requests), so it is never
+        # capped; the network fetches are, to stay under the site's rate limit.
         if reparse:
             pipe.fetch_scorecards(reparse, use_cache=True, limit=args.limit)
-        pipe.fetch_scorecards(fetch, use_cache=False, limit=args.limit)
+        cap = args.limit if args.limit is not None else FETCH_CAP
+        if len(fetch) > cap:
+            log.info("capping this night's fetches at %d of %d; "
+                     "the rest resume next run", cap, len(fetch))
+        pipe.fetch_scorecards(fetch, use_cache=False, limit=cap)
         log.info("S%d: stored %d, %d with nothing reconciling, %d error(s); "
                  "%d still unattempted",
                  target, pipe.stats.scorecards, pipe.stats.scorecards_empty,

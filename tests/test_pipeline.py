@@ -543,6 +543,30 @@ class TestRequestCeiling(unittest.TestCase):
         # Still a FetchError, so existing handlers keep working.
         self.assertTrue(issubclass(RequestCeilingReached, FetchError))
 
+    def test_persistent_429_raises_rate_limited_not_a_plain_error(self):
+        # A 429 that survives the retries must be distinguishable, so a fetch
+        # loop can stop and resume rather than record the page as broken and
+        # skip it. It stays a FetchError so existing handlers still catch it.
+        import urllib.error
+        from norcalstats.fetch import FetchError, RateLimited
+
+        fetcher = Fetcher("https://example.invalid", retries=2, backoff=0)
+
+        def always_429(url):
+            raise urllib.error.HTTPError(url, 429, "Too Many Requests", {}, None)
+
+        with self.assertRaises(RateLimited):
+            fetcher._with_retries("https://example.invalid/x", always_429)
+        self.assertTrue(issubclass(RateLimited, FetchError))
+
+    def test_429_backs_off_far_harder_than_a_500(self):
+        import urllib.error
+        fetcher = Fetcher("https://example.invalid", backoff=4.0)
+        five = urllib.error.HTTPError("u", 500, "err", {}, None)
+        rate = urllib.error.HTTPError("u", 429, "slow down", {}, None)
+        self.assertEqual(fetcher._retry_delay(1, five), 4.0)
+        self.assertGreater(fetcher._retry_delay(1, rate), fetcher._retry_delay(1, five))
+
     def test_the_archive_is_still_served_at_the_ceiling(self):
         # A page already collected costs no request, so a resumed run makes
         # progress rather than stopping again immediately.

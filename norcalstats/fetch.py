@@ -41,6 +41,16 @@ class RequestCeilingReached(FetchError):
     """
 
 
+class RateLimited(FetchError):
+    """The site returned 429 and kept returning it through the retries.
+
+    Distinct from an ordinary failure, like the request ceiling: it says stop
+    and come back later, not that this page is broken. A run that hits it should
+    keep what it has and resume next time, leaving the unfetched pages to be
+    tried again -- never recording them as errors, which would skip them.
+    """
+
+
 @dataclass
 class Page:
     url: str
@@ -230,25 +240,7 @@ class Fetcher:
         return BinaryPage(url, payload, _sha_bytes(payload))
 
     def _get_bytes_with_retries(self, url: str) -> bytes:
-        last: Optional[Exception] = None
-        for attempt in range(1, self.retries + 1):
-            self._throttle()
-            try:
-                self.requests_made += 1
-                return self._get_bytes_once(url)
-            except urllib.error.HTTPError as exc:
-                last = exc
-                if exc.code < 500 and exc.code != 429:
-                    raise FetchError(f"HTTP {exc.code} for {url}") from exc
-                log.warning("HTTP %s for %s (attempt %d/%d)",
-                            exc.code, url, attempt, self.retries)
-            except (urllib.error.URLError, TimeoutError, OSError) as exc:
-                last = exc
-                log.warning("network error for %s (attempt %d/%d): %s",
-                            url, attempt, self.retries, exc)
-            if attempt < self.retries:
-                time.sleep(self.backoff * attempt)
-        raise FetchError(f"giving up on {url}: {last}")
+        return self._with_retries(url, self._get_bytes_once)
 
     def _get_bytes_once(self, url: str) -> bytes:
         request = urllib.request.Request(
@@ -267,15 +259,25 @@ class Fetcher:
         return raw
 
     def _get_with_retries(self, url: str) -> str:
+        return self._with_retries(url, self._get_once)
+
+    def _with_retries(self, url: str, fetch_fn):
+        """Retry ``fetch_fn(url)`` on 5xx/429/network errors, with backoff.
+
+        A 429 that survives every retry raises :class:`RateLimited` rather than
+        a plain :class:`FetchError`, so a caller can stop and resume instead of
+        recording the page as broken -- and it backs off far harder than a 5xx,
+        since the site is explicitly asking for a pause.
+        """
         last: Optional[Exception] = None
         for attempt in range(1, self.retries + 1):
             self._throttle()
             try:
                 self.requests_made += 1
-                return self._get_once(url)
+                return fetch_fn(url)
             except urllib.error.HTTPError as exc:
                 last = exc
-                # 4xx (other than 429) will not improve on retry.
+                # 4xx other than 429 will not improve on retry.
                 if exc.code < 500 and exc.code != 429:
                     raise FetchError(f"HTTP {exc.code} for {url}") from exc
                 log.warning("HTTP %s for %s (attempt %d/%d)",
@@ -285,8 +287,25 @@ class Fetcher:
                 log.warning("network error for %s (attempt %d/%d): %s",
                             url, attempt, self.retries, exc)
             if attempt < self.retries:
-                time.sleep(self.backoff * attempt)
+                time.sleep(self._retry_delay(attempt, last))
+        if isinstance(last, urllib.error.HTTPError) and last.code == 429:
+            raise RateLimited(f"rate limited on {url} after {self.retries} tries")
         raise FetchError(f"giving up on {url}: {last}")
+
+    def _retry_delay(self, attempt: int, exc: Optional[Exception]) -> float:
+        """How long to wait before the next attempt.
+
+        A 429 gets a long cooldown -- the server's ``Retry-After`` if it gave
+        one, else several times the ordinary backoff -- because retrying a rate
+        limit quickly just earns another. Capped so a run cannot hang for
+        minutes on a single page.
+        """
+        if isinstance(exc, urllib.error.HTTPError) and exc.code == 429:
+            retry_after = exc.headers.get("Retry-After") if exc.headers else None
+            if retry_after and str(retry_after).strip().isdigit():
+                return min(int(retry_after), 120)
+            return min(self.backoff * attempt * 4, 120)
+        return self.backoff * attempt
 
     def _get_once(self, url: str) -> str:
         request = urllib.request.Request(
