@@ -32,11 +32,13 @@ from norcalstats.config import Config  # noqa: E402
 
 log = logging.getLogger("backfill-scorecards")
 
-#: Most network fetches to attempt in one night. The site started returning 429
-#: at roughly 1,400 requests in a run, so this stays comfortably under -- a
-#: bigger season simply finishes over two nights. Re-parsing already-archived
-#: scorecards does not count: those are read from disk, not fetched.
-FETCH_CAP = 1100
+#: Most network fetches to attempt in one night. The site began returning 429
+#: at ~1,000 requests one night and ~1,400 another, so this sits below the
+#: lower of the two -- we stop ourselves before the site has to refuse, rather
+#: than poking it until it does. A bigger season simply finishes over two
+#: nights. Re-parsing already-archived scorecards does not count: those are
+#: read from disk, not fetched.
+FETCH_CAP = 900
 
 
 def _remaining(conn, season: int) -> int:
