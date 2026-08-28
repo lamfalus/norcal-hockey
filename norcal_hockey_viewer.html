@@ -286,7 +286,7 @@
   .dr-table td{padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;}
   .dr-table tbody tr:last-child td{border-bottom:none;}
   .dr-rk{color:var(--muted);text-align:right;width:2.4em;font-variant-numeric:tabular-nums;}
-  .dr-jersey{color:var(--muted);font-variant-numeric:tabular-nums;width:2.2em;}
+  .jersey-yr{display:inline-block;font-size:.68rem;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:0 4px;margin-left:5px;vertical-align:middle;white-space:nowrap;font-variant-numeric:tabular-nums;}
   .dr-table td.dr-val,.dr-table th.dr-val{text-align:right;font-variant-numeric:tabular-nums;}
   .dr-sub{color:var(--muted);font-size:.82em;}
   .dr-share{min-width:132px;}
@@ -2768,14 +2768,13 @@ function drMiniTable(title, rows, statHead, statFn) {
   }
   var body = rows.map(function(e, i) {
     return '<tr><td class="dr-rk">' + (i + 1) + '</td>'
-      + '<td><span class="team-link" onclick="goToPlayer(' + e.playerId + ')">' + escHtml(e.playerName) + '</span>' + bornLabel(e.playerId) + '</td>'
-      + '<td class="dr-jersey">' + escHtml(e.jersey || '') + '</td>'
+      + '<td><span class="team-link" onclick="goToPlayer(' + e.playerId + ')">' + escHtml(e.playerName) + '</span>' + jerseyLabel(e.jersey) + bornLabel(e.playerId) + '</td>'
       + '<td><span class="team-link" onclick="goToTeam(\'' + escAttr(e.teamKey) + '\')">' + escHtml(drTeamName(e.teamKey)) + '</span></td>'
       + '<td class="dr-val">' + statFn(e) + '</td></tr>';
   }).join('');
   return '<div class="dr-card"><div class="panel-title">' + title + '</div>'
     + '<div class="table-wrap"><table class="dr-table"><thead><tr>'
-    + '<th class="dr-rk">Rk</th><th>Player</th><th class="dr-jersey">#</th><th>Team</th><th class="dr-val">' + statHead + '</th>'
+    + '<th class="dr-rk">Rk</th><th>Player</th><th>Team</th><th class="dr-val">' + statHead + '</th>'
     + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
 }
 
@@ -2800,7 +2799,7 @@ function drScoringBalance(entries) {
     var t = byTeam[e.teamKey] || (byTeam[e.teamKey] = { key: e.teamKey, label: drTeamName(e.teamKey), goals: 0, scorers: 0, top: null });
     t.goals += (e.G || 0);
     if ((e.G || 0) > 0) t.scorers++;
-    if (!t.top || (e.G || 0) > t.top.G) t.top = { name: e.playerName, id: e.playerId, G: e.G || 0 };
+    if (!t.top || (e.G || 0) > t.top.G) t.top = { name: e.playerName, id: e.playerId, G: e.G || 0, jersey: e.jersey };
   });
   var rows = Object.keys(byTeam).map(function(k) { return byTeam[k]; })
     .filter(function(t) { return t.goals > 0; })
@@ -2811,7 +2810,7 @@ function drScoringBalance(entries) {
     var pct = Math.round(t.share * 100);
     return '<tr><td><span class="team-link" onclick="goToTeam(\'' + escAttr(t.key) + '\')">' + escHtml(t.label) + '</span></td>'
       + '<td class="dr-val">' + t.goals + '</td>'
-      + '<td>' + (t.top ? '<span class="team-link" onclick="goToPlayer(' + t.top.id + ')">' + escHtml(t.top.name) + '</span> <span class="dr-sub">' + t.top.G + 'g</span>' : '&mdash;') + '</td>'
+      + '<td>' + (t.top ? '<span class="team-link" onclick="goToPlayer(' + t.top.id + ')">' + escHtml(t.top.name) + '</span>' + jerseyLabel(t.top.jersey) + ' <span class="dr-sub">' + t.top.G + 'g</span>' : '&mdash;') + '</td>'
       + '<td class="dr-val">' + t.scorers + '</td>'
       + '<td class="dr-share"><span class="dr-barwrap"><span class="dr-bar" style="width:' + pct + '%"></span></span><span class="dr-pct">' + pct + '%</span></td></tr>';
   }).join('');
@@ -3485,6 +3484,13 @@ function byLabel(playerId) {
   var p = APP.playerById[playerId];
   if (!p || !p.born) return '';
   return '<span class="birth-yr">\'' + String(p.born).slice(2) + '</span>';
+}
+
+// A jersey number as a small tile, sitting just before the birth-year one.
+function jerseyLabel(jersey) {
+  jersey = (jersey == null ? '' : String(jersey)).trim();
+  if (!jersey) return '';
+  return '<span class="jersey-yr">#' + escHtml(jersey) + '</span>';
 }
 
 function bornLabel(playerId) {
