@@ -439,7 +439,7 @@
   <span class="load-status" id="load-status">✓ Loaded</span>
   <div class="tab-bar">
     <button class="tab-btn active" onclick="showView('schedule',this)">Schedule</button>
-    <button class="tab-btn" onclick="showView('browse',this)">Stats by Season</button>
+    <button class="tab-btn" onclick="showView('browse',this)">Stats</button>
     <button class="tab-btn" onclick="showView('migration',this);renderMigration()">Player Flow</button>
   </div>
 </header>
@@ -1215,7 +1215,7 @@ function showView(v, btn) {
 //: date, so there is one thing to change when this file changes rather than two
 //: that can quietly disagree. There is no build step to derive it from -- that
 //: is a deliberate property of this file, not an oversight.
-var VIEWER_VERSION = '2026.08.27';
+var VIEWER_VERSION = '2026.08.28';
 
 var SCHEDULE = { rows: null, loading: null, partial: null };
 
