@@ -3255,16 +3255,18 @@ function playerCurvePanel(skaterEntries, goalieEntries) {
   if (!src.length) return '';
   var bySeason = {};
   src.forEach(function(e) {
-    var b = bySeason[e.season] || (bySeason[e.season] = { gp: 0, pts: 0, ga: 0 });
+    var b = bySeason[e.season] || (bySeason[e.season] = { gp: 0, pts: 0, ga: 0, teams: [] });
     b.gp += parseInt(e.GP) || 0;
     b.pts += entryPts(e);
     b.ga += entryGA(e);
+    if (e.team && b.teams.indexOf(e.team) === -1) b.teams.push(e.team);
   });
   var points = Object.keys(bySeason).map(Number).sort(function(a, b) { return a - b; })
     .filter(function(s) { return bySeason[s].gp > 0; })
     .map(function(s) {
       var b = bySeason[s];
-      return { label: SEASON_LABELS[s], gp: b.gp, value: useSk ? b.pts / b.gp : b.ga / b.gp };
+      return { label: SEASON_LABELS[s], gp: b.gp, value: useSk ? b.pts / b.gp : b.ga / b.gp,
+               teams: b.teams.join(', ') };
     });
   if (points.length < 2) return '';
   var title = useSk ? 'Points per game' : 'Goals against per game';
@@ -3293,7 +3295,7 @@ function devCurveSvg(points) {
   var line = points.map(function(p, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p.value).toFixed(1); }).join(' ');
   var marks = points.map(function(p, i) {
     var x = X(i).toFixed(1), y = Y(p.value);
-    return '<circle class="dc-dot" cx="' + x + '" cy="' + y.toFixed(1) + '" r="4"><title>' + escHtml(p.label) + ': ' + p.value.toFixed(2) + ' (' + p.gp + ' GP)</title></circle>'
+    return '<circle class="dc-dot" cx="' + x + '" cy="' + y.toFixed(1) + '" r="4"><title>' + escHtml(p.label) + ': ' + p.value.toFixed(2) + ' (' + p.gp + ' GP)' + (p.teams ? '\n' + escHtml(p.teams) : '') + '</title></circle>'
       + '<text class="dc-val" x="' + x + '" y="' + (y - 10).toFixed(1) + '" text-anchor="middle">' + p.value.toFixed(2) + '</text>'
       + '<text class="dc-x" x="' + x + '" y="' + (H - padB + 18) + '" text-anchor="middle">' + escHtml(p.label) + '</text>';
   }).join('');
