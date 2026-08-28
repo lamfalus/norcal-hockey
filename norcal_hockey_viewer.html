@@ -267,6 +267,11 @@
   .ctc-stat small{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
   .team-pill{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:.75rem;margin:2px;cursor:pointer;color:var(--accent);transition:background .12s;}
   .team-pill:hover{background:#1a2240;border-color:var(--accent);}
+  /* The rosters column can hold twenty-odd team pills. Left to the table's
+     default nowrap they run off the panel and scroll the whole page sideways;
+     held to the container, they wrap down the cell instead. */
+  .club-summary{width:100%;}
+  .club-summary td.roster-cell{white-space:normal;}
   .birth-yr{display:inline-block;font-size:.68rem;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:0 4px;margin-left:5px;vertical-align:middle;white-space:nowrap;}
 
   .load-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:500;transition:all .15s;white-space:nowrap;}
@@ -2087,7 +2092,7 @@ function renderClubOverview(club, content) {
     <td><span class="season-badge" style="cursor:pointer" onclick="setClubSeason(${r.season})">${SEASON_LABELS[r.season]}</span></td>
     <td class="num">${r.teams.length}</td>
     <td class="num">${r.playerCount}</td>
-    <td>${r.teams.map(t => `<span class="team-pill" onclick="setClubSeasonTeam(${r.season},'${escAttr(t.key)}')">${escHtml(t.short)}</span>`).join(' ')}</td>
+    <td class="roster-cell">${r.teams.map(t => `<span class="team-pill" onclick="setClubSeasonTeam(${r.season},'${escAttr(t.key)}')">${escHtml(t.short)}</span>`).join(' ')}</td>
   </tr>`).join('');
 
   content.innerHTML = `
@@ -2098,7 +2103,7 @@ function renderClubOverview(club, content) {
     <div class="panel">
       <div class="panel-title">Season-by-Season Summary</div>
       <div class="table-wrap">
-        <table>
+        <table class="club-summary">
           <thead><tr>
             <th>Season</th>
             <th style="text-align:right">Teams</th>
