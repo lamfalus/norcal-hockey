@@ -1,0 +1,16 @@
+[Unit]
+Description=Nightly push of NorCal scorecards to Google Drive
+Documentation=https://github.com/lamfalus/norcal-hockey
+
+[Timer]
+# After the 03:52 collector has derived, exported and published (~05:15), so
+# the push catches both the backfill's historical season and the current one.
+OnCalendar=*-*-* 06:00:00
+RandomizedDelaySec=15m
+
+# If the Pi was off at 06:00, run once it is back; rclone copy is incremental
+# so a late run simply uploads whatever is new.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

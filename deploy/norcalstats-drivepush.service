@@ -1,0 +1,43 @@
+[Unit]
+Description=NorCal scorecards -> Google Drive (named mirror + rclone copy)
+Documentation=https://github.com/lamfalus/norcal-hockey
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=%i
+WorkingDirectory=/home/%i/norcal-hockey
+Environment=PYTHONUNBUFFERED=1
+
+# First decompress any newly-collected scorecards into the named tree, then
+# copy that tree to Drive. rclone copy is incremental -- only new files upload
+# -- so a night adds just the season the backfill fetched. If export fails the
+# copy does not run (a failed ExecStart stops the rest).
+ExecStart=/usr/bin/python3 deploy/export-scorecards.py --config /home/%i/norcal-hockey/norcalstats.json
+ExecStart=/usr/bin/rclone copy data/scorecards "gdrive:NorCal Scorecards" --transfers=4 --stats=5m --stats-one-line
+
+# The shared client id is slow, so a season's push can take a few hours; that
+# is fine at this priority. It reads the database read-only and writes only the
+# mirror, so it never contends with the collector.
+TimeoutStartSec=8h
+Nice=15
+IOSchedulingClass=idle
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+# rclone refreshes its OAuth token and writes it back to its config, and keeps
+# a cache, so those dirs are writable alongside the repo (which holds the
+# mirror). Home is otherwise read-only under ProtectSystem=strict.
+ReadWritePaths=/home/%i/norcal-hockey /home/%i/.config/rclone /home/%i/.cache/rclone
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
