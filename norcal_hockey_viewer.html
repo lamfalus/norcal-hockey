@@ -434,8 +434,9 @@
      a control that visibly does nothing is worse than no control, and one
      doing something invisibly is worse than either.
 
-     The order is fixed -- season, league, game type, then whatever the view
-     asks for itself -- so the same question is always in the same place. -->
+     The order is fixed -- season, league, then whatever the view asks for
+     itself, with game type always last in the rightmost slot -- so the same
+     question is always in the same place. -->
 <details class="filter-panel" id="filters" open>
   <summary id="filter-summary">Filters</summary>
   <div class="controls" id="filter-controls">
@@ -459,22 +460,6 @@
         <option value="">&mdash; all leagues &mdash;</option>
       </select>
     </label>
-
-    <!-- The schedule asks the neighbouring question -- what kind of fixture to
-         list, not what a total should count -- so it keeps a set of its own in
-         the same slot under the same name. -->
-    <div class="filter-group" data-views="schedule">Game Type
-      <details class="type-menu" id="sched-type-menu">
-        <summary id="sched-type-summary">All types</summary>
-        <div class="type-list" id="sched-type-boxes"></div>
-      </details>
-    </div>
-    <div class="filter-group" data-views="browse club player">Game Type
-      <details class="type-menu" id="gameclass-menu">
-        <summary id="gameclass-summary">All types</summary>
-        <div class="type-list" id="gameclass-boxes"></div>
-      </details>
-    </div>
 
     <!-- The teams' divisions, not the game's level. Those are different
          things and the column still shows the other one: a 13U AAA team can
@@ -529,6 +514,23 @@
         <option value="9">9+</option>
       </select>
     </label>
+
+    <!-- Game Type sits last, in the rightmost slot every view shares, so the
+         same question is always in the same place. The schedule asks the
+         neighbouring question -- what kind of fixture to list, not what a total
+         should count -- so it keeps a set of its own under the same name. -->
+    <div class="filter-group" data-views="schedule">Game Type
+      <details class="type-menu" id="sched-type-menu">
+        <summary id="sched-type-summary">All types</summary>
+        <div class="type-list" id="sched-type-boxes"></div>
+      </details>
+    </div>
+    <div class="filter-group" data-views="browse club player">Game Type
+      <details class="type-menu" id="gameclass-menu">
+        <summary id="gameclass-summary">All types</summary>
+        <div class="type-list" id="gameclass-boxes"></div>
+      </details>
+    </div>
 
     <span class="filter-note" id="filter-note" data-views="browse club player"></span>
   </div>
@@ -1196,7 +1198,7 @@ function showView(v, btn) {
 //: date, so there is one thing to change when this file changes rather than two
 //: that can quietly disagree. There is no build step to derive it from -- that
 //: is a deliberate property of this file, not an oversight.
-var VIEWER_VERSION = '2026.08.24';
+var VIEWER_VERSION = '2026.08.27';
 
 var SCHEDULE = { rows: null, loading: null, partial: null };
 
@@ -2434,7 +2436,7 @@ function goToPlayer(playerId) {
   document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
   document.getElementById('view-player').classList.add('active');
-  document.querySelectorAll('.tab-btn')[2].classList.add('active');
+  document.querySelectorAll('.tab-btn')[3].classList.add('active');
   // The filter bar reads this to decide which of its controls mean anything
   // here. Without it a player reached from the schedule keeps the schedule's
   // rules, which hide "Games counted" -- a filter still applying, with its
@@ -2453,7 +2455,7 @@ function goToBrowseTeam(key) {
   document.querySelectorAll('.view').forEach(function(el) { el.classList.remove('active'); });
   document.querySelectorAll('.tab-btn').forEach(function(el) { el.classList.remove('active'); });
   document.getElementById('view-browse').classList.add('active');
-  document.querySelectorAll('.tab-btn')[0].classList.add('active');
+  document.querySelectorAll('.tab-btn')[1].classList.add('active');
   markActiveView('browse');
   document.getElementById('sel-season').value = match.season;
   onSeasonChange();
@@ -3300,7 +3302,8 @@ function goToClub(club, season) {
   document.querySelectorAll('.view').forEach(function(el) { el.classList.remove('active'); });
   document.querySelectorAll('.tab-btn').forEach(function(el) { el.classList.remove('active'); });
   document.getElementById('view-club').classList.add('active');
-  document.querySelectorAll('.tab-btn')[1].classList.add('active');
+  document.querySelectorAll('.tab-btn')[2].classList.add('active');
+  markActiveView('club');
   refreshClubOptions();
   document.getElementById('sel-club').value = club;
   document.getElementById('sel-club-season').value = season || '';
