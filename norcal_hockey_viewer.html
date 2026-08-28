@@ -18,6 +18,13 @@
   .tab-bar{display:flex;gap:4px;margin-left:auto;}
   .tab-btn{background:transparent;border:1px solid transparent;color:var(--muted);padding:7px 18px;border-radius:6px;cursor:pointer;font-size:.9rem;font-weight:500;transition:all .15s;}
   .tab-btn:hover{color:var(--text);background:var(--surface2);}
+  /* The header search grows to fill the gap between the wordmark and the tabs,
+     capped so it never crowds them out on a wide screen. */
+  .global-search{position:relative;flex:1 1 240px;min-width:150px;max-width:440px;}
+  .global-search input{width:100%;}
+  /* A muted heading before each block of results, so a name that is both a club
+     and a division reads as two answers, not one guess. */
+  .ac-group{padding:6px 14px 4px;font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--surface2);border-bottom:1px solid var(--border);}
   .tab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
   main{max-width:1200px;margin:0 auto;padding:28px 20px;}
   .view{display:none;}.view.active{display:block;}
@@ -224,7 +231,6 @@
   .note-link{color:var(--accent);cursor:pointer;font-weight:600;text-decoration:underline;
              background:none;border:none;padding:0;font:inherit;}
   .div-badge{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 7px;font-size:.75rem;color:var(--muted);}
-  .search-wrap{position:relative;}
   .autocomplete-list{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;max-height:260px;overflow-y:auto;z-index:200;}
   .autocomplete-item{padding:9px 14px;cursor:pointer;font-size:.9rem;border-bottom:1px solid var(--border);transition:background .1s;display:flex;justify-content:space-between;align-items:center;}
   .autocomplete-item:last-child{border-bottom:none;}
@@ -274,7 +280,9 @@
     header h1{font-size:.95rem;}
     header h1 span{display:none;}
     .load-status{display:none !important;}
-    .tab-bar{margin-left:0;width:100%;gap:2px;}
+    /* Search takes its own full-width row between the wordmark and the tabs. */
+    .global-search{order:2;flex-basis:100%;max-width:none;min-width:0;}
+    .tab-bar{order:3;margin-left:0;width:100%;gap:2px;}
     .tab-btn{flex:1;text-align:center;padding:8px 2px;font-size:.72rem;
              border-radius:5px;}
     /* A player's teams are named in full, so on a phone they wrap; tightened
@@ -317,7 +325,6 @@
     #filter-controls > [data-views]{width:auto;min-width:0;}
     .filter-note{grid-column:1 / -1;margin-left:0;font-size:.72rem;}
     select,input[type=text]{min-width:0;width:100%;font-size:16px;padding:7px 9px;}
-    .search-wrap{width:100%;}
     /* A label long enough to wrap would push its row taller than its neighbour. */
     .controls label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
@@ -415,14 +422,19 @@
 <body>
 <header>
   <h1>⛸ California Hockey <span>Stats DB</span></h1>
-  <div style="display:flex;align-items:center;gap:6px;margin-left:auto;margin-right:16px;">
-    <span class="load-status" id="load-status">✓ Loaded</span>
+  <!-- One search bar, always here, doing the job the Player Lookup and Club
+       View tabs used to: type a player, a club or a division and it takes you
+       to that page -- whether or not a tab exists for it. -->
+  <div class="global-search" id="global-search-wrap">
+    <input type="text" id="global-search" placeholder="Search players, clubs, divisions…"
+           autocomplete="off" oninput="onGlobalSearch()" onkeydown="onGlobalKey(event)"
+           onfocus="onGlobalSearch()">
+    <div class="autocomplete-list" id="global-ac" style="display:none"></div>
   </div>
+  <span class="load-status" id="load-status">✓ Loaded</span>
   <div class="tab-bar">
     <button class="tab-btn active" onclick="showView('schedule',this)">Schedule</button>
     <button class="tab-btn" onclick="showView('browse',this)">Stats by Season</button>
-    <button class="tab-btn" onclick="showView('club',this)">Club View</button>
-    <button class="tab-btn" onclick="showView('player',this)">Player Lookup</button>
     <button class="tab-btn" onclick="showView('migration',this);renderMigration()">Player Flow</button>
   </div>
 </header>
@@ -562,18 +574,11 @@
   </div>
 </div>
 
-<!-- VIEW 3: Player Lookup -->
+<!-- VIEW 3: a single player. No tab of its own any more -- reached from the
+     header search or by clicking a name, the way the team page is. -->
 <div class="view" id="view-player">
-  <div class="panel">
-    <div class="panel-title">Search for a Player</div>
-    <div class="search-wrap">
-      <input type="text" id="player-search" placeholder="Type a player name…" autocomplete="off"
-             oninput="onPlayerSearch()" onkeydown="onSearchKey(event)">
-      <div class="autocomplete-list" id="ac-list" style="display:none"></div>
-    </div>
-  </div>
   <div id="player-content">
-    <div class="empty"><div class="icon">👤</div>Search for a player to see their full history.</div>
+    <div class="empty"><div class="icon">👤</div>Search for a player above to see their full history.</div>
   </div>
 </div>
 
@@ -1075,6 +1080,18 @@ function loadSeasonGames(season) {
 }
 
 // ── View switching ──
+// Only three views own a tab. Club, player, team and a division-filtered
+// schedule are all drill-down destinations reached from the search bar or a
+// link, and leave the bar unhighlighted the way the team page always has --
+// so navigation names a view, never a brittle tab index.
+var TAB_INDEX = { schedule: 0, browse: 1, migration: 2 };
+function markTab(view) {
+  var tabs = document.querySelectorAll('.tab-btn');
+  tabs.forEach(function(el) { el.classList.remove('active'); });
+  var ti = TAB_INDEX[view];
+  if (ti != null && tabs[ti]) tabs[ti].classList.add('active');
+}
+
 function captureAppState(viewOverride) {
   var views = ['schedule','browse','club','player','team','migration'];
   var v = viewOverride || views.find(function(v){ return document.getElementById('view-'+v).classList.contains('active'); }) || 'schedule';
@@ -1102,10 +1119,9 @@ function captureAppState(viewOverride) {
 }
 function applyAppState(s) {
   if (!s || !s.view) return;
-  var viewOrder = ['schedule','browse','club','player','migration'];
   if (s.view === 'team') {
     document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
-    document.querySelectorAll('.tab-btn').forEach(function(el){el.classList.remove('active');});
+    markTab('team');
     document.getElementById('view-team').classList.add('active');
     markActiveView('team');
     if (s.teamKey) renderTeam(s.teamKey);
@@ -1113,11 +1129,9 @@ function applyAppState(s) {
     return;
   }
   document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
-  document.querySelectorAll('.tab-btn').forEach(function(el){el.classList.remove('active');});
+  markTab(s.view);
   document.getElementById('view-'+s.view).classList.add('active');
   markActiveView(s.view);
-  var ti = viewOrder.indexOf(s.view);
-  if (ti >= 0) document.querySelectorAll('.tab-btn')[ti].classList.add('active');
   if (s.view === 'schedule') {
     // The dropdowns may not be filled yet if the back button lands here before
     // the schedule has loaded; initSchedule renders once it is.
@@ -1150,9 +1164,7 @@ function applyAppState(s) {
     if (s.div)  document.getElementById('sel-div-browse').value = s.div;
     onBrowseRender();
   } else if (s.view === 'player') {
-    var p = APP.playerById[s.playerId];
-    document.getElementById('player-search').value = p ? p.name : '';
-    document.getElementById('ac-list').style.display = 'none';
+    document.getElementById('global-ac').style.display = 'none';
     if (s.playerId) renderPlayerHistory(s.playerId);
   } else if (s.view === 'club') {
     if (s.clubName)   document.getElementById('sel-club').value = s.clubName;
@@ -2365,7 +2377,7 @@ function setClubSeasonTeam(season, key) {
 
 
 // ════════════════════════════════════════
-// VIEW 3: Player Lookup
+// The player page + the global search bar
 // ════════════════════════════════════════
 // Players are addressed by id, never by name: a quarter of them share a
 // display name with somebody else, so a name is a search term, not a handle.
@@ -2393,59 +2405,151 @@ function lastSeenFor(playerId) {
   return best;
 }
 
-function onPlayerSearch() {
-  const q = document.getElementById('player-search').value.trim().toLowerCase();
-  const list = document.getElementById('ac-list');
+// ── Global search ───────────────────────────────────────────────────────────
+// The header bar searches players, clubs and divisions at once. A single query
+// can match all three, so results are grouped under a heading each and capped
+// per type -- a common run of letters in 3,000 player names can never bury the
+// handful of clubs or divisions that also match.
+var GLOBAL_RESULTS = [];
+var TYPE_LABEL = { division: 'Divisions', club: 'Clubs', player: 'Players' };
+var TYPE_ORDER = ['division', 'club', 'player'];
+var TYPE_CAP   = { division: 6, club: 6, player: 20 };
+
+// Players come from the same index the old lookup used; clubs from APP.clubs;
+// divisions from the schedule's own filter list, so a picked division is always
+// a value that filter recognises. Divisions arrive once the schedule has
+// loaded, so the index is only cached as complete after they are present.
+function globalSearchIndex() {
+  var divSel = document.getElementById('sel-sched-div');
+  var divReady = !!(divSel && divSel.options.length > 1);
+  if (APP._globalIdx && APP._globalDivReady) return APP._globalIdx;
+  var items = [];
+  playerSearchIndex().forEach(function(p) {
+    items.push({ type: 'player', id: p.id, name: p.name, hay: p.hay });
+  });
+  (APP.clubs || []).forEach(function(name) {
+    var disp = clubDisplayName(name);
+    items.push({ type: 'club', id: name, name: disp,
+                 hay: (disp + ' ' + name).toLowerCase() });
+  });
+  if (divReady) {
+    Array.prototype.forEach.call(divSel.options, function(o) {
+      if (!o.value) return;
+      items.push({ type: 'division', id: o.value, name: o.value,
+                   hay: o.value.toLowerCase() });
+    });
+  }
+  APP._globalIdx = items;
+  APP._globalDivReady = divReady;
+  return items;
+}
+
+function onGlobalSearch() {
+  var q = document.getElementById('global-search').value.trim().toLowerCase();
+  var list = document.getElementById('global-ac');
   acFocusIdx = -1;
+  GLOBAL_RESULTS = [];
   if (!q) { list.style.display = 'none'; return; }
-  const matches = playerSearchIndex().filter(p => p.hay.indexOf(q) !== -1).slice(0, 30);
-  if (!matches.length) { list.style.display = 'none'; return; }
-  list.innerHTML = matches.map(function(m) {
-    const player = APP.playerById[m.id];
-    const seasons = [...new Set(player.seasons.map(s => s.season))].sort();
-    const last = lastSeenFor(m.id);
-    const sub = (seasons.length ? seasons.map(s => SEASON_LABELS[s]).join(', ') : 'no games counted')
-      + (last ? ' · ' + last.team : '');
-    return '<div class="autocomplete-item" onclick="selectPlayer(' + m.id + ')"><span>'
-      + escHtml(m.name) + bornLabel(m.id) + '</span><span class="ac-sub">' + escHtml(sub) + '</span></div>';
-  }).join('');
+  var hits = globalSearchIndex().filter(function(it) { return it.hay.indexOf(q) !== -1; });
+  // A name that starts with the query beats one that merely contains it, so
+  // "cup" surfaces Cupertino ahead of a name with those letters mid-word.
+  hits.sort(function(a, b) {
+    var ap = a.name.toLowerCase().indexOf(q) === 0 ? 0 : 1;
+    var bp = b.name.toLowerCase().indexOf(q) === 0 ? 0 : 1;
+    return ap - bp || a.name.localeCompare(b.name);
+  });
+  var byType = { division: [], club: [], player: [] };
+  hits.forEach(function(it) {
+    if (byType[it.type].length < TYPE_CAP[it.type]) byType[it.type].push(it);
+  });
+  var html = '';
+  TYPE_ORDER.forEach(function(t) {
+    if (!byType[t].length) return;
+    html += '<div class="ac-group">' + TYPE_LABEL[t] + '</div>';
+    byType[t].forEach(function(it) {
+      var idx = GLOBAL_RESULTS.length;
+      GLOBAL_RESULTS.push(it);
+      html += renderGlobalItem(it, idx);
+    });
+  });
+  if (!html) { list.style.display = 'none'; return; }
+  list.innerHTML = html;
   list.style.display = 'block';
 }
 
-function onSearchKey(e) {
-  const list = document.getElementById('ac-list');
-  const items = list.querySelectorAll('.autocomplete-item');
+function renderGlobalItem(it, idx) {
+  var main, sub;
+  if (it.type === 'player') {
+    var player = APP.playerById[it.id];
+    var seasons = [...new Set(player.seasons.map(function(s) { return s.season; }))].sort();
+    var last = lastSeenFor(it.id);
+    sub = (seasons.length ? seasons.map(function(s) { return SEASON_LABELS[s]; }).join(', ') : 'no games counted')
+        + (last ? ' · ' + last.team : '');
+    main = escHtml(it.name) + bornLabel(it.id);
+  } else {
+    main = escHtml(it.name);
+    sub = it.type === 'club' ? 'Club page' : 'Schedule';
+  }
+  return '<div class="autocomplete-item" onclick="pickGlobalAt(' + idx + ')"><span>'
+    + main + '</span><span class="ac-sub">' + escHtml(sub) + '</span></div>';
+}
+
+// Results carry no user text into the onclick -- they are addressed by their
+// slot in GLOBAL_RESULTS, so a club or division name with a quote in it can
+// never break the markup or the routing.
+function pickGlobalAt(idx) {
+  var it = GLOBAL_RESULTS[idx];
+  if (!it) return;
+  document.getElementById('global-ac').style.display = 'none';
+  document.getElementById('global-search').value = it.name;
+  if (it.type === 'player') goToPlayer(it.id);
+  else if (it.type === 'club') goToClub(it.id);
+  else if (it.type === 'division') goToScheduleDivision(it.id);
+}
+
+function onGlobalKey(e) {
+  var list = document.getElementById('global-ac');
+  var items = list.querySelectorAll('.autocomplete-item');
   if (!items.length) return;
-  if (e.key === 'ArrowDown') { acFocusIdx = Math.min(acFocusIdx + 1, items.length - 1); items.forEach((el, i) => el.classList.toggle('focused', i === acFocusIdx)); e.preventDefault(); }
-  else if (e.key === 'ArrowUp') { acFocusIdx = Math.max(acFocusIdx - 1, 0); items.forEach((el, i) => el.classList.toggle('focused', i === acFocusIdx)); e.preventDefault(); }
+  if (e.key === 'ArrowDown') { acFocusIdx = Math.min(acFocusIdx + 1, items.length - 1); items.forEach(function(el, i) { el.classList.toggle('focused', i === acFocusIdx); }); if (items[acFocusIdx]) items[acFocusIdx].scrollIntoView({ block: 'nearest' }); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { acFocusIdx = Math.max(acFocusIdx - 1, 0); items.forEach(function(el, i) { el.classList.toggle('focused', i === acFocusIdx); }); if (items[acFocusIdx]) items[acFocusIdx].scrollIntoView({ block: 'nearest' }); e.preventDefault(); }
   else if (e.key === 'Enter' && acFocusIdx >= 0) items[acFocusIdx].click();
   else if (e.key === 'Escape') list.style.display = 'none';
 }
-document.addEventListener('click', e => { if (!e.target.closest('.search-wrap')) document.getElementById('ac-list').style.display = 'none'; });
-
-function selectPlayer(playerId) {
-  const p = APP.playerById[playerId];
-  document.getElementById('player-search').value = p ? p.name : '';
-  document.getElementById('ac-list').style.display = 'none';
-  history.pushState({ view: 'player', playerId: playerId }, '');
-  renderPlayerHistory(playerId);
-}
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.global-search')) document.getElementById('global-ac').style.display = 'none';
+});
 
 function goToPlayer(playerId) {
-  const p = APP.playerById[playerId];
   document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  markTab('player');
   document.getElementById('view-player').classList.add('active');
-  document.querySelectorAll('.tab-btn')[3].classList.add('active');
   // The filter bar reads this to decide which of its controls mean anything
   // here. Without it a player reached from the schedule keeps the schedule's
   // rules, which hide "Games counted" -- a filter still applying, with its
   // control taken away.
   markActiveView('player');
-  document.getElementById('player-search').value = p ? p.name : '';
-  document.getElementById('ac-list').style.display = 'none';
+  document.getElementById('global-ac').style.display = 'none';
   history.pushState({ view: 'player', playerId: playerId }, '');
   renderPlayerHistory(playerId);
+}
+
+// Land on the schedule with a division picked -- there is no division page, and
+// the schedule is where a division reads as itself: who it plays and when.
+function goToScheduleDivision(divName) {
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  markTab('schedule');
+  document.getElementById('view-schedule').classList.add('active');
+  markActiveView('schedule');
+  var divSel = document.getElementById('sel-sched-div');
+  if (divSel) divSel.value = divName;
+  // Clear the club filter so the division is not silently narrowed to whatever
+  // club happened to be set.
+  var clubSel = document.getElementById('sel-sched-club');
+  if (clubSel) clubSel.value = '';
+  renderSchedule();
+  history.pushState(captureAppState('schedule'), '');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // Kept for history entries written before the team page existed.
@@ -2453,9 +2557,8 @@ function goToBrowseTeam(key) {
   const match = ALL_ENTRIES.filter(e => e.teamKey === key)[0];
   if (!match) return;
   document.querySelectorAll('.view').forEach(function(el) { el.classList.remove('active'); });
-  document.querySelectorAll('.tab-btn').forEach(function(el) { el.classList.remove('active'); });
+  markTab('browse');
   document.getElementById('view-browse').classList.add('active');
-  document.querySelectorAll('.tab-btn')[1].classList.add('active');
   markActiveView('browse');
   document.getElementById('sel-season').value = match.season;
   onSeasonChange();
@@ -3300,9 +3403,8 @@ function renderTeamRoster(roster) {
 
 function goToClub(club, season) {
   document.querySelectorAll('.view').forEach(function(el) { el.classList.remove('active'); });
-  document.querySelectorAll('.tab-btn').forEach(function(el) { el.classList.remove('active'); });
+  markTab('club');
   document.getElementById('view-club').classList.add('active');
-  document.querySelectorAll('.tab-btn')[2].classList.add('active');
   markActiveView('club');
   refreshClubOptions();
   document.getElementById('sel-club').value = club;
