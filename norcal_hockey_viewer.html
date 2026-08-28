@@ -286,6 +286,7 @@
   .dr-table td{padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;}
   .dr-table tbody tr:last-child td{border-bottom:none;}
   .dr-rk{color:var(--muted);text-align:right;width:2.4em;font-variant-numeric:tabular-nums;}
+  .dr-jersey{color:var(--muted);font-variant-numeric:tabular-nums;width:2.2em;}
   .dr-table td.dr-val,.dr-table th.dr-val{text-align:right;font-variant-numeric:tabular-nums;}
   .dr-sub{color:var(--muted);font-size:.82em;}
   .dr-share{min-width:132px;}
@@ -2768,12 +2769,13 @@ function drMiniTable(title, rows, statHead, statFn) {
   var body = rows.map(function(e, i) {
     return '<tr><td class="dr-rk">' + (i + 1) + '</td>'
       + '<td><span class="team-link" onclick="goToPlayer(' + e.playerId + ')">' + escHtml(e.playerName) + '</span>' + bornLabel(e.playerId) + '</td>'
+      + '<td class="dr-jersey">' + escHtml(e.jersey || '') + '</td>'
       + '<td><span class="team-link" onclick="goToTeam(\'' + escAttr(e.teamKey) + '\')">' + escHtml(drTeamName(e.teamKey)) + '</span></td>'
       + '<td class="dr-val">' + statFn(e) + '</td></tr>';
   }).join('');
   return '<div class="dr-card"><div class="panel-title">' + title + '</div>'
     + '<div class="table-wrap"><table class="dr-table"><thead><tr>'
-    + '<th class="dr-rk">Rk</th><th>Player</th><th>Team</th><th class="dr-val">' + statHead + '</th>'
+    + '<th class="dr-rk">Rk</th><th>Player</th><th class="dr-jersey">#</th><th>Team</th><th class="dr-val">' + statHead + '</th>'
     + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
 }
 
