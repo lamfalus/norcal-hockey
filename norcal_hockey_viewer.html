@@ -298,6 +298,8 @@
   .dr-neg{color:var(--red);font-weight:600;}
   .dr-none,.dr-loading{color:var(--muted);font-size:.85rem;margin:0;}
   .dr-amp{color:var(--muted);padding:0 2px;}
+  .flow-season{display:inline-flex;align-items:center;gap:8px;font-size:.82rem;color:var(--muted);}
+  .flow-season select{min-width:0;padding:6px 10px;}
 
   /* ── Development curve (player page) ── */
   .devcurve-wrap{overflow-x:auto;}
@@ -420,7 +422,7 @@
     .box-meta{font-size:.75rem;}
     /* The flow chart is drawn at a fixed 500px minimum and scrolls; letting it
        shrink to fit rendered its labels at 7.6px. */
-    #migration-content{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    #club-flow,#team-flow{-webkit-overflow-scrolling:touch;}
     /* Misc */
     .empty{padding:40px 16px;}
     .section-heading h2{font-size:1.1rem;}
@@ -477,7 +479,6 @@
     <button class="tab-btn active" onclick="showView('schedule',this)">Schedule</button>
     <button class="tab-btn" onclick="showView('browse',this)">Stats</button>
     <button class="tab-btn" onclick="showView('division',this)">Division</button>
-    <button class="tab-btn" onclick="showView('migration',this);renderMigration()">Player Flow</button>
   </div>
 </header>
 <main>
@@ -641,35 +642,14 @@
   </div>
 </div>
 
-<!-- VIEW 4: Player Flow / Migration -->
-<div class="view" id="view-migration">
-  <div class="panel">
-    <div class="panel-title">Player Flow Between Clubs — Season to Season</div>
-    <div class="controls">
-      <label>Season
-        <select id="mig-season" onchange="renderMigration()">
-          <option value="27">'21-'22</option>
-          <option value="28">'22-'23</option>
-          <option value="29">'23-'24</option>
-          <option value="30">'24-'25</option>
-          <option value="31" selected>'25-'26</option>
-        </select>
-      </label>
-      <select id="mig-min-flow" style="display:none"><option value="1" selected>1+</option></select>
-      <label>Club
-        <select id="mig-focus-club" onchange="onMigFocusChange()">
-          <option value="">All clubs</option>
-        </select>
-      </label>
-      <label>Specific Team
-        <select id="mig-team-filter" onchange="renderMigration()">
-          <option value="">All teams</option>
-        </select>
-      </label>
-    </div>
-  </div>
-  <div id="migration-content" style="overflow-x:auto;padding:0 4px;"></div>
-  <div style="margin-top:12px;padding:0 4px;" id="migration-legend"></div>
+<!-- The player-flow chart has no tab of its own any more: it is drawn onto the
+     club and team pages, focused on that club or team. These controls survive
+     only as the state the drawing reads -- nothing shows them. -->
+<div id="flow-controls" hidden>
+  <select id="mig-season"></select>
+  <select id="mig-min-flow"><option value="1" selected>1+</option></select>
+  <select id="mig-focus-club"><option value="">All clubs</option></select>
+  <select id="mig-team-filter"><option value="">All teams</option></select>
 </div>
 
 <!-- VIEW 5: a single team. Reached by clicking a team anywhere, not from the
@@ -1143,7 +1123,7 @@ function loadSeasonGames(season) {
 // schedule are all drill-down destinations reached from the search bar or a
 // link, and leave the bar unhighlighted the way the team page always has --
 // so navigation names a view, never a brittle tab index.
-var TAB_INDEX = { schedule: 0, browse: 1, division: 2, migration: 3 };
+var TAB_INDEX = { schedule: 0, browse: 1, division: 2 };
 function markTab(view) {
   var tabs = document.querySelectorAll('.tab-btn');
   tabs.forEach(function(el) { el.classList.remove('active'); });
@@ -1237,8 +1217,6 @@ function applyAppState(s) {
     onDrSeasonChange();
     if (s.div) document.getElementById('sel-dr-div').value = s.div;
     renderDivisionReport();
-  } else if (s.view === 'migration') {
-    renderMigration();
   }
   window.scrollTo({top:0, behavior:'smooth'});
 }
@@ -2178,6 +2156,7 @@ function renderClubOverview(club, content) {
     </div>
     ${clubRetention(club, rows)}
   `;
+  if (rows.length >= 2) renderClubFlow(club);
 }
 
 // Club retention & pipeline (#17). How many of a club's players come back the
@@ -2191,14 +2170,7 @@ function clubRetention(club, rows) {
     r.teams.forEach(function(t) { t.entries.forEach(function(e) { set[e.playerId] = true; }); });
     setBySeason[r.season] = set;
   });
-  // Every player's club(s) per season, for tracing where leavers land.
-  var clubOf = {};
-  ALL_ENTRIES.forEach(function(e) {
-    if (!e.club) return;
-    var byS = clubOf[e.playerId] || (clubOf[e.playerId] = {});
-    (byS[e.season] || (byS[e.season] = {}))[e.club] = true;
-  });
-  var transitions = [], destTally = {}, leftData = 0, totalLeavers = 0;
+  var transitions = [];
   for (var i = 0; i < rows.length - 1; i++) {
     var a = rows[i], b = rows[i + 1];
     var A = setBySeason[a.season], B = setBySeason[b.season];
@@ -2212,14 +2184,6 @@ function clubRetention(club, rows) {
       rate: aIds.length ? retained / aIds.length : 0,
       newIn: Object.keys(B).filter(function(id) { return !A[id]; }).length,
       gap: (ya != null && yb != null) ? (yb - ya > 1) : false });
-    aIds.forEach(function(id) {
-      if (B[id]) return;
-      totalLeavers++;
-      var next = (clubOf[id] || {})[b.season];
-      var dests = next ? Object.keys(next).filter(function(c) { return c !== club; }) : [];
-      if (dests.length) dests.forEach(function(c) { destTally[c] = (destTally[c] || 0) + 1; });
-      else leftData++;
-    });
   }
   var rowsHtml = transitions.map(function(t) {
     var pct = Math.round(t.rate * 100);
@@ -2229,28 +2193,41 @@ function clubRetention(club, rows) {
       + '<td class="dr-share"><span class="dr-barwrap"><span class="dr-bar" style="width:' + pct + '%"></span></span><span class="dr-pct">' + pct + '%</span></td>'
       + '<td class="dr-val dr-sub">+' + t.newIn + '</td></tr>';
   }).join('');
-  var dests = Object.keys(destTally).map(function(c) { return { club: c, n: destTally[c] }; })
-    .sort(function(x, y) { return y.n - x.n; }).slice(0, 8);
-  var destHtml = '';
-  if (totalLeavers) {
-    var destRows = dests.map(function(d) {
-      return '<tr><td><span class="team-link" onclick="goToClub(\'' + escAttr(d.club) + '\')">'
-        + escHtml(clubDisplayName(d.club)) + '</span></td><td class="dr-val">' + d.n + '</td></tr>';
-    }).join('');
-    destHtml = '<div class="dr-h" style="margin-top:20px">Where players go when they leave</div>'
-      + '<p class="dr-lede">Counting every season-to-season departure. ' + leftData + ' of ' + totalLeavers
-      + ' left the data entirely &mdash; aged out, or simply stopped being recorded.</p>'
-      + (dests.length ? '<div class="table-wrap"><table class="dr-table"><thead><tr>'
-        + '<th>Destination club</th><th class="dr-val">Players</th></tr></thead><tbody>'
-        + destRows + '</tbody></table></div>'
-        : '<p class="dr-none">Everyone who left the club left the data too.</p>');
-  }
+
+  // Where the players came from and went is the player-flow chart, focused on
+  // this club -- both directions in one picture, where the old table showed only
+  // departures. Centred on the latest season the club was active, its own
+  // seasons on offer.
+  var actSeasons = rows.map(function(r) { return r.season; });
+  var latestActive = actSeasons[actSeasons.length - 1];
+  var seasonOpts = actSeasons.slice().reverse().map(function(s) {
+    return '<option value="' + s + '"' + (s === latestActive ? ' selected' : '') + '>' + escHtml(SEASON_LABELS[s]) + '</option>';
+  }).join('');
+  var flowSection = '<div class="dr-h" style="margin-top:24px">Where players come from &amp; go</div>'
+    + '<p class="dr-lede">The clubs this club\'s players arrived from and left for, season to season. Hover a block to trace one club.</p>'
+    + '<label class="flow-season">Centre on <select id="club-flow-season" onchange="onClubFlowSeasonChange()">' + seasonOpts + '</select></label>'
+    + '<div id="club-flow" style="overflow-x:auto;margin-top:12px"></div>'
+    + '<div id="club-flow-legend" style="margin-top:10px"></div>';
+
   return '<div class="panel dr-panel"><div class="dr-h">Player retention</div>'
     + '<p class="dr-lede">How many of one season\'s players return the next &mdash; and how many are new. A roster is a single season\'s thing, so this counts the players, not the teams.</p>'
     + '<div class="table-wrap"><table class="dr-table"><thead><tr>'
     + '<th>Season change</th><th class="dr-val">Players</th><th class="dr-val">Returned</th><th>Retention</th><th class="dr-val">New</th>'
     + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>'
-    + destHtml + '</div>';
+    + flowSection + '</div>';
+}
+
+// The club's flow chart is drawn after its page is in the DOM, and redrawn when
+// the season control moves.
+function renderClubFlow(club) {
+  var seasonSel = document.getElementById('club-flow-season');
+  var cont = document.getElementById('club-flow');
+  if (!seasonSel || !cont) return;
+  renderFlowInto(cont, document.getElementById('club-flow-legend'),
+    { season: parseInt(seasonSel.value), focusClub: club });
+}
+function onClubFlowSeasonChange() {
+  renderClubFlow(document.getElementById('sel-club').value);
 }
 
 // Each team's record under the filters above.
@@ -3617,14 +3594,13 @@ function onFilterChange() {
   updateFilterSummary();
   refreshClubOptions();
 
-  var active = ['schedule', 'browse', 'club', 'division', 'player', 'migration'].filter(function(v) {
+  var active = ['schedule', 'browse', 'club', 'division', 'player'].filter(function(v) {
     return document.getElementById('view-' + v).classList.contains('active');
   })[0] || 'schedule';
   if (active === 'schedule') renderSchedule();
   else if (active === 'browse') onSeasonChange();
   else if (active === 'club') renderClub();
   else if (active === 'division') onDrSeasonChange();
-  else if (active === 'migration') renderMigration();
   else if (active === 'player') {
     if (CURRENT_PLAYER_ID) renderPlayerHistory(CURRENT_PLAYER_ID);
   }
@@ -3773,9 +3749,18 @@ function renderTeam(key) {
     + record
     + '<div id="team-schedule"><div class="log-loading">Loading games…</div></div>'
     + '<div id="team-periods"></div>'
-    + '<div id="team-roster"></div>';
+    + '<div id="team-roster"></div>'
+    + (team.club ? '<div class="panel dr-panel">'
+        + '<div class="dr-h">Where this team\'s players come from &amp; go</div>'
+        + '<p class="dr-lede">Tracing this exact roster &mdash; the clubs these players were with the season before, and the season after. Hover a block to follow one club.</p>'
+        + '<div id="team-flow" style="overflow-x:auto"></div>'
+        + '<div id="team-flow-legend" style="margin-top:10px"></div></div>' : '');
 
   renderTeamRoster(roster);
+  if (team.club) {
+    renderFlowInto(document.getElementById('team-flow'), document.getElementById('team-flow-legend'),
+      { season: team.season, focusClub: team.club, focusTeam: key });
+  }
 
   loadSeasonGames(team.season).then(function(games) {
     var rows = teamGames(team.season, team.id, games);
@@ -4283,6 +4268,8 @@ function migShowPlayerPopup(ids, clubLabel, seasonLabel, ev) {
 }
 
 
+// Fills the hidden season control the flow chart reads. The chart itself is
+// drawn from the club and team pages via renderFlowInto.
 function initMigration() {
   var sel = document.getElementById('mig-season');
   sel.innerHTML = '';
@@ -4295,24 +4282,24 @@ function initMigration() {
   });
 }
 
-function migClearTeamIfMismatch(newFocusClub) {
-  var ts = document.getElementById('mig-team-filter');
-  if (!ts.value) return;
-  var match = ALL_ENTRIES.filter(function(e) { return e.teamKey === ts.value; })[0];
-  if (!newFocusClub || !match || match.club !== newFocusClub) ts.value = '';
-}
-
-function onMigFocusChange() {
-  migClearTeamIfMismatch(document.getElementById('mig-focus-club').value);
-  renderMigration();
-}
-
-function renderMigration() {
-  var content = document.getElementById('migration-content');
-  var legend  = document.getElementById('migration-legend');
-  content.innerHTML = '<div class="empty"><div class="icon">⏳</div>Computing migrations…</div>';
-  legend.innerHTML  = '';
-  setTimeout(function() { _drawMigrationSVG(content, legend); }, 20);
+// Draw the player-flow chart into any container, centred on a season and
+// focused on a club (and optionally one of its teams). The drawing reads its
+// focus from the hidden controls, and reads it *before* it rebuilds their
+// option lists -- so each is seeded here with the wanted value already selected,
+// which then survives the rebuild.
+function renderFlowInto(container, legendEl, opts) {
+  opts = opts || {};
+  document.getElementById('mig-season').value = String(opts.season);
+  document.getElementById('mig-focus-club').innerHTML =
+    '<option value="' + escAttr(opts.focusClub || '') + '" selected></option>';
+  document.getElementById('mig-team-filter').innerHTML =
+    '<option value="' + escAttr(opts.focusTeam || '') + '" selected></option>';
+  container.innerHTML = '<div class="empty"><div class="icon">⏳</div>Working out the flow…</div>';
+  if (legendEl) legendEl.innerHTML = '';
+  setTimeout(function() {
+    if (!container.isConnected) return; // the reader moved on before it drew
+    _drawMigrationSVG(container, legendEl);
+  }, 20);
 }
 
 function _drawMigrationSVG(container, legendEl) {
