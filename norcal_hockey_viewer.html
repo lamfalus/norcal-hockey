@@ -2314,7 +2314,7 @@ function renderClubSeason(club, season, teams, content) {
 
   content.innerHTML = `
     <div class="section-heading" style="margin-bottom:8px">
-      <h2>${escHtml(clubDisplayName(club))}</h2>
+      <h2><span class="team-link" onclick="setClubSeason('')" title="Back to all seasons">${escHtml(clubDisplayName(club))}</span></h2>
       <span class="badge">${SEASON_LABELS[season]}</span>
     </div>
     <div class="club-totals-bar">
@@ -2328,9 +2328,17 @@ function renderClubSeason(club, season, teams, content) {
       ${teamCards}
     </div>
     <div id="club-roster-panel"></div>
+    <div class="panel dr-panel">
+      <div class="dr-h">Where players come from &amp; go</div>
+      <p class="dr-lede">The clubs this club's players arrived from and left for around ${escHtml(SEASON_LABELS[season])}. Hover a block to trace one club.</p>
+      <div id="club-flow" style="overflow-x:auto"></div>
+      <div id="club-flow-legend" style="margin-top:10px"></div>
+    </div>
   `;
 
   fillClubRecords(club, season, teams);
+  renderFlowInto(document.getElementById('club-flow'),
+    document.getElementById('club-flow-legend'), { season: season, focusClub: club });
 }
 
 function showTeamRoster(key) {
