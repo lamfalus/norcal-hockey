@@ -41,7 +41,6 @@
   body[data-view="schedule"] #filter-controls > [data-views~="schedule"],
   body[data-view="browse"]   #filter-controls > [data-views~="browse"],
   body[data-view="club"]     #filter-controls > [data-views~="club"],
-  body[data-view="division"] #filter-controls > [data-views~="division"],
   body[data-view="player"]   #filter-controls > [data-views~="player"]{display:flex;}
   body[data-view="team"]     #filter-controls > [data-views~="club"]{display:flex;}
   .filter-note{font-size:.78rem;color:var(--muted);margin-left:auto;align-self:center;}
@@ -478,7 +477,6 @@
   <div class="tab-bar">
     <button class="tab-btn active" onclick="showView('schedule',this)">Schedule</button>
     <button class="tab-btn" onclick="showView('browse',this)">Stats</button>
-    <button class="tab-btn" onclick="showView('division',this)">Division</button>
   </div>
 </header>
 <main>
@@ -509,11 +507,8 @@
         <option value="">&mdash; all seasons &mdash;</option>
       </select>
     </label>
-    <label data-views="division">Season
-      <select id="sel-dr-season" onchange="onDrSeasonChange()"></select>
-    </label>
 
-    <label data-views="schedule browse club division">League
+    <label data-views="schedule browse club">League
       <select id="sel-league" onchange="onFilterChange()">
         <option value="">&mdash; all leagues &mdash;</option>
       </select>
@@ -550,11 +545,6 @@
         <option value="">&mdash; all &mdash;</option>
       </select>
     </label>
-    <label data-views="division">Division
-      <select id="sel-dr-div" onchange="renderDivisionReport()">
-        <option value="">&mdash; select a division &mdash;</option>
-      </select>
-    </label>
     <!-- "Type" here meant skaters or goalies, one slot away from a Game Type
          that means something else entirely. It is a position. -->
     <label data-views="browse">Position
@@ -588,7 +578,7 @@
         <div class="type-list" id="sched-type-boxes"></div>
       </details>
     </div>
-    <div class="filter-group" data-views="browse club player division">Game Type
+    <div class="filter-group" data-views="browse club player">Game Type
       <details class="type-menu" id="gameclass-menu">
         <summary id="gameclass-summary">All types</summary>
         <div class="type-list" id="gameclass-boxes"></div>
@@ -622,15 +612,6 @@
   
   <div id="club-content">
     <div class="empty"><div class="icon">🏒</div>Select a club above to begin.</div>
-  </div>
-</div>
-
-<!-- VIEW 2b: Division report. Pick a season, league and division and read the
-     whole division at once -- special-teams leaders, how top-heavy each team is,
-     home-ice records, and the pairs who score together. -->
-<div class="view" id="view-division">
-  <div id="division-content">
-    <div class="empty"><div class="icon">🏒</div>Pick a season and division above to read the whole division at once.</div>
   </div>
 </div>
 
@@ -1123,7 +1104,7 @@ function loadSeasonGames(season) {
 // schedule are all drill-down destinations reached from the search bar or a
 // link, and leave the bar unhighlighted the way the team page always has --
 // so navigation names a view, never a brittle tab index.
-var TAB_INDEX = { schedule: 0, browse: 1, division: 2 };
+var TAB_INDEX = { schedule: 0, browse: 1 };
 function markTab(view) {
   var tabs = document.querySelectorAll('.tab-btn');
   tabs.forEach(function(el) { el.classList.remove('active'); });
@@ -1151,9 +1132,6 @@ function captureAppState(viewOverride) {
   } else if (v === 'club') {
     s.clubName   = document.getElementById('sel-club').value;
     s.clubSeason = document.getElementById('sel-club-season').value;
-  } else if (v === 'division') {
-    s.season = document.getElementById('sel-dr-season').value;
-    s.div    = document.getElementById('sel-dr-div').value;
   } else if (v === 'team') {
     s.teamKey = CURRENT_TEAM_KEY;
   }
@@ -1212,11 +1190,6 @@ function applyAppState(s) {
     if (s.clubName)   document.getElementById('sel-club').value = s.clubName;
     if (s.clubSeason) document.getElementById('sel-club-season').value = s.clubSeason;
     renderClub();
-  } else if (s.view === 'division') {
-    if (s.season) document.getElementById('sel-dr-season').value = s.season;
-    onDrSeasonChange();
-    if (s.div) document.getElementById('sel-dr-div').value = s.div;
-    renderDivisionReport();
   }
   window.scrollTo({top:0, behavior:'smooth'});
 }
@@ -1885,6 +1858,10 @@ function onBrowseRender(){
     }
   }
   if(!html)html='<div class="empty"><div class="icon">📭</div>No data found.</div>';
+  // Narrowed to one division, the player leaderboards are followed by the
+  // division broken down by team: special teams, scoring balance, home ice and
+  // the pairs who score together.
+  if(div) html+='<div id="browse-division" style="margin-top:32px"></div>';
   content.innerHTML=html;
   if(type==='skater'||type==='all'){
     const sk=ALL_ENTRIES.filter(e=>baseFilter(e)&&e.type==='skater'&&(parseInt(e.GP)||0)>=minGP);
@@ -1894,6 +1871,39 @@ function onBrowseRender(){
     const gl=ALL_ENTRIES.filter(e=>baseFilter(e)&&e.type==='goalie'&&(parseInt(e.GP)||0)>=minGP);
     attachGoalieSortHandlers('browse-goalie-table',gl,true);
   }
+  if(div) renderBrowseDivision(season, div, club);
+}
+
+// The division breakdown under the Stats leaderboards. Scoped to the same
+// season, division and (if set) club as the tables above; ALL_ENTRIES is
+// already narrowed to the League picker. A division name can recur across
+// leagues, so if it spans more than one and no league is picked, ask for one
+// rather than merge leagues that never play each other.
+function renderBrowseDivision(season, div, club) {
+  var host = document.getElementById('browse-division');
+  if (!host) return;
+  var entries = ALL_ENTRIES.filter(function(e) {
+    return e.season === season && e.division === div && (club ? e.club === club : true);
+  });
+  if (!entries.length) { host.innerHTML = ''; return; }
+  var leagues = {};
+  entries.forEach(function(e) { if (e.leagueId != null) leagues[e.leagueId] = true; });
+  var leagueIds = Object.keys(leagues);
+  if (leagueIds.length > 1 && !FILTERS.league) {
+    host.innerHTML = '<div class="panel dr-panel"><div class="dr-h">Division breakdown</div>'
+      + '<p class="dr-lede">' + escHtml(div) + ' runs in ' + leagueIds.length
+      + ' leagues this season. Pick a league above to break the division down by team.</p></div>';
+    return;
+  }
+  var lg = APP.leagueById[entries[0].leagueId];
+  var teamSet = {};
+  entries.forEach(function(e) { teamSet[e.teamKey] = 1; });
+  var teamCount = Object.keys(teamSet).length;
+  host.innerHTML = '<div class="section-heading" style="margin-bottom:14px">'
+    + '<h2>Division breakdown</h2><span class="badge">' + escHtml(div)
+    + (lg ? ' · ' + escHtml(lg.name) : '') + ' · ' + teamCount + ' team' + (teamCount === 1 ? '' : 's')
+    + '</span></div><div id="browse-division-panels"></div>';
+  renderDivisionInto(document.getElementById('browse-division-panels'), entries, season);
 }
 // Shared first-6-column widths for skater/goalie browse tables so columns align.
 const BROWSE_SHARED_COLS='<col style="width:3%"><col style="width:20%"><col style="width:4%"><col style="width:19%"><col style="width:9%"><col style="width:5%">';
@@ -2685,102 +2695,26 @@ function goToScheduleDivision(divName) {
 // of each team leans on one player, home-and-away records, and the pairs who
 // keep scoring together. Everything but the chemistry graph is already in the
 // entries the app built at load; that one file loads on demand.
-var DR = { season: null, div: null };
+var DR = { season: null, token: 0 };
 
-function initDivisionReport() {
-  var sel = document.getElementById('sel-dr-season');
-  sel.innerHTML = '';
-  SEASONS.forEach(function(s) {
-    var o = document.createElement('option');
-    o.value = s; o.textContent = SEASON_LABELS[s];
-    sel.appendChild(o);
-  });
-  sel.value = latestSeasonWithData();
-  onDrSeasonChange();
-}
-
-// A division belongs to one league, and the same name ("14U AA") recurs across
-// leagues -- so unless the League picker has already narrowed to one, each
-// option names its league too, and its value carries the league id. That keeps
-// a report a true division-and-league combo rather than several leagues' teams
-// merged under a shared name.
-var DR_SEP = '';
-function onDrSeasonChange() {
-  var season = parseInt(document.getElementById('sel-dr-season').value);
-  var divSel = document.getElementById('sel-dr-div');
-  var prev = divSel.value;
-  divSel.innerHTML = '<option value="">&mdash; select a division &mdash;</option>';
-  if (season) {
-    var oneLeague = !!FILTERS.league; // entries are already filtered to it
-    var seen = {}, opts = [];
-    ALL_ENTRIES.forEach(function(e) {
-      if (e.season !== season || !e.division) return;
-      var key = oneLeague ? e.division : (e.leagueId + DR_SEP + e.division);
-      if (seen[key]) return;
-      seen[key] = true;
-      var lg = APP.leagueById[e.leagueId];
-      opts.push({
-        value: key, div: e.division,
-        label: e.division + (oneLeague || !lg ? '' : ' · ' + lg.name)
-      });
-    });
-    opts.sort(function(a, b) {
-      var x = schedAgeOrder(a.div), y = schedAgeOrder(b.div);
-      return x[0] - y[0] || a.label.localeCompare(b.label);
-    });
-    opts.forEach(function(o) {
-      var el = document.createElement('option');
-      el.value = o.value; el.textContent = o.label; divSel.appendChild(el);
-    });
-    if (prev && seen[prev]) divSel.value = prev;
-  }
-  renderDivisionReport();
-}
-
-// A selected division carries its league id when the picker was left on "all".
-function drParseDiv(raw) {
-  if (!raw) return { div: '', league: null };
-  var i = raw.indexOf(DR_SEP);
-  if (i === -1) return { div: raw, league: null };
-  return { div: raw.slice(i + 1), league: parseInt(raw.slice(0, i)) };
-}
-
-function drEmpty(msg) {
-  return '<div class="empty"><div class="icon">🏒</div>' + msg + '</div>';
-}
-
-function renderDivisionReport() {
-  updateFilterSummary();
-  var content = document.getElementById('division-content');
-  var season = parseInt(document.getElementById('sel-dr-season').value) || null;
-  var raw = document.getElementById('sel-dr-div').value;
-  var parsed = drParseDiv(raw);
-  var div = parsed.div, league = parsed.league;
-  DR.season = season; DR.div = raw;
-  if (!season) { content.innerHTML = drEmpty('Pick a season and division above.'); return; }
-  if (!div) { content.innerHTML = drEmpty('Pick a division to read its whole report.'); return; }
-
-  var entries = ALL_ENTRIES.filter(function(e) {
-    return e.season === season && e.division === div && (league == null || e.leagueId === league);
-  });
-  if (!entries.length) {
-    content.innerHTML = drEmpty('No data for ' + escHtml(div) + ' in ' + escHtml(SEASON_LABELS[season]) + '.');
-    return;
-  }
-
-  // The teams making up the division, from the entries themselves. Inside one
-  // division the label the app usually shows -- the level, "13U AAA" -- is the
-  // same for every team, so the club is what tells them apart; the full name is
-  // only needed when a club fields two teams here.
+// Draw the four division panels into a container, from entries already scoped to
+// one division, one league and one season. A token guards the two async panels
+// so a fast switch to another division cannot let a stale draw land in the new.
+function renderDivisionInto(container, entries, season) {
   var teams = {};
   entries.forEach(function(e) {
     if (!teams[e.teamKey]) {
       teams[e.teamKey] = { key: e.teamKey, id: e.teamId, club: e.club, short: e.teamShort };
     }
   });
-  var teamCount = Object.keys(teams).length;
+  // Inside one division the label the app usually shows -- the level, "13U AAA"
+  // -- is the same for every team, so the club tells them apart; the full name
+  // is only needed when a club fields two teams here.
   var clubCount = {};
   Object.keys(teams).forEach(function(k) { var c = teams[k].club || ''; clubCount[c] = (clubCount[c] || 0) + 1; });
+  DR.season = season;
+  DR.token = (DR.token || 0) + 1;
+  var token = DR.token;
   DR.teamLabels = {};
   Object.keys(teams).forEach(function(k) {
     var t = teams[k], obj = APP.teamByKey[k];
@@ -2788,23 +2722,14 @@ function renderDivisionReport() {
     else t.label = obj ? teamName(obj) : (clubDisplayName(t.club) || t.short);
     DR.teamLabels[k] = t.label;
   });
-  var lg = APP.leagueById[entries[0].leagueId];
 
-  var html = '<div class="section-heading" style="margin-bottom:14px">'
-    + '<h2>' + escHtml(div) + '</h2><span class="badge">'
-    + escHtml(SEASON_LABELS[season]) + (lg ? ' · ' + escHtml(lg.name) : '')
-    + ' · ' + teamCount + ' team' + (teamCount === 1 ? '' : 's') + '</span></div>';
-
-  html += drSpecialTeams(entries);
-  html += drScoringBalance(entries);
-  html += '<div class="panel dr-panel" id="dr-homeice"><div class="dr-h">Home ice</div>'
-        + '<p class="dr-loading">Working out home and away records…</p></div>';
-  html += '<div class="panel dr-panel" id="dr-chem"><div class="dr-h">Line chemistry</div>'
-        + '<p class="dr-loading">Loading goals to find the pairs who score together…</p></div>';
-
-  content.innerHTML = html;
-  drRenderHomeIce(season, teams);
-  drRenderChemistry(season, teams);
+  container.innerHTML = drSpecialTeams(entries) + drScoringBalance(entries)
+    + '<div class="panel dr-panel" id="dr-homeice"><div class="dr-h">Home ice</div>'
+    + '<p class="dr-loading">Working out home and away records.</p></div>'
+    + '<div class="panel dr-panel" id="dr-chem"><div class="dr-h">Line chemistry</div>'
+    + '<p class="dr-loading">Loading goals to find the pairs who score together.</p></div>';
+  drRenderHomeIce(season, teams, token);
+  drRenderChemistry(season, teams, token);
 }
 
 // The team's name as this division shows it -- the club, since the level is the
@@ -2879,10 +2804,10 @@ function drScoringBalance(entries) {
 // Home ice needs the schedule file. Each team in the division is scored on its
 // own games, split by where they were played; the class filter is applied so
 // the record matches whatever game types are ticked above.
-function drRenderHomeIce(season, teams) {
+function drRenderHomeIce(season, teams, token) {
   loadSchedule().then(function(rows) {
     var host = document.getElementById('dr-homeice');
-    if (!host || DR.season !== season) return;
+    if (!host || DR.token !== token) return;
     var classes = classFilter();
     var rec = {};
     Object.keys(teams).forEach(function(k) {
@@ -2945,10 +2870,10 @@ function drRenderHomeIce(season, teams) {
 // in both directions -- the same scorer↔assister signal the player page uses,
 // aggregated across the whole division. Only goals scored by a division team
 // count, and only the ticked game types.
-function drRenderChemistry(season, teams) {
+function drRenderChemistry(season, teams, token) {
   loadSeasonGames(season).then(function(games) {
     var host = document.getElementById('dr-chem');
-    if (!host || DR.season !== season) return;
+    if (!host || DR.token !== token) return;
     var classes = classFilter();
     var byId = {};
     Object.keys(teams).forEach(function(k) { byId[teams[k].id] = teams[k]; });
@@ -3602,13 +3527,12 @@ function onFilterChange() {
   updateFilterSummary();
   refreshClubOptions();
 
-  var active = ['schedule', 'browse', 'club', 'division', 'player'].filter(function(v) {
+  var active = ['schedule', 'browse', 'club', 'player'].filter(function(v) {
     return document.getElementById('view-' + v).classList.contains('active');
   })[0] || 'schedule';
   if (active === 'schedule') renderSchedule();
   else if (active === 'browse') onSeasonChange();
   else if (active === 'club') renderClub();
-  else if (active === 'division') onDrSeasonChange();
   else if (active === 'player') {
     if (CURRENT_PLAYER_ID) renderPlayerHistory(CURRENT_PLAYER_ID);
   }
@@ -3628,7 +3552,6 @@ function boot() {
     initSchedule();
     initBrowse();
     initClub();
-    initDivisionReport();
     initMigration();
     // Open in the markup so the panel still works without this, and closed here
     // only where the screen is small enough to need it. Once at boot: after
