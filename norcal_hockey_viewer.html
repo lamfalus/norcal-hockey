@@ -299,6 +299,12 @@
   .dr-amp{color:var(--muted);padding:0 2px;}
   .flow-season{display:inline-flex;align-items:center;gap:8px;font-size:.82rem;color:var(--muted);}
   .flow-season select{min-width:0;padding:6px 10px;}
+  /* Signpost above the roster to the division breakdown below it. */
+  .dr-jump{margin:0 0 16px;}
+  .dr-jump button{display:inline-flex;align-items:center;gap:7px;background:var(--surface2);
+    border:1px solid var(--border);color:var(--accent);font-weight:600;font-size:.82rem;
+    padding:7px 14px;border-radius:20px;cursor:pointer;transition:all .12s;}
+  .dr-jump button:hover{border-color:var(--accent);background:#1a2240;}
 
   /* ── Development curve (player page) ── */
   .devcurve-wrap{overflow-x:auto;}
@@ -1860,8 +1866,13 @@ function onBrowseRender(){
   if(!html)html='<div class="empty"><div class="icon">📭</div>No data found.</div>';
   // Narrowed to one division, the player leaderboards are followed by the
   // division broken down by team: special teams, scoring balance, home ice and
-  // the pairs who score together.
-  if(div) html+='<div id="browse-division" style="margin-top:32px"></div>';
+  // the pairs who score together. A jump chip goes above the roster so the
+  // breakdown below a long list is not missed; it is filled only when there is
+  // actually a breakdown to jump to.
+  if(div){
+    html = '<div id="browse-jump"></div>' + html
+      + '<div id="browse-division" style="margin-top:32px"></div>';
+  }
   content.innerHTML=html;
   if(type==='skater'||type==='all'){
     const sk=ALL_ENTRIES.filter(e=>baseFilter(e)&&e.type==='skater'&&(parseInt(e.GP)||0)>=minGP);
@@ -1881,11 +1892,14 @@ function onBrowseRender(){
 // rather than merge leagues that never play each other.
 function renderBrowseDivision(season, div, club) {
   var host = document.getElementById('browse-division');
+  var jump = document.getElementById('browse-jump');
   if (!host) return;
   var entries = ALL_ENTRIES.filter(function(e) {
     return e.season === season && e.division === div && (club ? e.club === club : true);
   });
-  if (!entries.length) { host.innerHTML = ''; return; }
+  if (!entries.length) { host.innerHTML = ''; if (jump) jump.innerHTML = ''; return; }
+  if (jump) jump.innerHTML = '<div class="dr-jump"><button onclick="jumpToDivisionBreakdown()">'
+    + escHtml(div) + ' breakdown &darr;</button></div>';
   var leagues = {};
   entries.forEach(function(e) { if (e.leagueId != null) leagues[e.leagueId] = true; });
   var leagueIds = Object.keys(leagues);
@@ -1904,6 +1918,11 @@ function renderBrowseDivision(season, div, club) {
     + (lg ? ' · ' + escHtml(lg.name) : '') + ' · ' + teamCount + ' team' + (teamCount === 1 ? '' : 's')
     + '</span></div><div id="browse-division-panels"></div>';
   renderDivisionInto(document.getElementById('browse-division-panels'), entries, season);
+}
+
+function jumpToDivisionBreakdown() {
+  var el = document.getElementById('browse-division');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 // Shared first-6-column widths for skater/goalie browse tables so columns align.
 const BROWSE_SHARED_COLS='<col style="width:3%"><col style="width:20%"><col style="width:4%"><col style="width:19%"><col style="width:9%"><col style="width:5%">';
