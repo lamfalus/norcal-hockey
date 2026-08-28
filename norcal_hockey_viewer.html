@@ -41,6 +41,7 @@
   body[data-view="schedule"] #filter-controls > [data-views~="schedule"],
   body[data-view="browse"]   #filter-controls > [data-views~="browse"],
   body[data-view="club"]     #filter-controls > [data-views~="club"],
+  body[data-view="division"] #filter-controls > [data-views~="division"],
   body[data-view="player"]   #filter-controls > [data-views~="player"]{display:flex;}
   body[data-view="team"]     #filter-controls > [data-views~="club"]{display:flex;}
   .filter-note{font-size:.78rem;color:var(--muted);margin-left:auto;align-self:center;}
@@ -272,6 +273,41 @@
      held to the container, they wrap down the cell instead. */
   .club-summary{width:100%;}
   .club-summary td.roster-cell{white-space:normal;}
+
+  /* ── Division report ── */
+  .dr-panel{margin-bottom:20px;}
+  .dr-h{font-size:1.05rem;font-weight:700;margin-bottom:4px;color:var(--text);}
+  .dr-lede{color:var(--muted);font-size:.85rem;margin:0 0 14px;max-width:72ch;}
+  .dr-two{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:22px;}
+  .dr-card .panel-title{font-size:.76rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px;}
+  .dr-table{width:100%;border-collapse:collapse;font-size:.9rem;}
+  .dr-table th{background:var(--surface2);color:var(--muted);text-transform:uppercase;font-size:.68rem;
+               letter-spacing:.05em;font-weight:600;text-align:left;padding:7px 10px;white-space:nowrap;
+               position:static;cursor:default;user-select:auto;border-bottom:1px solid var(--border);}
+  .dr-table td{padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  .dr-table tbody tr:last-child td{border-bottom:none;}
+  .dr-rk{color:var(--muted);text-align:right;width:2.4em;font-variant-numeric:tabular-nums;}
+  .dr-table td.dr-val,.dr-table th.dr-val{text-align:right;font-variant-numeric:tabular-nums;}
+  .dr-sub{color:var(--muted);font-size:.82em;}
+  .dr-share{min-width:132px;}
+  .dr-barwrap{display:inline-block;width:66px;height:8px;background:var(--surface2);border:1px solid var(--border);
+              border-radius:4px;overflow:hidden;vertical-align:middle;margin-right:8px;}
+  .dr-bar{display:block;height:100%;background:var(--accent);}
+  .dr-pct{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.82rem;}
+  .dr-pos{color:var(--green);font-weight:600;}
+  .dr-neg{color:var(--red);font-weight:600;}
+  .dr-none,.dr-loading{color:var(--muted);font-size:.85rem;margin:0;}
+  .dr-amp{color:var(--muted);padding:0 2px;}
+
+  /* ── Development curve (player page) ── */
+  .devcurve-wrap{overflow-x:auto;}
+  .devcurve{width:100%;max-width:600px;height:auto;display:block;font-family:inherit;}
+  .dc-grid{stroke:var(--border);stroke-width:1;}
+  .dc-axis,.dc-x{fill:var(--muted);font-size:11px;}
+  .dc-x{font-weight:600;}
+  .dc-val{fill:var(--text);font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .dc-line{stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round;}
+  .dc-dot{fill:var(--accent);stroke:var(--surface);stroke-width:1.5;}
   .birth-yr{display:inline-block;font-size:.68rem;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:0 4px;margin-left:5px;vertical-align:middle;white-space:nowrap;}
 
   .load-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:500;transition:all .15s;white-space:nowrap;}
@@ -440,6 +476,7 @@
   <div class="tab-bar">
     <button class="tab-btn active" onclick="showView('schedule',this)">Schedule</button>
     <button class="tab-btn" onclick="showView('browse',this)">Stats</button>
+    <button class="tab-btn" onclick="showView('division',this)">Division</button>
     <button class="tab-btn" onclick="showView('migration',this);renderMigration()">Player Flow</button>
   </div>
 </header>
@@ -471,8 +508,11 @@
         <option value="">&mdash; all seasons &mdash;</option>
       </select>
     </label>
+    <label data-views="division">Season
+      <select id="sel-dr-season" onchange="onDrSeasonChange()"></select>
+    </label>
 
-    <label data-views="schedule browse club">League
+    <label data-views="schedule browse club division">League
       <select id="sel-league" onchange="onFilterChange()">
         <option value="">&mdash; all leagues &mdash;</option>
       </select>
@@ -509,6 +549,11 @@
         <option value="">&mdash; all &mdash;</option>
       </select>
     </label>
+    <label data-views="division">Division
+      <select id="sel-dr-div" onchange="renderDivisionReport()">
+        <option value="">&mdash; select a division &mdash;</option>
+      </select>
+    </label>
     <!-- "Type" here meant skaters or goalies, one slot away from a Game Type
          that means something else entirely. It is a position. -->
     <label data-views="browse">Position
@@ -542,7 +587,7 @@
         <div class="type-list" id="sched-type-boxes"></div>
       </details>
     </div>
-    <div class="filter-group" data-views="browse club player">Game Type
+    <div class="filter-group" data-views="browse club player division">Game Type
       <details class="type-menu" id="gameclass-menu">
         <summary id="gameclass-summary">All types</summary>
         <div class="type-list" id="gameclass-boxes"></div>
@@ -576,6 +621,15 @@
   
   <div id="club-content">
     <div class="empty"><div class="icon">🏒</div>Select a club above to begin.</div>
+  </div>
+</div>
+
+<!-- VIEW 2b: Division report. Pick a season, league and division and read the
+     whole division at once -- special-teams leaders, how top-heavy each team is,
+     home-ice records, and the pairs who score together. -->
+<div class="view" id="view-division">
+  <div id="division-content">
+    <div class="empty"><div class="icon">🏒</div>Pick a season and division above to read the whole division at once.</div>
   </div>
 </div>
 
@@ -1089,7 +1143,7 @@ function loadSeasonGames(season) {
 // schedule are all drill-down destinations reached from the search bar or a
 // link, and leave the bar unhighlighted the way the team page always has --
 // so navigation names a view, never a brittle tab index.
-var TAB_INDEX = { schedule: 0, browse: 1, migration: 2 };
+var TAB_INDEX = { schedule: 0, browse: 1, division: 2, migration: 3 };
 function markTab(view) {
   var tabs = document.querySelectorAll('.tab-btn');
   tabs.forEach(function(el) { el.classList.remove('active'); });
@@ -1117,6 +1171,9 @@ function captureAppState(viewOverride) {
   } else if (v === 'club') {
     s.clubName   = document.getElementById('sel-club').value;
     s.clubSeason = document.getElementById('sel-club-season').value;
+  } else if (v === 'division') {
+    s.season = document.getElementById('sel-dr-season').value;
+    s.div    = document.getElementById('sel-dr-div').value;
   } else if (v === 'team') {
     s.teamKey = CURRENT_TEAM_KEY;
   }
@@ -1175,6 +1232,11 @@ function applyAppState(s) {
     if (s.clubName)   document.getElementById('sel-club').value = s.clubName;
     if (s.clubSeason) document.getElementById('sel-club-season').value = s.clubSeason;
     renderClub();
+  } else if (s.view === 'division') {
+    if (s.season) document.getElementById('sel-dr-season').value = s.season;
+    onDrSeasonChange();
+    if (s.div) document.getElementById('sel-dr-div').value = s.div;
+    renderDivisionReport();
   } else if (s.view === 'migration') {
     renderMigration();
   }
@@ -2114,7 +2176,81 @@ function renderClubOverview(club, content) {
         </table>
       </div>
     </div>
+    ${clubRetention(club, rows)}
   `;
+}
+
+// Club retention & pipeline (#17). How many of a club's players come back the
+// next season, and where the ones who leave turn up. Both read off the entries
+// the app already holds: a player's club, season by season.
+function clubRetention(club, rows) {
+  if (rows.length < 2) return '';
+  var setBySeason = {};
+  rows.forEach(function(r) {
+    var set = {};
+    r.teams.forEach(function(t) { t.entries.forEach(function(e) { set[e.playerId] = true; }); });
+    setBySeason[r.season] = set;
+  });
+  // Every player's club(s) per season, for tracing where leavers land.
+  var clubOf = {};
+  ALL_ENTRIES.forEach(function(e) {
+    if (!e.club) return;
+    var byS = clubOf[e.playerId] || (clubOf[e.playerId] = {});
+    (byS[e.season] || (byS[e.season] = {}))[e.club] = true;
+  });
+  var transitions = [], destTally = {}, leftData = 0, totalLeavers = 0;
+  for (var i = 0; i < rows.length - 1; i++) {
+    var a = rows[i], b = rows[i + 1];
+    var A = setBySeason[a.season], B = setBySeason[b.season];
+    var aIds = Object.keys(A);
+    var retained = aIds.filter(function(id) { return B[id]; }).length;
+    // A gap is a missed calendar year, judged by start year -- season ids are
+    // not always consecutive even when the seasons are.
+    var ya = (APP.seasonById[a.season] || {}).startYear;
+    var yb = (APP.seasonById[b.season] || {}).startYear;
+    transitions.push({ from: a.season, to: b.season, start: aIds.length, retained: retained,
+      rate: aIds.length ? retained / aIds.length : 0,
+      newIn: Object.keys(B).filter(function(id) { return !A[id]; }).length,
+      gap: (ya != null && yb != null) ? (yb - ya > 1) : false });
+    aIds.forEach(function(id) {
+      if (B[id]) return;
+      totalLeavers++;
+      var next = (clubOf[id] || {})[b.season];
+      var dests = next ? Object.keys(next).filter(function(c) { return c !== club; }) : [];
+      if (dests.length) dests.forEach(function(c) { destTally[c] = (destTally[c] || 0) + 1; });
+      else leftData++;
+    });
+  }
+  var rowsHtml = transitions.map(function(t) {
+    var pct = Math.round(t.rate * 100);
+    return '<tr><td>' + escHtml(SEASON_LABELS[t.from]) + ' &rarr; ' + escHtml(SEASON_LABELS[t.to])
+      + (t.gap ? ' <span class="dr-sub">(gap)</span>' : '') + '</td>'
+      + '<td class="dr-val">' + t.start + '</td><td class="dr-val">' + t.retained + '</td>'
+      + '<td class="dr-share"><span class="dr-barwrap"><span class="dr-bar" style="width:' + pct + '%"></span></span><span class="dr-pct">' + pct + '%</span></td>'
+      + '<td class="dr-val dr-sub">+' + t.newIn + '</td></tr>';
+  }).join('');
+  var dests = Object.keys(destTally).map(function(c) { return { club: c, n: destTally[c] }; })
+    .sort(function(x, y) { return y.n - x.n; }).slice(0, 8);
+  var destHtml = '';
+  if (totalLeavers) {
+    var destRows = dests.map(function(d) {
+      return '<tr><td><span class="team-link" onclick="goToClub(\'' + escAttr(d.club) + '\')">'
+        + escHtml(clubDisplayName(d.club)) + '</span></td><td class="dr-val">' + d.n + '</td></tr>';
+    }).join('');
+    destHtml = '<div class="dr-h" style="margin-top:20px">Where players go when they leave</div>'
+      + '<p class="dr-lede">Counting every season-to-season departure. ' + leftData + ' of ' + totalLeavers
+      + ' left the data entirely &mdash; aged out, or simply stopped being recorded.</p>'
+      + (dests.length ? '<div class="table-wrap"><table class="dr-table"><thead><tr>'
+        + '<th>Destination club</th><th class="dr-val">Players</th></tr></thead><tbody>'
+        + destRows + '</tbody></table></div>'
+        : '<p class="dr-none">Everyone who left the club left the data too.</p>');
+  }
+  return '<div class="panel dr-panel"><div class="dr-h">Player retention</div>'
+    + '<p class="dr-lede">How many of one season\'s players return the next &mdash; and how many are new. A roster is a single season\'s thing, so this counts the players, not the teams.</p>'
+    + '<div class="table-wrap"><table class="dr-table"><thead><tr>'
+    + '<th>Season change</th><th class="dr-val">Players</th><th class="dr-val">Returned</th><th>Retention</th><th class="dr-val">New</th>'
+    + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>'
+    + destHtml + '</div>';
 }
 
 // Each team's record under the filters above.
@@ -2557,6 +2693,320 @@ function goToScheduleDivision(divName) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// ════════════════════════════════════════
+// VIEW 2b: Division report
+// ════════════════════════════════════════
+// One division, one season, read whole: who scores on special teams, how much
+// of each team leans on one player, home-and-away records, and the pairs who
+// keep scoring together. Everything but the chemistry graph is already in the
+// entries the app built at load; that one file loads on demand.
+var DR = { season: null, div: null };
+
+function initDivisionReport() {
+  var sel = document.getElementById('sel-dr-season');
+  sel.innerHTML = '';
+  SEASONS.forEach(function(s) {
+    var o = document.createElement('option');
+    o.value = s; o.textContent = SEASON_LABELS[s];
+    sel.appendChild(o);
+  });
+  sel.value = latestSeasonWithData();
+  onDrSeasonChange();
+}
+
+// A division belongs to one league, and the same name ("14U AA") recurs across
+// leagues -- so unless the League picker has already narrowed to one, each
+// option names its league too, and its value carries the league id. That keeps
+// a report a true division-and-league combo rather than several leagues' teams
+// merged under a shared name.
+var DR_SEP = '';
+function onDrSeasonChange() {
+  var season = parseInt(document.getElementById('sel-dr-season').value);
+  var divSel = document.getElementById('sel-dr-div');
+  var prev = divSel.value;
+  divSel.innerHTML = '<option value="">&mdash; select a division &mdash;</option>';
+  if (season) {
+    var oneLeague = !!FILTERS.league; // entries are already filtered to it
+    var seen = {}, opts = [];
+    ALL_ENTRIES.forEach(function(e) {
+      if (e.season !== season || !e.division) return;
+      var key = oneLeague ? e.division : (e.leagueId + DR_SEP + e.division);
+      if (seen[key]) return;
+      seen[key] = true;
+      var lg = APP.leagueById[e.leagueId];
+      opts.push({
+        value: key, div: e.division,
+        label: e.division + (oneLeague || !lg ? '' : ' · ' + lg.name)
+      });
+    });
+    opts.sort(function(a, b) {
+      var x = schedAgeOrder(a.div), y = schedAgeOrder(b.div);
+      return x[0] - y[0] || a.label.localeCompare(b.label);
+    });
+    opts.forEach(function(o) {
+      var el = document.createElement('option');
+      el.value = o.value; el.textContent = o.label; divSel.appendChild(el);
+    });
+    if (prev && seen[prev]) divSel.value = prev;
+  }
+  renderDivisionReport();
+}
+
+// A selected division carries its league id when the picker was left on "all".
+function drParseDiv(raw) {
+  if (!raw) return { div: '', league: null };
+  var i = raw.indexOf(DR_SEP);
+  if (i === -1) return { div: raw, league: null };
+  return { div: raw.slice(i + 1), league: parseInt(raw.slice(0, i)) };
+}
+
+function drEmpty(msg) {
+  return '<div class="empty"><div class="icon">🏒</div>' + msg + '</div>';
+}
+
+function renderDivisionReport() {
+  updateFilterSummary();
+  var content = document.getElementById('division-content');
+  var season = parseInt(document.getElementById('sel-dr-season').value) || null;
+  var raw = document.getElementById('sel-dr-div').value;
+  var parsed = drParseDiv(raw);
+  var div = parsed.div, league = parsed.league;
+  DR.season = season; DR.div = raw;
+  if (!season) { content.innerHTML = drEmpty('Pick a season and division above.'); return; }
+  if (!div) { content.innerHTML = drEmpty('Pick a division to read its whole report.'); return; }
+
+  var entries = ALL_ENTRIES.filter(function(e) {
+    return e.season === season && e.division === div && (league == null || e.leagueId === league);
+  });
+  if (!entries.length) {
+    content.innerHTML = drEmpty('No data for ' + escHtml(div) + ' in ' + escHtml(SEASON_LABELS[season]) + '.');
+    return;
+  }
+
+  // The teams making up the division, from the entries themselves. Inside one
+  // division the label the app usually shows -- the level, "13U AAA" -- is the
+  // same for every team, so the club is what tells them apart; the full name is
+  // only needed when a club fields two teams here.
+  var teams = {};
+  entries.forEach(function(e) {
+    if (!teams[e.teamKey]) {
+      teams[e.teamKey] = { key: e.teamKey, id: e.teamId, club: e.club, short: e.teamShort };
+    }
+  });
+  var teamCount = Object.keys(teams).length;
+  var clubCount = {};
+  Object.keys(teams).forEach(function(k) { var c = teams[k].club || ''; clubCount[c] = (clubCount[c] || 0) + 1; });
+  DR.teamLabels = {};
+  Object.keys(teams).forEach(function(k) {
+    var t = teams[k], obj = APP.teamByKey[k];
+    if (t.club && clubCount[t.club] === 1) t.label = clubDisplayName(t.club);
+    else t.label = obj ? teamName(obj) : (clubDisplayName(t.club) || t.short);
+    DR.teamLabels[k] = t.label;
+  });
+  var lg = APP.leagueById[entries[0].leagueId];
+
+  var html = '<div class="section-heading" style="margin-bottom:14px">'
+    + '<h2>' + escHtml(div) + '</h2><span class="badge">'
+    + escHtml(SEASON_LABELS[season]) + (lg ? ' · ' + escHtml(lg.name) : '')
+    + ' · ' + teamCount + ' team' + (teamCount === 1 ? '' : 's') + '</span></div>';
+
+  html += drSpecialTeams(entries);
+  html += drScoringBalance(entries);
+  html += '<div class="panel dr-panel" id="dr-homeice"><div class="dr-h">Home ice</div>'
+        + '<p class="dr-loading">Working out home and away records…</p></div>';
+  html += '<div class="panel dr-panel" id="dr-chem"><div class="dr-h">Line chemistry</div>'
+        + '<p class="dr-loading">Loading goals to find the pairs who score together…</p></div>';
+
+  content.innerHTML = html;
+  drRenderHomeIce(season, teams);
+  drRenderChemistry(season, teams);
+}
+
+// The team's name as this division shows it -- the club, since the level is the
+// same down every row. Falls back to the app's usual name off the report.
+function drTeamName(key) {
+  if (DR.teamLabels && DR.teamLabels[key]) return DR.teamLabels[key];
+  var t = APP.teamByKey[key];
+  return t ? teamName(t) : '';
+}
+
+// A short ranked list of players, one stat.
+function drMiniTable(title, rows, statHead, statFn) {
+  if (!rows.length) {
+    return '<div class="dr-card"><div class="panel-title">' + title + '</div>'
+      + '<p class="dr-none">None recorded.</p></div>';
+  }
+  var body = rows.map(function(e, i) {
+    return '<tr><td class="dr-rk">' + (i + 1) + '</td>'
+      + '<td><span class="team-link" onclick="goToPlayer(' + e.playerId + ')">' + escHtml(e.playerName) + '</span>' + bornLabel(e.playerId) + '</td>'
+      + '<td><span class="team-link" onclick="goToTeam(\'' + escAttr(e.teamKey) + '\')">' + escHtml(drTeamName(e.teamKey)) + '</span></td>'
+      + '<td class="dr-val">' + statFn(e) + '</td></tr>';
+  }).join('');
+  return '<div class="dr-card"><div class="panel-title">' + title + '</div>'
+    + '<div class="table-wrap"><table class="dr-table"><thead><tr>'
+    + '<th class="dr-rk">Rk</th><th>Player</th><th>Team</th><th class="dr-val">' + statHead + '</th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
+}
+
+function drSpecialTeams(entries) {
+  var sk = entries.filter(function(e) { return e.type === 'skater'; });
+  var pp = sk.filter(function(e) { return (e.PPG || 0) > 0; })
+    .sort(function(a, b) { return b.PPG - a.PPG || entryPts(b) - entryPts(a); }).slice(0, 12);
+  var sh = sk.filter(function(e) { return (e.SHG || 0) > 0; })
+    .sort(function(a, b) { return b.SHG - a.SHG || entryPts(b) - entryPts(a); }).slice(0, 10);
+  return '<div class="panel dr-panel"><div class="dr-h">Special teams</div>'
+    + '<p class="dr-lede">Goals scored on the power play and short-handed. The scoresheet flags the strength automatically, so these counts are trustworthy.</p>'
+    + '<div class="dr-two">'
+    + drMiniTable('Power-play goals', pp, 'Goals', function(e) { return e.PPG; })
+    + drMiniTable('Short-handed goals', sh, 'Goals', function(e) { return e.SHG; })
+    + '</div></div>';
+}
+
+function drScoringBalance(entries) {
+  var byTeam = {};
+  entries.forEach(function(e) {
+    if (e.type !== 'skater') return;
+    var t = byTeam[e.teamKey] || (byTeam[e.teamKey] = { key: e.teamKey, label: drTeamName(e.teamKey), goals: 0, scorers: 0, top: null });
+    t.goals += (e.G || 0);
+    if ((e.G || 0) > 0) t.scorers++;
+    if (!t.top || (e.G || 0) > t.top.G) t.top = { name: e.playerName, id: e.playerId, G: e.G || 0 };
+  });
+  var rows = Object.keys(byTeam).map(function(k) { return byTeam[k]; })
+    .filter(function(t) { return t.goals > 0; })
+    .map(function(t) { t.share = t.top ? t.top.G / t.goals : 0; return t; })
+    .sort(function(a, b) { return b.share - a.share; });
+  if (!rows.length) return '';
+  var body = rows.map(function(t) {
+    var pct = Math.round(t.share * 100);
+    return '<tr><td><span class="team-link" onclick="goToTeam(\'' + escAttr(t.key) + '\')">' + escHtml(t.label) + '</span></td>'
+      + '<td class="dr-val">' + t.goals + '</td>'
+      + '<td>' + (t.top ? '<span class="team-link" onclick="goToPlayer(' + t.top.id + ')">' + escHtml(t.top.name) + '</span> <span class="dr-sub">' + t.top.G + 'g</span>' : '&mdash;') + '</td>'
+      + '<td class="dr-val">' + t.scorers + '</td>'
+      + '<td class="dr-share"><span class="dr-barwrap"><span class="dr-bar" style="width:' + pct + '%"></span></span><span class="dr-pct">' + pct + '%</span></td></tr>';
+  }).join('');
+  return '<div class="panel dr-panel"><div class="dr-h">Scoring balance</div>'
+    + '<p class="dr-lede">How much of each team\'s offence runs through its top scorer &mdash; a high share is a one-line team, a low one spreads it around.</p>'
+    + '<div class="table-wrap"><table class="dr-table"><thead><tr>'
+    + '<th>Team</th><th class="dr-val">Goals</th><th>Top scorer</th><th class="dr-val">Scorers</th><th>Top-scorer share</th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
+}
+
+// Home ice needs the schedule file. Each team in the division is scored on its
+// own games, split by where they were played; the class filter is applied so
+// the record matches whatever game types are ticked above.
+function drRenderHomeIce(season, teams) {
+  loadSchedule().then(function(rows) {
+    var host = document.getElementById('dr-homeice');
+    if (!host || DR.season !== season) return;
+    var classes = classFilter();
+    var rec = {};
+    Object.keys(teams).forEach(function(k) {
+      rec[teams[k].id] = { label: teams[k].label, key: teams[k].key,
+        home: { w: 0, l: 0, t: 0, gf: 0, ga: 0 }, away: { w: 0, l: 0, t: 0, gf: 0, ga: 0 } };
+    });
+    rows.forEach(function(g) {
+      if (g.season !== season || g.hg == null || g.ag == null) return;
+      if (classes && !classes[g.cls]) return;
+      [['home', g.home, g.hg, g.ag], ['away', g.away, g.ag, g.hg]].forEach(function(spec) {
+        var r = rec[spec[1]];
+        if (!r) return;
+        var slot = r[spec[0]], gf = spec[2], ga = spec[3];
+        slot.gf += gf; slot.ga += ga;
+        if (gf > ga) slot.w++; else if (gf < ga) slot.l++; else slot.t++;
+      });
+    });
+    function played(s) { return s.w + s.l + s.t; }
+    function winPct(s) { var n = played(s); return n ? (s.w + s.t * 0.5) / n : 0; }
+    var list = Object.keys(rec).map(function(id) { return rec[id]; })
+      .filter(function(r) { return played(r.home) + played(r.away) > 0; });
+    // An edge only means something with games on both sides -- a team that has
+    // only played at home has not shown a home advantage, just a home schedule.
+    list.forEach(function(r) {
+      r.edge = (played(r.home) && played(r.away)) ? winPct(r.home) - winPct(r.away) : null;
+    });
+    list.sort(function(a, b) {
+      if ((a.edge == null) !== (b.edge == null)) return a.edge == null ? 1 : -1;
+      if (a.edge == null) return played(b.home) + played(b.away) - (played(a.home) + played(a.away));
+      return b.edge - a.edge;
+    });
+    if (!list.length) {
+      host.innerHTML = '<div class="dr-h">Home ice</div><p class="dr-none">No played games yet.</p>';
+      return;
+    }
+    function rec3(s) { return s.w + '-' + s.l + '-' + s.t; }
+    var body = list.map(function(r) {
+      var edgeCell, cls = '';
+      if (r.edge == null) { edgeCell = '&mdash;'; }
+      else {
+        var edgePct = Math.round(r.edge * 100);
+        cls = r.edge > 0.005 ? 'dr-pos' : (r.edge < -0.005 ? 'dr-neg' : '');
+        edgeCell = (edgePct > 0 ? '+' : '') + edgePct;
+      }
+      return '<tr><td><span class="team-link" onclick="goToTeam(\'' + escAttr(r.key) + '\')">' + escHtml(r.label) + '</span></td>'
+        + '<td class="dr-val">' + rec3(r.home) + '</td><td class="dr-val dr-sub">' + r.home.gf + '&ndash;' + r.home.ga + '</td>'
+        + '<td class="dr-val">' + rec3(r.away) + '</td><td class="dr-val dr-sub">' + r.away.gf + '&ndash;' + r.away.ga + '</td>'
+        + '<td class="dr-val ' + cls + '">' + edgeCell + '</td></tr>';
+    }).join('');
+    host.innerHTML = '<div class="dr-h">Home ice</div>'
+      + '<p class="dr-lede">Each team\'s record at home and on the road (W-L-T, then goals for&ndash;against), sorted by the size of their home-ice edge in win percentage.</p>'
+      + '<div class="table-wrap"><table class="dr-table"><thead><tr>'
+      + '<th>Team</th><th class="dr-val">Home</th><th class="dr-val">GF&ndash;GA</th><th class="dr-val">Away</th><th class="dr-val">GF&ndash;GA</th><th class="dr-val">Edge</th>'
+      + '</tr></thead><tbody>' + body + '</tbody></table></div>';
+  });
+}
+
+// Line chemistry (#16): the pairs who combine for goals, built from the season's
+// goal events. A pair is one player's goal and another's assist on it, counted
+// in both directions -- the same scorer↔assister signal the player page uses,
+// aggregated across the whole division. Only goals scored by a division team
+// count, and only the ticked game types.
+function drRenderChemistry(season, teams) {
+  loadSeasonGames(season).then(function(games) {
+    var host = document.getElementById('dr-chem');
+    if (!host || DR.season !== season) return;
+    var classes = classFilter();
+    var byId = {};
+    Object.keys(teams).forEach(function(k) { byId[teams[k].id] = teams[k]; });
+    var pairs = {};
+    Object.keys(games).forEach(function(id) {
+      var g = games[id];
+      if (classes && !classes[g['class']]) return;
+      (g.goals || []).forEach(function(goal) {
+        var tm = byId[goal.side === 'home' ? g.home : g.away];
+        if (!tm) return;
+        var by = goal.by, assists = goal.assists || [];
+        if (by == null || !assists.length) return;
+        assists.forEach(function(a) {
+          if (a == null || a === by) return;
+          var key = Math.min(by, a) + '|' + Math.max(by, a);
+          var p = pairs[key] || (pairs[key] = { a: Math.min(by, a), b: Math.max(by, a), n: 0, teamKey: tm.key });
+          p.n++;
+        });
+      });
+    });
+    var list = Object.keys(pairs).map(function(k) { return pairs[k]; })
+      .sort(function(x, y) { return y.n - x.n; }).slice(0, 15);
+    if (!list.length) {
+      host.innerHTML = '<div class="dr-h">Line chemistry</div><p class="dr-none">No assisted goals recorded yet.</p>';
+      return;
+    }
+    var body = list.map(function(p, i) {
+      var na = (APP.playerById[p.a] || {}).name || ('#' + p.a);
+      var nb = (APP.playerById[p.b] || {}).name || ('#' + p.b);
+      return '<tr><td class="dr-rk">' + (i + 1) + '</td>'
+        + '<td><span class="team-link" onclick="goToPlayer(' + p.a + ')">' + escHtml(na) + '</span>' + bornLabel(p.a)
+        + ' <span class="dr-amp">&harr;</span> <span class="team-link" onclick="goToPlayer(' + p.b + ')">' + escHtml(nb) + '</span>' + bornLabel(p.b) + '</td>'
+        + '<td><span class="team-link" onclick="goToTeam(\'' + escAttr(p.teamKey) + '\')">' + escHtml(drTeamName(p.teamKey)) + '</span></td>'
+        + '<td class="dr-val">' + p.n + '</td></tr>';
+    }).join('');
+    host.innerHTML = '<div class="dr-h">Line chemistry</div>'
+      + '<p class="dr-lede">The pairs who combine most for goals &mdash; one scored, the other assisted, counted both ways. Assists are recorded on about 71% of goals, so these are a floor.</p>'
+      + '<div class="table-wrap"><table class="dr-table"><thead><tr>'
+      + '<th class="dr-rk">Rk</th><th>Pair</th><th>Team</th><th class="dr-val">Goals together</th>'
+      + '</tr></thead><tbody>' + body + '</tbody></table></div>';
+  });
+}
+
 // Kept for history entries written before the team page existed.
 function goToBrowseTeam(key) {
   const match = ALL_ENTRIES.filter(e => e.teamKey === key)[0];
@@ -2851,7 +3301,8 @@ function renderPlayerHistory(playerId) {
 
   content.innerHTML = '<div class="player-history-header"><h2>' + escHtml(player.name) + bornLabel(playerId) + '</h2>'
     + (isTwoWay ? '<span class="div-badge">⛸ + 🥅 Two-Way</span>' : isGoalie ? '<span class="div-badge">🥅 Goalie</span>' : '')
-    + '</div>' + aliasNote + teamBoxes(groups) + summaryCards + seasonSections
+    + '</div>' + aliasNote + teamBoxes(groups) + summaryCards
+    + playerCurvePanel(skaterEntries, goalieEntries) + seasonSections
     + classNote
     + '<div id="linemates"></div>';
 
@@ -2861,6 +3312,63 @@ function renderPlayerHistory(playerId) {
   entries.forEach(e => { playing[e.season + '|' + e.teamId] = true; });
   renderGameLogs(playerId, seasons, playing);
   renderLinemates(playerId, seasons, playing);
+}
+
+// ── Development curve (#12) ─────────────────────────────────────────────────
+// A player's scoring rate season by season -- the trajectory the season table
+// carries but never draws. Skaters get points per game; a keeper with no skater
+// seasons gets goals-against per game instead. Needs at least two seasons with
+// games, since one point is not a line.
+function playerCurvePanel(skaterEntries, goalieEntries) {
+  var useSk = skaterEntries.length > 0;
+  var src = useSk ? skaterEntries : goalieEntries;
+  if (!src.length) return '';
+  var bySeason = {};
+  src.forEach(function(e) {
+    var b = bySeason[e.season] || (bySeason[e.season] = { gp: 0, pts: 0, ga: 0 });
+    b.gp += parseInt(e.GP) || 0;
+    b.pts += entryPts(e);
+    b.ga += entryGA(e);
+  });
+  var points = Object.keys(bySeason).map(Number).sort(function(a, b) { return a - b; })
+    .filter(function(s) { return bySeason[s].gp > 0; })
+    .map(function(s) {
+      var b = bySeason[s];
+      return { label: SEASON_LABELS[s], gp: b.gp, value: useSk ? b.pts / b.gp : b.ga / b.gp };
+    });
+  if (points.length < 2) return '';
+  var title = useSk ? 'Points per game' : 'Goals against per game';
+  var lede = useSk
+    ? 'How this skater\'s scoring rate has moved season to season.'
+    : 'Goals allowed per game, season to season &mdash; lower is better.';
+  return '<div class="panel"><div class="panel-title">Development &middot; ' + title + '</div>'
+    + '<div class="devcurve-wrap">' + devCurveSvg(points) + '</div>'
+    + '<p class="dr-lede" style="margin:10px 0 0">' + lede + '</p></div>';
+}
+
+function devCurveSvg(points) {
+  var W = 600, H = 220, padL = 40, padR = 18, padT = 24, padB = 34;
+  var plotW = W - padL - padR, plotH = H - padT - padB;
+  var maxV = Math.max.apply(null, points.map(function(p) { return p.value; }));
+  var niceMax = Math.max(0.5, Math.ceil(maxV / 0.5) * 0.5);
+  var n = points.length;
+  function X(i) { return padL + (n === 1 ? plotW / 2 : plotW * i / (n - 1)); }
+  function Y(v) { return padT + plotH * (1 - v / niceMax); }
+  var grid = '';
+  [0, niceMax / 2, niceMax].forEach(function(t) {
+    var y = Y(t);
+    grid += '<line class="dc-grid" x1="' + padL + '" y1="' + y.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + y.toFixed(1) + '"/>'
+      + '<text class="dc-axis" x="' + (padL - 7) + '" y="' + (y + 3.5).toFixed(1) + '" text-anchor="end">' + t.toFixed(1) + '</text>';
+  });
+  var line = points.map(function(p, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p.value).toFixed(1); }).join(' ');
+  var marks = points.map(function(p, i) {
+    var x = X(i).toFixed(1), y = Y(p.value);
+    return '<circle class="dc-dot" cx="' + x + '" cy="' + y.toFixed(1) + '" r="4"><title>' + escHtml(p.label) + ': ' + p.value.toFixed(2) + ' (' + p.gp + ' GP)</title></circle>'
+      + '<text class="dc-val" x="' + x + '" y="' + (y - 10).toFixed(1) + '" text-anchor="middle">' + p.value.toFixed(2) + '</text>'
+      + '<text class="dc-x" x="' + x + '" y="' + (H - padB + 18) + '" text-anchor="middle">' + escHtml(p.label) + '</text>';
+  }).join('');
+  return '<svg class="devcurve" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Development curve">'
+    + grid + '<path class="dc-line" d="' + line + '" fill="none"/>' + marks + '</svg>';
 }
 
 // ── Game log ──────────────────────────────────────────────────────────────
@@ -3109,12 +3617,13 @@ function onFilterChange() {
   updateFilterSummary();
   refreshClubOptions();
 
-  var active = ['schedule', 'browse', 'club', 'player', 'migration'].filter(function(v) {
+  var active = ['schedule', 'browse', 'club', 'division', 'player', 'migration'].filter(function(v) {
     return document.getElementById('view-' + v).classList.contains('active');
   })[0] || 'schedule';
   if (active === 'schedule') renderSchedule();
   else if (active === 'browse') onSeasonChange();
   else if (active === 'club') renderClub();
+  else if (active === 'division') onDrSeasonChange();
   else if (active === 'migration') renderMigration();
   else if (active === 'player') {
     if (CURRENT_PLAYER_ID) renderPlayerHistory(CURRENT_PLAYER_ID);
@@ -3135,6 +3644,7 @@ function boot() {
     initSchedule();
     initBrowse();
     initClub();
+    initDivisionReport();
     initMigration();
     // Open in the markup so the panel still works without this, and closed here
     // only where the screen is small enough to need it. Once at boot: after
@@ -3238,17 +3748,28 @@ function renderTeam(key) {
       + '</div>';
   }
 
+  // The club half of the title links back to the club; the level after it stays
+  // plain, so "SJ Jr. Sharks 13U AAA" reads with only the club as a link.
+  var titleHtml;
+  if (team.club) {
+    var clubDisp = clubDisplayName(team.club);
+    var lvl = teamLabel(team);
+    var tail = clubDisp.split(' ').pop().toLowerCase();
+    var head = (lvl.split(' ')[0] || '').toLowerCase();
+    if (tail && tail === head) lvl = lvl.split(' ').slice(1).join(' ');
+    titleHtml = '<span class="team-link" onclick="goToClub(\'' + escAttr(team.club) + '\',' + team.season + ')">'
+      + escHtml(clubDisp) + '</span>' + (lvl ? ' ' + escHtml(lvl) : '');
+  } else {
+    titleHtml = escHtml(teamName(team));
+  }
+
   host.innerHTML =
-    '<div class="team-head"><h2>' + escHtml(teamName(team)) + '</h2>'
+    '<div class="team-head"><h2>' + titleHtml + '</h2>'
     + '<span class="season-badge">' + SEASON_LABELS[team.season] + '</span>'
     + (div ? '<span class="div-badge">' + escHtml(div.name) + '</span>' : '')
     + (league ? '<span class="div-badge">' + escHtml(league.name) + '</span>' : '')
     + '</div>'
-    + '<div class="team-sub">'
-    + '<span class="team-link" onclick="goToClub(\'' + escAttr(team.club) + '\',' + team.season + ')">'
-    + escHtml(clubDisplayName(team.club)) + '</span>'
-    + (standing && standing.gp ? '' : ' · no standings published')
-    + '</div>'
+    + (standing && standing.gp ? '' : '<div class="team-sub">No standings published</div>')
     + record
     + '<div id="team-schedule"><div class="log-loading">Loading games…</div></div>'
     + '<div id="team-periods"></div>'
