@@ -18,7 +18,9 @@
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;}
   header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;}
-  header h1{font-size:1.15rem;font-weight:700;letter-spacing:.02em;}
+  header h1{font-size:1.15rem;font-weight:700;letter-spacing:.02em;cursor:pointer;user-select:none;transition:opacity .15s;outline:none;}
+  header h1:hover{opacity:.82;}
+  header h1:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px;}
   header h1 span{color:var(--accent);}
   .tab-bar{display:flex;gap:4px;margin-left:auto;}
   .tab-btn{background:transparent;border:1px solid transparent;color:var(--muted);padding:7px 18px;border-radius:6px;cursor:pointer;font-size:.9rem;font-weight:500;transition:all .15s;}
@@ -486,7 +488,12 @@
 </head>
 <body>
 <header>
-  <h1>⛸ California Hockey <span>Stats DB</span></h1>
+  <!-- The wordmark doubles as a home link: it drops every filter, the search
+       and the view state by reloading the bare page, back to the schedule the
+       app opens on. -->
+  <h1 id="home-link" role="link" tabindex="0" title="Back to the start"
+      onclick="goHome()"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goHome();}">🏒 California Hockey <span>Stats DB</span></h1>
   <!-- One search bar, always here, doing the job the Player Lookup and Club
        View tabs used to: type a player, a club or a division and it takes you
        to that page -- whether or not a tab exists for it. -->
@@ -1225,6 +1232,13 @@ function markActiveView(v) {
   // One row serving every view means its summary changes with the view, not
   // only with the controls.
   updateFilterSummary();
+}
+
+// The wordmark's home link. Every filter, the search box and the view all live
+// in state this file builds at boot, so the surest way back to the base page is
+// to build it again -- reload the bare path, dropping any query or hash with it.
+function goHome() {
+  location.assign(location.pathname);
 }
 
 function showView(v, btn) {
