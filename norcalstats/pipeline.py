@@ -1323,6 +1323,68 @@ def raise_team_questions(conn: sqlite3.Connection) -> None:
     review.record(conn, items, sweep=("ambiguous_team",))
 
 
+def squad_clusters(conn: sqlite3.Connection, season_id: int, team_id: int,
+                   threshold: float = 0.3) -> list[dict]:
+    """Partition a team-season's games into squads by roster overlap.
+
+    Single-linkage on the Jaccard overlap of each game's roster: games of one
+    squad share most of their players and chain together, while a game belonging
+    to a different squad shares few and falls out on its own. So a team that is
+    really one squad plus a stray mis-filed game comes back as a big cluster and
+    a small one. Returned largest first, each carrying its games and the union of
+    their players.
+    """
+    rosters: dict[int, set[int]] = {}
+    for r in conn.execute(
+        "SELECT s.game_id, s.player_id FROM player_game_stats s "
+        "  JOIN games g ON g.game_id = s.game_id "
+        " WHERE g.season_id = ? AND s.team_id = ?", (season_id, team_id)
+    ):
+        rosters.setdefault(r["game_id"], set()).add(r["player_id"])
+    games = list(rosters)
+    parent = {g: g for g in games}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for i in range(len(games)):
+        for j in range(i + 1, len(games)):
+            a, b = rosters[games[i]], rosters[games[j]]
+            union = len(a | b)
+            if union and len(a & b) / union >= threshold:
+                parent[find(games[i])] = find(games[j])
+
+    grouped: dict[int, list[int]] = {}
+    for g in games:
+        grouped.setdefault(find(g), []).append(g)
+    clusters = [{"games": gs, "players": set().union(*(rosters[g] for g in gs))}
+                for gs in grouped.values()]
+    clusters.sort(key=lambda c: len(c["games"]), reverse=True)
+    return clusters
+
+
+def _outlier_home(conn: sqlite3.Connection, season_id: int, players: set,
+                  exclude_team: int):
+    """The team these players most often play for other than ``exclude_team`` --
+    where an outlier game most likely belongs."""
+    if not players:
+        return None
+    marks = ",".join("?" * len(players))
+    row = conn.execute(
+        f"SELECT s.team_id, t.name, COUNT(*) AS n "
+        f"  FROM player_game_stats s "
+        f"  JOIN games g ON g.game_id = s.game_id "
+        f"  JOIN teams t ON t.team_id = s.team_id AND t.season_id = g.season_id "
+        f" WHERE g.season_id = ? AND s.team_id <> ? "
+        f"   AND s.player_id IN ({marks}) "
+        f" GROUP BY s.team_id ORDER BY n DESC LIMIT 1",
+        (season_id, exclude_team, *players)).fetchone()
+    return (row["team_id"], row["name"]) if row else None
+
+
 #: A USA Hockey roster tops out at 22 players. A team-season carrying more than
 #: that is almost always two squads the source filed under one team id -- as CAHA
 #: did with Golden State Elite's two 14U AA teams in 2022-23, whose 38 players
@@ -1356,17 +1418,36 @@ def raise_oversized_rosters(conn: sqlite3.Connection) -> None:
         HAVING players > ?
          ORDER BY players DESC
     """, (MAX_ROSTER,)):
+        detail = [
+            f"{row['players']} distinct players, over the {MAX_ROSTER}-player "
+            "USA Hockey maximum",
+        ]
+        # Break the games into squads by roster overlap. A clean one-squad team
+        # with heavy call-ups stays one cluster; a merge splits, and a small
+        # off-cluster is usually games mis-filed from another team.
+        clusters = squad_clusters(conn, row["season_id"], row["team_id"])
+        if len(clusters) > 1:
+            total = sum(len(c["games"]) for c in clusters)
+            sizes = " + ".join(str(len(c["games"])) for c in clusters)
+            detail.append(f"its {total} games split into {sizes} by roster overlap")
+            for c in clusters[1:]:
+                home = _outlier_home(conn, row["season_id"], c["players"],
+                                     row["team_id"])
+                where = (f"; those players otherwise skate for {home[1]} "
+                         f"(team {home[0]})") if home else ""
+                games = ", ".join(str(g) for g in sorted(c["games"])[:6])
+                detail.append(
+                    f"{len(c['games'])} game(s) look like a different squad "
+                    f"({games}){where}")
+        else:
+            detail.append("usually two squads the source filed under a single team id")
+        detail.append("a season of heavy call-ups can reach this honestly -- "
+                      "'dismiss' if that is what it is")
         items.append(review.Item(
             kind="oversized_roster",
             subject=(f"S{row['season_id']} {row['name']} ({row['division']}): "
                      f"{row['players']} players on one team"),
-            evidence={"names": [], "detail": [
-                f"{row['players']} distinct players, over the {MAX_ROSTER}-player "
-                "USA Hockey maximum",
-                "usually two squads the source filed under a single team id",
-                "a season of heavy call-ups can reach this honestly -- "
-                "'dismiss' if that is what it is",
-            ]},
+            evidence={"names": [], "detail": detail},
             suggestion="split the team into its squads, or 'dismiss' to accept the count",
             applied="left as one team; its totals combine every squad that played",
             confidence=0.3,

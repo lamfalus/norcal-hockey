@@ -850,21 +850,26 @@ class OversizedRosterTest(ReviewDbTestCase):
     """A team-season over the roster cap becomes a review question -- unless it
     is a high school, which is allowed to be bigger."""
 
-    def _seed_team(self, team_id, club, kind, n_players, div_id, season=31):
+    def _seed_team(self, team_id, club, kind, n_players, div_id, season=31, n_games=4):
+        """One squad: every player dresses for the same handful of games, so the
+        roster clusters as a single group."""
         c = self.conn
         c.execute("INSERT OR IGNORE INTO clubs(name, short_name, kind) VALUES (?,?,?)",
                   (club, club, kind))
         c.execute("INSERT INTO teams(team_id, season_id, name, club, division_id) "
                   "VALUES (?,?,?,?,?)", (team_id, season, club, club, div_id))
-        for i in range(n_players):
-            pid = c.execute(
-                "INSERT INTO players(canonical_name, display_name) VALUES (?,?)",
-                (f"p{team_id}_{i}", f"Player {team_id}-{i}")).lastrowid
-            gid = team_id * 1000 + i
+        pids = [c.execute(
+            "INSERT INTO players(canonical_name, display_name) VALUES (?,?)",
+            (f"p{team_id}_{i}", f"Player {team_id}-{i}")).lastrowid
+            for i in range(n_players)]
+        for gi in range(n_games):
+            gid = team_id * 1000 + gi
             c.execute("INSERT INTO games(game_id, season_id, status) VALUES (?,?, 'final')",
                       (gid, season))
-            c.execute("INSERT INTO player_game_stats(game_id, player_id, season_id, "
-                      "team_id) VALUES (?,?,?,?)", (gid, pid, season, team_id))
+            for pid in pids:
+                c.execute("INSERT INTO player_game_stats(game_id, player_id, "
+                          "season_id, team_id) VALUES (?,?,?,?)",
+                          (gid, pid, season, team_id))
 
     def setUp(self):
         super().setUp()
@@ -897,6 +902,48 @@ class OversizedRosterTest(ReviewDbTestCase):
 
     def test_under_the_cap_is_not_flagged(self):
         self.assertFalse(any("Small Club" in f for f in self._flagged()))
+
+
+class SquadClusterTest(ReviewDbTestCase):
+    """squad_clusters separates a team-season's games into squads by roster."""
+
+    def setUp(self):
+        super().setUp()
+        c = self.conn
+        c.execute("INSERT OR IGNORE INTO seasons(season_id, label, first_seen_at) "
+                  "VALUES (31, 'Fall 2025', '2025-01-01')")
+        c.execute("INSERT INTO teams(team_id, season_id, name) VALUES (500, 31, 'T')")
+        for pid in range(1, 25):
+            c.execute("INSERT INTO players(player_id, canonical_name, display_name) "
+                      "VALUES (?,?,?)", (pid, f"c{pid}", f"P{pid}"))
+        # Squad A (players 1-12) play games 0-3; squad B (13-24) play games 4-7.
+        for gi in range(8):
+            c.execute("INSERT INTO games(game_id, season_id, status) VALUES (?,31,'final')",
+                      (gi,))
+            roster = range(1, 13) if gi < 4 else range(13, 25)
+            for pid in roster:
+                c.execute("INSERT INTO player_game_stats(game_id, player_id, "
+                          "season_id, team_id) VALUES (?,?,31,500)", (gi, pid))
+        c.commit()
+
+    def test_splits_into_two_disjoint_squads(self):
+        from norcalstats import pipeline
+        clusters = pipeline.squad_clusters(self.conn, 31, 500)
+        self.assertEqual(sorted(len(c["games"]) for c in clusters), [4, 4])
+        self.assertEqual(clusters[0]["players"] & clusters[1]["players"], set())
+
+    def test_one_shared_squad_stays_one_cluster(self):
+        # Everyone in one game: identical rosters chain into a single cluster.
+        from norcalstats import pipeline
+        c = self.conn
+        c.execute("INSERT INTO games(game_id, season_id, status) VALUES (99,31,'final')")
+        for pid in range(1, 25):
+            c.execute("INSERT INTO player_game_stats(game_id, player_id, season_id, "
+                      "team_id) VALUES (99,?,31,500)", (pid,))
+        c.commit()
+        # That bridging game links the two squads into one.
+        clusters = pipeline.squad_clusters(self.conn, 31, 500)
+        self.assertEqual(len(clusters), 1)
 
 
 if __name__ == "__main__":
