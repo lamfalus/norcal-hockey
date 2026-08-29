@@ -846,5 +846,58 @@ class TestSplitPlayersResolveCorrectly(ReviewDbTestCase):
         self.assertNotEqual(s29, s31, "the two children must not share an id")
 
 
+class OversizedRosterTest(ReviewDbTestCase):
+    """A team-season over the roster cap becomes a review question -- unless it
+    is a high school, which is allowed to be bigger."""
+
+    def _seed_team(self, team_id, club, kind, n_players, div_id, season=31):
+        c = self.conn
+        c.execute("INSERT OR IGNORE INTO clubs(name, short_name, kind) VALUES (?,?,?)",
+                  (club, club, kind))
+        c.execute("INSERT INTO teams(team_id, season_id, name, club, division_id) "
+                  "VALUES (?,?,?,?,?)", (team_id, season, club, club, div_id))
+        for i in range(n_players):
+            pid = c.execute(
+                "INSERT INTO players(canonical_name, display_name) VALUES (?,?)",
+                (f"p{team_id}_{i}", f"Player {team_id}-{i}")).lastrowid
+            gid = team_id * 1000 + i
+            c.execute("INSERT INTO games(game_id, season_id, status) VALUES (?,?, 'final')",
+                      (gid, season))
+            c.execute("INSERT INTO player_game_stats(game_id, player_id, season_id, "
+                      "team_id) VALUES (?,?,?,?)", (gid, pid, season, team_id))
+
+    def setUp(self):
+        super().setUp()
+        c = self.conn
+        c.execute("INSERT OR IGNORE INTO seasons(season_id, label, first_seen_at) "
+                  "VALUES (31, 'Fall 2025', '2025-01-01')")
+        c.execute("INSERT OR IGNORE INTO leagues(league_id, name) VALUES (3, 'Test')")
+        div = c.execute("INSERT INTO divisions(season_id, league_id, name) "
+                        "VALUES (31, 3, '14U AA')").lastrowid
+        self._seed_team(100, "Big Club", "club", 23, div)          # over -> flagged
+        self._seed_team(101, "Some High School", "high_school", 25, div)  # over but HS
+        self._seed_team(102, "Small Club", "club", 20, div)        # under -> fine
+        c.commit()
+        from norcalstats import pipeline
+        pipeline.raise_oversized_rosters(c)
+
+    def _flagged(self):
+        return [r["subject"] for r in self.conn.execute(
+            "SELECT subject FROM review_items "
+            "WHERE kind = 'oversized_roster' AND status = 'open'")]
+
+    def test_only_the_oversized_club_team_is_flagged(self):
+        flagged = self._flagged()
+        self.assertEqual(len(flagged), 1)
+        self.assertIn("Big Club", flagged[0])
+        self.assertIn("23 players", flagged[0])
+
+    def test_high_school_is_not_flagged(self):
+        self.assertFalse(any("High School" in f for f in self._flagged()))
+
+    def test_under_the_cap_is_not_flagged(self):
+        self.assertFalse(any("Small Club" in f for f in self._flagged()))
+
+
 if __name__ == "__main__":
     unittest.main()

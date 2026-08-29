@@ -1081,6 +1081,7 @@ class Pipeline:
         rebuild_player_game_stats(self.conn)
         audit(self.conn)
         raise_team_questions(self.conn)
+        raise_oversized_rosters(self.conn)
         self.conn.commit()
         if result.get("questions"):
             log.info("  %d name question(s) for review "
@@ -1320,6 +1321,58 @@ def raise_team_questions(conn: sqlite3.Connection) -> None:
     # Always recorded, even when empty: a game whose teams were identified on a
     # later run should stop being asked about.
     review.record(conn, items, sweep=("ambiguous_team",))
+
+
+#: A USA Hockey roster tops out at 22 players. A team-season carrying more than
+#: that is almost always two squads the source filed under one team id -- as CAHA
+#: did with Golden State Elite's two 14U AA teams in 2022-23, whose 38 players
+#: landed on one team. Counting the roster is a cheap, early tell that a merge
+#: has happened, long before anyone reads the names.
+MAX_ROSTER = 22
+
+
+def raise_oversized_rosters(conn: sqlite3.Connection) -> None:
+    """Flag team-seasons whose player count exceeds a legal roster.
+
+    Read from the materialized stat lines, so it runs after
+    ``rebuild_player_game_stats``. Self-heals like the other team questions: a
+    team split or dismissed on a later run drops off the queue.
+    """
+    items = []
+    for row in conn.execute("""
+        SELECT g.season_id, s.team_id, t.name,
+               COALESCE(d.name, '?') AS division,
+               COUNT(DISTINCT s.player_id) AS players
+          FROM player_game_stats s
+          JOIN games g ON g.game_id = s.game_id
+          JOIN teams t ON t.team_id = s.team_id AND t.season_id = g.season_id
+          LEFT JOIN divisions d ON d.division_id = t.division_id
+          LEFT JOIN clubs c ON c.name = t.club
+         WHERE s.team_id IS NOT NULL
+           -- High school rosters are allowed to be larger, so the cap does not
+           -- apply to them.
+           AND (c.kind IS NULL OR c.kind != 'high_school')
+         GROUP BY g.season_id, s.team_id
+        HAVING players > ?
+         ORDER BY players DESC
+    """, (MAX_ROSTER,)):
+        items.append(review.Item(
+            kind="oversized_roster",
+            subject=(f"S{row['season_id']} {row['name']} ({row['division']}): "
+                     f"{row['players']} players on one team"),
+            evidence={"names": [], "detail": [
+                f"{row['players']} distinct players, over the {MAX_ROSTER}-player "
+                "USA Hockey maximum",
+                "usually two squads the source filed under a single team id",
+                "a season of heavy call-ups can reach this honestly -- "
+                "'dismiss' if that is what it is",
+            ]},
+            suggestion="split the team into its squads, or 'dismiss' to accept the count",
+            applied="left as one team; its totals combine every squad that played",
+            confidence=0.3,
+            parts=(str(row["season_id"]), str(row["team_id"])),
+        ))
+    review.record(conn, items, sweep=("oversized_roster",))
 
 
 def rebuild_player_game_stats(conn: sqlite3.Connection) -> None:
