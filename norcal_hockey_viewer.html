@@ -80,6 +80,8 @@
   .team-link:hover{text-decoration:underline;}
   .game-link{cursor:pointer;}
   .game-link:hover{background:var(--surface2);}
+  .box-link{cursor:pointer;}
+  .box-link:hover{text-decoration:underline;}
   .sched{color:var(--muted);font-style:italic;}
   /* Schedule feed. A day is a row spanning the table rather than a repeated
      date column: on a phone the date is the one thing every row would share. */
@@ -3748,15 +3750,20 @@ function renderTeamSchedule(rows, team) {
     var res = resultOf(r);
     var cls = res === 'W' ? 'res-w' : res === 'L' ? 'res-l' : 'res-t';
     var opp = APP.teamByKey[teamKey(team.season, r.opp)];
-    return '<tr class="game-link" onclick="openBoxScore(' + team.season + ',\'' + r.id + '\')">'
+    // The opponent name goes to that team; only the result opens the box score.
+    var oppCell = opp
+      ? '<span class="team-link" onclick="goToTeam(\'' + escAttr(teamKey(team.season, r.opp)) + '\')">' + escHtml(teamName(opp)) + '</span>'
+      : escHtml(r.oppName || 'Unknown');
+    var resultCell = r.played
+      ? '<span class="box-link" onclick="openBoxScore(' + team.season + ',\'' + r.id + '\')" title="Box score">'
+        + '<span class="' + cls + '">' + res + '</span> ' + r.gf + '–' + r.ga + '</span>'
+      : '<span class="sched">' + escHtml(r.game.time || 'scheduled') + '</span>';
+    return '<tr>'
       + '<td class="log-date">' + escHtml(formatGameDate(r.game.date)) + '</td>'
-      + '<td>' + (r.home ? '<span class="log-vs">vs</span> ' : '<span class="log-vs">@</span> ')
-      + escHtml(opp ? teamName(opp) : (r.oppName || 'Unknown')) + '</td>'
+      + '<td>' + (r.home ? '<span class="log-vs">vs</span> ' : '<span class="log-vs">@</span> ') + oppCell + '</td>'
       + '<td class="log-class">'
       + escHtml(gameTypeLabel(r.game['class'], r.game.stage)) + '</td>'
-      + '<td class="num">' + (r.played
-          ? '<span class="' + cls + '">' + res + '</span> ' + r.gf + '–' + r.ga
-          : '<span class="sched">' + escHtml(r.game.time || 'scheduled') + '</span>') + '</td>'
+      + '<td class="num">' + resultCell + '</td>'
       + '<td class="log-class">' + escHtml(r.game.rink || '') + '</td>'
       + '</tr>';
   }).join('');
