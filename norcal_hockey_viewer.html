@@ -39,7 +39,10 @@
   .panel-title{font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:14px;}
   .controls{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:24px;}
   #filter-controls{padding-bottom:18px;margin-bottom:22px;border-bottom:1px solid var(--border);}
-  #filter-controls select{min-width:170px;}
+  /* Narrow enough that the Stats view's seven controls sit on one row within
+     the 1200px main column, rather than one spilling to a second line. */
+  #filter-controls select,
+  #filter-controls .type-menu > summary{min-width:136px;}
   /* Every filter any view uses lives in the one row; each says which views it
      belongs to and appears in those alone. One rule rather than a hiding rule
      per control, so a new filter is scoped by its markup and cannot be added
@@ -540,7 +543,7 @@
 
     <label data-views="schedule browse club">League
       <select id="sel-league" onchange="onFilterChange()">
-        <option value="">&mdash; all leagues &mdash;</option>
+        <option value="">&mdash; all &mdash;</option>
       </select>
     </label>
 
