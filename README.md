@@ -23,22 +23,26 @@ reads the dataset from `data`, and neither needs a hand.
 |---|---|
 | Seasons | Fall 2021 – Fall 2026 (S27–S31, S33 — the site has no S32) |
 | Leagues | 4 — Norcal, CAHA, SCAHA, PGHL |
-| Games | 14,019, of which 8,130 have a result |
+| Games | 14,064, of which 8,130 have a result |
 | Stat lines | 240,901 across 63,631 goals and 49,193 penalties |
-| Teams / clubs | 2,346 team-seasons resolving to 65 clubs |
-| Players | 10,338 in the published dataset |
-| Open review questions | 169 |
-| Schema | v6 |
+| Teams / clubs | 2,363 team-seasons resolving to 66 clubs |
+| Players | 10,351 in the published dataset |
+| Open review questions | 172 (four of them oversized rosters) |
+| Schema | v8 |
 
-Counts are a snapshot taken 2026-08-24, after the first run on schema v6; the
-collector adds to them nightly.
+Counts are a snapshot taken 2026-08-28; the collector adds to them nightly.
 
 The viewer opens on the **schedule**: what is on next and what just happened,
-across every league and division at once. Behind that are stats by season, club
-pages, player pages with per-game logs and linemates, team pages with schedule,
-standings and scoring by period, box scores, and the club-to-club player flow
-chart. It works on a phone — that took measuring rather than guessing, and the
-notes are in [The viewer](#the-viewer).
+across every league and division at once. A search bar, always on the header,
+finds a player, a club or a division and jumps to it. Behind the schedule are
+the **Stats** leaderboards — narrow them to one division and its team breakdown
+appears beneath: special-teams leaders, how top-heavy each team's scoring is,
+home-ice records, and the pairs who most score together. **Club** pages carry
+season-by-season teams, retention, and a player-flow chart; **player** pages
+carry per-game logs, linemates, and a development curve; **team** pages carry a
+schedule, standings, scoring by period, and their own flow chart. It works on a
+phone — that took measuring rather than guessing, and the notes are in
+[The viewer](#the-viewer).
 
 **What is left**, in the order it is worth doing:
 
@@ -308,6 +312,7 @@ or recent enough that a scorekeeper might still correct them.
 | `leagues` | Leagues carrying games, per season (`--discover` to probe) |
 | `audit` | Data-quality findings |
 | `review` | Questions about names and teams needing your decision |
+| `reassign-game` | Re-home a game the source filed under the wrong team (`<game> <from_team> <to_team>`) |
 
 Useful flags: `--season N`, `--league N` and `--team ID` (all repeatable), `--limit N`
 to cap scoresheets per run, `--delay` to change the request spacing, and
@@ -549,6 +554,24 @@ Ambiguous *teams* land in the same queue — when a club enters two teams under
 one name and they play each other, neither side can be identified from the
 schedule. The item names the candidate teams and tells you which side is
 already known.
+
+**Oversized rosters** land there too. A USA Hockey roster tops out at 22, so a
+team-season carrying more is almost always two squads the source filed under one
+team id — as CAHA did with Golden State Elite's two 14U AA teams in 2022-23,
+whose games landed on one team. The flag counts each team's distinct players
+(high schools exempt, since theirs are allowed to be larger) and, for anything
+over the cap, clusters its games by roster overlap: one squad plus a stray
+mis-filed game comes back as a big cluster and a small one, and the item names
+the odd games and where their players otherwise skate. Fix the stray game with:
+
+```bash
+python3 -m norcalstats.cli reassign-game 37799 435 549
+```
+
+which re-homes it from one team to the other. The re-homing is recorded in
+`game_team_overrides` and re-applied on every derive, so — like the player
+decisions — it survives a re-fetch and a full rebuild; the roster then drops
+back under the cap and the flag clears itself.
 
 ### Data quality
 
@@ -968,13 +991,27 @@ Three things about it are decisions rather than defaults:
   The index earns its keep on the results band, which spans six seasons and
   15.8 MB of per-season files.
 
-**Stats by Season** — every skater and goalie in a season, narrowed by club
-and division, sortable on any column.
+**Stats** — every skater and goalie in a season, narrowed by division and club,
+sortable on any column. Picking a division cuts the club list to the clubs that
+actually field a team in it that season. Narrow to a single division and the
+leaderboards are followed by that division's **breakdown**: power-play and
+short-handed leaders, how top-heavy each team's scoring is (its top scorer's
+share of the goals), home-and-away records sorted by home-ice edge, and the
+pairs who most combine for a goal. The division picker qualifies a name by
+league — `14U AA · CAHA` — where it recurs across leagues, so a shared name is
+never merged into a single fake division; a chip above the roster jumps down to
+the breakdown.
 
-**Club View** — a club's teams season by season, with rosters. Teams are
-grouped by identity, never by name: in the older seasons the site gives every
-one of a club's teams the same name, and eighteen different squads are all
-called "Anaheim Jr Ducks" in 2021.
+**Club page** — reached from the search bar or by clicking a club, not from a
+tab. A club's teams season by season, with rosters grouped by identity, never by
+name: in the older seasons the site gives every one of a club's teams the same
+name, and eighteen different squads are all called "Anaheim Jr Ducks" in 2021.
+Below the teams sit **retention** — how many of each season's players return the
+next, and how many are new — and a club-focused **player-flow** chart: where its
+players arrived from and left for, centred on its latest active season with the
+rest on a picker. Click a season for that season's team records; the club name
+at the top links back to the all-seasons overview, where a search for the club
+also lands.
 
 Each team card carries its **record** beside the player count, counted under
 whatever the filters above are set to. Not the league's standings row — that is
@@ -992,10 +1029,13 @@ regular CAHA games with results, while its standings row covers three. That is
 [the CAHA rounds rolling up](#one-source-the-leagues-that-matter) — the row
 belongs to one round, the games span several.
 
-**Player Lookup** — a career, **newest season first**, each section with a
-collapsible **game log**: date, opponent, home or away, result, goals, assists,
-points, penalty minutes, and power-play or short-handed marks. One fetch of the
-player's shard covers every season they played.
+**Player page** — a career, **newest season first**, reached from the search bar
+or by clicking a name, not from a tab. Each section has a collapsible **game
+log**: date, opponent, home or away, result, goals, assists, points, penalty
+minutes, and power-play or short-handed marks; one fetch of the player's shard
+covers every season they played. Above the seasons is a **development curve** —
+points per game season by season (goals-against per game for a keeper) — each
+point naming the team the player was on that year.
 
 Above the seasons is a box per **team**, all ticked. The same team across two
 seasons is one box, not two — a player who stayed put for two years played for
@@ -1010,14 +1050,21 @@ linemates panel alike, at team-season grain rather than by season: a player
 with two teams in one year can drop the one-game call-up and keep the season.
 The boxes only appear where there is more than one team to choose between.
 
-**Player Flow** — an alluvial diagram of movement between clubs across seasons.
+**Player flow** — the alluvial diagram of movement between clubs season to
+season. No longer a tab of its own: it is drawn on a **club** page focused on
+that club, and on a **team** page focused on that exact roster — where its
+players came from the season before and left for the season after.
 
 **Team page** — reached by clicking a team anywhere, not from the tab bar,
 since it only means anything once you have picked one. The league's standings
-row, every game played or still to come, the roster, and **scoring by period**
-as goal difference per period. The standings are labelled regular season on
-purpose: the league's table counts that alone while the schedule counts every
-class, so the two game totals differ and one of them has to say which it is.
+row, every game played or still to come, the roster, **scoring by period** as
+goal difference per period, and the roster's player-flow chart. The standings
+are labelled regular season on purpose: the league's table counts that alone
+while the schedule counts every class, so the two game totals differ and one of
+them has to say which it is. On the schedule the **result** opens the box score
+and the **opponent** links to its team; the row itself is not a click target,
+and a scheduled game does not pretend to have a box score. The club name in the
+title links back to the club.
 
 **Box score** — opens over whatever you were reading, because you always arrive
 from a schedule or a game log and want to go back to it. Line score by period,
@@ -1075,16 +1122,16 @@ The order is fixed, and each control names the views it belongs to:
 
 | View | |
 |---|---|
-| **Schedule** | Season · League · Game Type · Division · Club |
-| **Stats by Season** | Season · League · Game Type · Club · Division · Position · Min GP |
-| **Club View** | Season · League · Game Type · Club |
-| **Player Lookup** | Game Type |
-| **Player Flow** | *(none — it reads every season at once)* |
+| **Schedule** | Season · League · Division · Club · Game Type |
+| **Stats** | Season · League · Division · Club · Position · Min GP · Game Type |
+| **Club** | Season · League · Club · Game Type |
+| **Player** | Game Type |
 
-Season is three different pickers sharing one slot, because the three views
-mean different things by it: a schedule season, a stats season, and a club
-season that also accepts *all seasons*. League and Game Type are one control
-each, shown wherever they apply.
+Division sits before Club so both views ask in the same order, and Game Type
+sits last, in the one slot every view shares. Season is three different pickers
+sharing one slot, because the three views mean different things by it: a
+schedule season, a stats season, and a club season that also accepts *all
+seasons*. League and Game Type are one control each, shown wherever they apply.
 
 `Position` was called `Type`, one slot away from a `Game Type` meaning
 something else entirely. It selects skaters or goalies.

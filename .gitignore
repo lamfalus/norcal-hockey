@@ -12,3 +12,6 @@ __pycache__/
 # Local operator notes: how to reach the machines this runs on. Deliberately
 # not published -- the repository is public.
 README.local.md
+
+# Claude Code local config (personal / machine-specific)
+.claude/
