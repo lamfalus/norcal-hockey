@@ -140,6 +140,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_audit.add_argument("--kind", help="only this anomaly kind")
     p_audit.add_argument("--limit", type=int, default=20)
 
+    p_reassign = sub.add_parser(
+        "reassign-game",
+        help="re-home a game's roster from the team it was filed under to the "
+             "right one (fixes a merged, oversized roster)")
+    p_reassign.add_argument("game_id", type=int)
+    p_reassign.add_argument("from_team", type=int,
+                            help="team the game is wrongly filed under")
+    p_reassign.add_argument("to_team", type=int, help="team it belongs to")
+    p_reassign.add_argument("--note", default="", help="why, for the record")
+
     p_review = sub.add_parser(
         "review", help="questions about names and teams that need your decision")
     review_sub = p_review.add_subparsers(dest="review_command")
@@ -223,6 +233,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return _cmd_leagues(conn, config, args)
         if command == "double-rostered":
             return _cmd_double_rostered(conn, args)
+        if command == "reassign-game":
+            return _cmd_reassign_game(conn, config, args)
     finally:
         conn.close()
     return 1
@@ -572,6 +584,28 @@ def _cmd_leagues(conn, config: Config, args) -> int:
         print(f"\n{skipped} league(s) not collected (tournaments, high school, "
               "unclassified). Show them with --all.")
     print("Change one with:  norcalstats leagues --include <id> | --exclude <id>")
+    return 0
+
+
+def _cmd_reassign_game(conn, config: Config, args) -> int:
+    """Re-home a mis-filed game, then re-derive so it takes effect at once.
+
+    The override is persisted, so it outlives a re-fetch or a wipe-and-rebuild;
+    re-deriving here just applies it now instead of waiting for the next run.
+    """
+    on = conn.execute(
+        "SELECT 1 FROM games WHERE game_id = ? AND ? IN (home_team_id, away_team_id)",
+        (args.game_id, args.from_team)).fetchone()
+    if not on:
+        print(f"game {args.game_id} is not filed under team {args.from_team} "
+              "(nothing to re-home)")
+        return 1
+    pipeline.record_game_override(conn, args.game_id, args.from_team,
+                                  args.to_team, args.note)
+    conn.commit()
+    print(f"game {args.game_id}: team {args.from_team} -> {args.to_team}")
+    result = pipeline.Pipeline(conn, config, _fetcher(config, offline=True)).derive()
+    print(f"re-derived: {result['players']} players from {result['names']} spellings")
     return 0
 
 

@@ -1078,6 +1078,7 @@ class Pipeline:
         log.info("resolving player identities")
         result = identity.rebuild(self.conn)
         log.info("  %(players)d players from %(names)d spellings", result)
+        apply_game_overrides(self.conn)
         rebuild_player_game_stats(self.conn)
         audit(self.conn)
         raise_team_questions(self.conn)
@@ -1321,6 +1322,37 @@ def raise_team_questions(conn: sqlite3.Connection) -> None:
     # Always recorded, even when empty: a game whose teams were identified on a
     # later run should stop being asked about.
     review.record(conn, items, sweep=("ambiguous_team",))
+
+
+def record_game_override(conn: sqlite3.Connection, game_id: int, from_team: int,
+                         to_team: int, note: str = "") -> None:
+    """Persist a game re-homing so every rebuild applies it."""
+    conn.execute(
+        "INSERT INTO game_team_overrides(game_id, from_team, to_team, note, decided_at) "
+        "VALUES (?,?,?,?,?) "
+        "ON CONFLICT(game_id, from_team) DO UPDATE SET "
+        "  to_team = excluded.to_team, note = excluded.note, "
+        "  decided_at = excluded.decided_at",
+        (game_id, from_team, to_team, note, now()))
+
+
+def apply_game_overrides(conn: sqlite3.Connection) -> int:
+    """Re-home games the source filed under the wrong team.
+
+    Run in ``derive`` before ``rebuild_player_game_stats``, so the corrected
+    home/away team flows straight into the stat lines. Idempotent, and re-applied
+    after any re-fetch that reset the game's teams.
+    """
+    n = 0
+    for r in conn.execute("SELECT game_id, from_team, to_team FROM game_team_overrides"):
+        for col in ("home_team_id", "away_team_id"):
+            cur = conn.execute(
+                f"UPDATE games SET {col} = ? WHERE game_id = ? AND {col} = ?",
+                (r["to_team"], r["game_id"], r["from_team"]))
+            n += cur.rowcount
+    if n:
+        log.info("re-homed %d game side(s) by override", n)
+    return n
 
 
 def squad_clusters(conn: sqlite3.Connection, season_id: int, team_id: int,

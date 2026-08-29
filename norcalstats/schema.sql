@@ -431,6 +431,22 @@ CREATE TABLE IF NOT EXISTS player_splits (
     PRIMARY KEY (name, season_id, team_id)
 );
 
+-- A game whose roster the source filed under the wrong team. Timetoscore
+-- sometimes files one club's two squads under a single team id, so a squad's
+-- game lands on the other's team and inflates its roster. This re-homes such a
+-- game: "in game G, the side attributed to from_team is really to_team." Read
+-- on every derive and applied before the stat lines are rebuilt, so it outlives
+-- a re-fetch and a wipe-and-rebuild alike. Written by hand or by
+-- `norcalstats reassign-game`; never auto-modified.
+CREATE TABLE IF NOT EXISTS game_team_overrides (
+    game_id    INTEGER NOT NULL,
+    from_team  INTEGER NOT NULL,
+    to_team    INTEGER NOT NULL,
+    note       TEXT,
+    decided_at TEXT,
+    PRIMARY KEY (game_id, from_team)
+);
+
 -- ---------------------------------------------------------- review queue
 
 -- Questions the collector cannot answer on its own. Each item is identified by

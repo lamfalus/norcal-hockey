@@ -946,5 +946,43 @@ class SquadClusterTest(ReviewDbTestCase):
         self.assertEqual(len(clusters), 1)
 
 
+class GameOverrideTest(ReviewDbTestCase):
+    """A recorded game re-homing moves the side, and its players with it."""
+
+    def _season(self):
+        self.conn.execute("INSERT OR IGNORE INTO seasons(season_id, label, "
+                          "first_seen_at) VALUES (31, 'Fall 2025', '2025-01-01')")
+        return self.conn
+
+    def test_override_moves_the_matching_side(self):
+        from norcalstats import pipeline
+        c = self._season()
+        c.execute("INSERT INTO games(game_id, season_id, status, home_team_id, "
+                  "away_team_id) VALUES (700, 31, 'final', 435, 999)")
+        pipeline.record_game_override(c, 700, 435, 549, "test")
+        self.assertEqual(pipeline.apply_game_overrides(c), 1)
+        row = c.execute("SELECT home_team_id, away_team_id FROM games "
+                        "WHERE game_id = 700").fetchone()
+        self.assertEqual((row["home_team_id"], row["away_team_id"]), (549, 999))
+
+    def test_override_flows_into_the_stat_line(self):
+        from norcalstats import pipeline
+        c = self._season()
+        c.execute("INSERT INTO players(player_id, canonical_name, display_name) "
+                  "VALUES (1, 'x', 'X')")
+        c.execute("INSERT INTO games(game_id, season_id, status, home_team_id, "
+                  "away_team_id) VALUES (700, 31, 'final', 435, 999)")
+        c.execute("INSERT INTO game_rosters(game_id, side, slot, jersey, position, "
+                  "name, role, player_id) VALUES (700,'home',0,'7','F','X','player',1)")
+        pipeline.rebuild_player_game_stats(c)
+        team = lambda: c.execute("SELECT team_id FROM player_game_stats "
+                                 "WHERE game_id = 700").fetchone()["team_id"]
+        self.assertEqual(team(), 435)
+        pipeline.record_game_override(c, 700, 435, 549)
+        pipeline.apply_game_overrides(c)
+        pipeline.rebuild_player_game_stats(c)
+        self.assertEqual(team(), 549)
+
+
 if __name__ == "__main__":
     unittest.main()
