@@ -545,7 +545,7 @@
     </label>
 
     <label id="lbl-div-browse" data-views="browse">Division
-      <select id="sel-div-browse" onchange="onBrowseRender()">
+      <select id="sel-div-browse" onchange="onDivBrowseChange()">
         <option value="">&mdash; all &mdash;</option>
       </select>
     </label>
@@ -1188,9 +1188,9 @@ function applyAppState(s) {
     if (s.type)   document.getElementById('sel-type').value = s.type;
     if (s.minGP)  document.getElementById('sel-min-gp').value = s.minGP;
     onSeasonChange();
+    if (s.div) document.getElementById('sel-div-browse').value = s.div;
+    onDivBrowseChange();
     if (s.club) document.getElementById('sel-club-browse').value = s.club;
-    onClubBrowseChange();
-    if (s.div)  document.getElementById('sel-div-browse').value = s.div;
     onBrowseRender();
   } else if (s.view === 'player') {
     document.getElementById('global-ac').style.display = 'none';
@@ -1806,22 +1806,26 @@ function onSeasonChange(){
   divs.forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=d;divSel.appendChild(o);});
   onBrowseRender();
 }
-function onClubBrowseChange(){
+// Division narrows Club, not the other way round: divisions are steady season
+// to season, but a club may field no team in a given division in a given year,
+// so once a division is picked the club list drops to those actually in it.
+function onDivBrowseChange(){
   const season=parseInt(document.getElementById('sel-season').value);
-  const club=document.getElementById('sel-club-browse').value;
-  const divSel=document.getElementById('sel-div-browse');
-  const prevDiv=divSel.value;
-  divSel.innerHTML='<option value="">— all —</option>';
+  const div=document.getElementById('sel-div-browse').value;
+  const clubSel=document.getElementById('sel-club-browse');
+  const prevClub=clubSel.value;
+  clubSel.innerHTML='<option value="">— all —</option>';
   if(season){
     let entries=ALL_ENTRIES.filter(e=>e.season===season);
-    if(club)entries=entries.filter(e=>e.club===club);
-    const divs=[...new Set(entries.map(e=>e.division).filter(Boolean))].sort();
-    divs.forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=d;divSel.appendChild(o);});
-    // Restore previous selection if still valid
-    if(prevDiv && divs.includes(prevDiv))divSel.value=prevDiv;
+    if(div)entries=entries.filter(e=>e.division===div);
+    const clubs=[...new Set(entries.map(e=>e.club).filter(Boolean))].filter(isBrowsableClub).sort((a,b)=>clubDisplayName(a).localeCompare(clubDisplayName(b)));
+    clubs.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=clubDisplayName(c);clubSel.appendChild(o);});
+    // Keep the club if it still fields a team in this division.
+    if(prevClub && clubs.includes(prevClub))clubSel.value=prevClub;
   }
   onBrowseRender();
 }
+function onClubBrowseChange(){ onBrowseRender(); }
 // What the collapsed filter panel says it is showing. Only the season is
 // always named; the rest appear when they are actually narrowing something, so
 // the line stays short enough to read on a phone.
@@ -2949,9 +2953,9 @@ function goToBrowseTeam(key) {
   markActiveView('browse');
   document.getElementById('sel-season').value = match.season;
   onSeasonChange();
-  if (match.club) document.getElementById('sel-club-browse').value = match.club;
-  onClubBrowseChange();
   if (match.division) document.getElementById('sel-div-browse').value = match.division;
+  onDivBrowseChange();
+  if (match.club) document.getElementById('sel-club-browse').value = match.club;
   onBrowseRender();
   history.pushState({
     view: 'browse', season: String(match.season), club: match.club, div: match.division,
