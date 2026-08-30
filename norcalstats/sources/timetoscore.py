@@ -44,7 +44,9 @@ PARSE_VERSION = 2
 #: Bumped when scorecard (PDF) parsing changes, to re-parse archived scorecards
 #: independently of the HTML scoresheets.
 #: v2: goalie records keyed by order, not jersey (old sheets omit jersey).
-SCORECARD_PARSE_VERSION = 2
+#: v3: nearest-column read (handles goalie-change column bleed) + blank-saves
+#:     backup inferred from the score, recovering many previously-rejected sides.
+SCORECARD_PARSE_VERSION = 3
 
 _MONTHS = {
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
@@ -652,15 +654,25 @@ def parse_scorecard(data: bytes, game_id: Optional[int] = None) -> Scorecard:
         return best if dist <= _COL_TOLERANCE else None
 
     def numbers(row, block: str) -> dict[str, int]:
-        out: dict[str, int] = {}
+        # Each token goes to its single nearest column, and each column keeps
+        # its closest token -- not last-write-wins. On a plain card every column
+        # has one token nearby so this is identical, but some cards overlay a
+        # goalie-change log ("SH" columns, times) whose stray numbers land near
+        # the period columns; nearest-wins picks the real value sitting dead on
+        # the column centre over the intruder a few points off. A misread still
+        # cannot store anything wrong -- the score reconcile is the backstop.
+        best: dict[str, tuple[float, int]] = {}
+        centres = [(p, cx) for p, cx in columns[block].items() if p != "No"]
         for t in row:
-            if block_of(t.x) != block:
+            if block_of(t.x) != block or not re.fullmatch(r"-?\d+", t.text):
                 continue
-            if re.fullmatch(r"-?\d+", t.text):
-                period = column_for(block, t.x)
-                if period:
-                    out[period] = int(t.text)
-        return out
+            if not centres:
+                continue
+            period, dist = min(((p, abs(t.x - cx)) for p, cx in centres),
+                               key=lambda kv: kv[1])
+            if dist <= _COL_TOLERANCE and (period not in best or dist < best[period][0]):
+                best[period] = (dist, int(t.text))
+        return {p: v for p, (_, v) in best.items()}
 
     # Walk the rows below the header. A "Shots" line opens a goalie; the next
     # "Saves" line closes it. The jersey sits on a line between them.
@@ -713,6 +725,36 @@ def _scorecard_jersey(row, block: str,
         if re.fullmatch(r"\d+", t.text) and abs(t.x - no_x) <= 14:
             return t.text
     return None
+
+
+def infer_blank_saves(card: Scorecard, home_goals: Optional[int],
+                      away_goals: Optional[int]) -> None:
+    """Fill a single goalie's blank saves cell from the side total, in place.
+
+    A backup who faced a shot or two is often left with an empty saves cell that
+    really means zero -- the scorekeeper wrote the shot but not the (non-)save.
+    That one blank makes the whole side fail to reconcile, throwing away the
+    starter's good line with it.
+
+    When a side has **exactly one** goalie with shots but no saves, and every
+    other goalie's goals-against is known, the blank one's GA is forced: it is
+    the goals the side conceded minus what the others let in. If that lands in
+    range (none of it negative, no more than the shots he faced) it is certain,
+    not a guess, so his saves are filled as shots - GA. Anything ambiguous --
+    two blanks, an out-of-range total -- is left alone to be rejected.
+    """
+    for records, conceded in ((card.home, away_goals), (card.away, home_goals)):
+        if conceded is None:
+            continue
+        blanks = [r for r in records
+                  if r.total_shots is not None and r.total_saves is None]
+        others = [r for r in records if r.total_saves is not None]
+        if len(blanks) != 1 or any(r.goals_against is None for r in others):
+            continue
+        inferred_ga = conceded - sum(r.goals_against for r in others)
+        blank = blanks[0]
+        if 0 <= inferred_ga <= blank.total_shots:
+            blank.saves["Total"] = blank.total_shots - inferred_ga
 
 
 def reconcile_scorecard(card: Scorecard, home_goals: Optional[int],

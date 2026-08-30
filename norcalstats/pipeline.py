@@ -976,6 +976,9 @@ class Pipeline:
         ).fetchone()
         home_goals = row["home_goals"] if row else None
         away_goals = row["away_goals"] if row else None
+        # Recover a side whose only gap is one backup's blank saves cell before
+        # judging it -- the side total forces that goalie's number exactly.
+        tts.infer_blank_saves(card, home_goals, away_goals)
         ok = tts.reconcile_scorecard(card, home_goals, away_goals)
 
         self.conn.execute("DELETE FROM goalie_records WHERE game_id = ?", (game_id,))

@@ -104,6 +104,35 @@ class TestScorecardParse(unittest.TestCase):
         self.assertEqual([g.jersey for g in card.home], ["", ""])
         self.assertEqual([g.seq for g in card.home], [0, 1])
 
+    def test_blank_saves_on_one_backup_is_inferred_from_the_score(self):
+        # Game 43775 (2-7): the starter is clean (32sh/26sv, GA6) but the
+        # backup faced 1 shot with a blank saves cell. The side conceded 7, so
+        # the backup's GA is forced to 1 (saves 0) -- recovered, not rejected.
+        card = tts.parse_scorecard(card_bytes(43775), 43775)
+        self.assertFalse(tts.reconcile_scorecard(card, 2, 7)["home"])  # blank first
+        tts.infer_blank_saves(card, 2, 7)
+        backup = next(g for g in card.home if g.total_shots == 1)
+        self.assertEqual(backup.total_saves, 0)
+        self.assertEqual(backup.goals_against, 1)
+        self.assertTrue(tts.reconcile_scorecard(card, 2, 7)["home"])
+
+    def test_two_blank_goalies_are_not_inferred(self):
+        # Both goalies blank -> the split between them is unknowable, so the
+        # side stays rejected rather than guessed (game 56743).
+        card = tts.parse_scorecard(card_bytes(56743), 56743)
+        tts.infer_blank_saves(card, 14, 0)
+        self.assertFalse(any(tts.reconcile_scorecard(card, 14, 0).values()))
+
+    def test_goalie_change_columns_do_not_corrupt_the_read(self):
+        # Game 43859 (18-0) overlays a goalie-change log on the home block, whose
+        # stray numbers sit near the period columns. Nearest-wins reads the real
+        # shutout line (3 shots, 3 saves, GA 0), not the intruders.
+        card = tts.parse_scorecard(card_bytes(43859), 43859)
+        tts.infer_blank_saves(card, 18, 0)
+        home = card.home[0]
+        self.assertEqual(home.goals_against, 0)
+        self.assertTrue(tts.reconcile_scorecard(card, 18, 0)["home"])
+
     def test_a_non_pdf_is_handled_not_crashed(self):
         card = tts.parse_scorecard(b"not a pdf at all", 1)
         self.assertFalse(card.is_usable)
