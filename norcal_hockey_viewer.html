@@ -52,13 +52,15 @@
   body[data-view="browse"]   #filter-controls > [data-views~="browse"],
   body[data-view="club"]     #filter-controls > [data-views~="club"],
   body[data-view="player"]   #filter-controls > [data-views~="player"]{display:flex;}
-  body[data-view="team"]     #filter-controls > [data-views~="club"]{display:flex;}
   .filter-note{font-size:.78rem;color:var(--muted);margin-left:auto;align-self:center;}
   body[data-view="browse"] #filter-controls > .filter-note,
   body[data-view="club"]   #filter-controls > .filter-note,
   body[data-view="player"] #filter-controls > .filter-note{display:block;}
-  /* Player Flow reads every season at once and has nothing to narrow. */
-  body[data-view="migration"] #filters{display:none;}
+  /* Player Flow reads every season at once and has nothing to narrow. A team
+     page is one fixed team, so the shared filters would only mislead -- hide
+     the panel on both. */
+  body[data-view="migration"] #filters,
+  body[data-view="team"]      #filters{display:none;}
   /* A player page asks about one child, where "which league" is a question
      about everybody else, so League is not among the views that control names.
      The page ignores the filter entirely too, rather than letting it drop a
