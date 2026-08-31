@@ -2262,7 +2262,9 @@ function clubRetention(club, rows) {
       newIn: Object.keys(B).filter(function(id) { return !A[id]; }).length,
       gap: (ya != null && yb != null) ? (yb - ya > 1) : false });
   }
-  var rowsHtml = transitions.map(function(t) {
+  // Newest transition on top, matching the season-by-season summary above;
+  // transitions itself stays chronological for anything reading it in order.
+  var rowsHtml = transitions.slice().reverse().map(function(t) {
     var pct = Math.round(t.rate * 100);
     return '<tr><td>' + escHtml(SEASON_LABELS[t.from]) + ' &rarr; ' + escHtml(SEASON_LABELS[t.to])
       + (t.gap ? ' <span class="dr-sub">(gap)</span>' : '') + '</td>'
