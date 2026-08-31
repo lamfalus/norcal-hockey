@@ -2201,7 +2201,9 @@ function renderClubOverview(club, content) {
     return { season: s, teams, playerCount: players.size };
   }).filter(r => r.teams.length);
 
-  const tableRows = rows.map(r => `<tr>
+  // Newest season on top; rows stays oldest-first for the retention and flow
+  // views below, which read it chronologically.
+  const tableRows = rows.slice().reverse().map(r => `<tr>
     <td><span class="season-badge" style="cursor:pointer" onclick="setClubSeason(${r.season})">${SEASON_LABELS[r.season]}</span></td>
     <td class="num">${r.teams.length}</td>
     <td class="num">${r.playerCount}</td>
