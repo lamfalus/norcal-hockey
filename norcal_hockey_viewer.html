@@ -134,6 +134,12 @@
   .box-head{text-align:center;margin-bottom:4px;}
   .box-score-line{font-size:1.5rem;font-weight:700;}
   .box-meta{color:var(--muted);font-size:.82rem;text-align:center;margin-bottom:18px;}
+  /* Out to the scoresheet the numbers came from, on Time to Score itself. */
+  .box-links{text-align:center;margin:-8px 0 18px;}
+  .scoresheet-link{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;
+                   color:var(--accent);text-decoration:none;border:1px solid var(--border);
+                   border-radius:6px;padding:5px 12px;transition:border-color .15s,background .15s;}
+  .scoresheet-link:hover{border-color:var(--accent);background:var(--surface2);}
   .box-sect{font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);
             margin:18px 0 8px;}
   .box-side{font-weight:600;}
@@ -3941,7 +3947,7 @@ function openBoxScore(season, gameId) {
   loadSeasonGames(season).then(function(games) {
     var g = games[String(gameId)];
     if (!g) { body.innerHTML = '<div class="empty"><div class="icon">❌</div>Game not found.</div>'; return; }
-    body.innerHTML = renderBoxScore(season, g);
+    body.innerHTML = renderBoxScore(season, g, gameId);
   }).catch(function(err) {
     body.innerHTML = '<div class="log-loading">Box score unavailable (' + escHtml(err.message) + ')</div>';
   });
@@ -3956,7 +3962,12 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') closeBoxScore();
 });
 
-function renderBoxScore(season, g) {
+// The host the data is collected from; the game's own id opens the same
+// scoresheet PDF a scorekeeper files -- generate-scorecard.php, the "Scoresheet"
+// column on Time to Score, not the HTML oss-scoresheet page.
+var TTS_HOST = 'https://stats.caha.timetoscore.com';
+
+function renderBoxScore(season, g, gameId) {
   var home = APP.teamByKey[teamKey(season, g.home)];
   var away = APP.teamByKey[teamKey(season, g.away)];
   var homeName = home ? teamName(home) : (g.homeName || 'Home');
@@ -3982,11 +3993,20 @@ function renderBoxScore(season, g) {
               gameTypeLabel(g['class'], g.stage), g.level]
     .filter(Boolean).map(escHtml).join(' · ');
 
+  // The scoresheet PDF is filed once a game is played; a scheduled game has
+  // none to link to yet.
+  var scoresheet = (played && gameId != null)
+    ? '<div class="box-links"><a class="scoresheet-link" target="_blank" rel="noopener noreferrer" href="'
+      + TTS_HOST + '/generate-scorecard.php?game_id=' + encodeURIComponent(gameId)
+      + '">Scoresheet PDF <span aria-hidden="true">↗</span></a></div>'
+    : '';
+
   return '<div class="box-head">'
     + '<div class="box-score-line">' + escHtml(awayName) + ' '
     + (played ? g.ag + ' – ' + g.hg : 'vs') + ' ' + escHtml(homeName) + '</div>'
     + '</div><div class="box-meta">' + meta
     + (played ? '' : ' · <span class="sched">not played yet</span>') + '</div>'
+    + scoresheet
     + (played ? lineScore : '')
     + renderGoalList(season, g, homeName, awayName)
     + renderPenaltyList(season, g, homeName, awayName);
