@@ -324,7 +324,9 @@
   .dr-none,.dr-loading{color:var(--muted);font-size:.85rem;margin:0;}
   .dr-amp{color:var(--muted);padding:0 2px;}
   .flow-season{display:inline-flex;align-items:center;gap:8px;font-size:.82rem;color:var(--muted);}
-  .flow-season select{min-width:0;padding:6px 10px;}
+  /* Leave room on the right for the shared chevron so it sits past the season,
+     not on top of it. */
+  .flow-season select{min-width:0;padding:6px 32px 6px 10px;}
   /* Signpost above the roster to the division breakdown below it. */
   .dr-jump{margin:0 0 16px;}
   .dr-jump button{display:inline-flex;align-items:center;gap:7px;background:var(--surface2);
