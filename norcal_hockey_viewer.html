@@ -217,6 +217,8 @@
   .section-heading{display:flex;align-items:baseline;gap:12px;margin-bottom:16px;}
   .section-heading h2{font-size:1.3rem;font-weight:700;}
   .badge{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:2px 10px;font-size:.78rem;color:var(--muted);}
+  /* The one team's record, set apart from the plain count beside it. */
+  .badge.sched-record{border-color:var(--accent);color:var(--text);font-weight:600;font-variant-numeric:tabular-nums;}
   .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}
   /* No overflow here on a wide screen, deliberately. Any overflow other than
      visible makes this a scroll container, and a scroll container becomes the
@@ -1560,6 +1562,23 @@ function schedulePasses(g, classes) {
   return true;
 }
 
+// With one club in one division picked, the played games on show are that
+// team's, so their record is worth stating. A game the club played against
+// itself is neither a win nor a loss for it, and drops out.
+function schedTeamRecord(games, club) {
+  var w = 0, l = 0, t = 0;
+  games.forEach(function(g) {
+    if (g.hg == null || g.ag == null) return;
+    var home = schedClubOf(g, 'home') === club;
+    var away = schedClubOf(g, 'away') === club;
+    if (home === away) return;
+    var gf = home ? g.hg : g.ag;
+    var ga = home ? g.ag : g.hg;
+    if (gf > ga) w++; else if (gf < ga) l++; else t++;
+  });
+  return { w: w, l: l, t: t, n: w + l + t };
+}
+
 // ── Rendering ─────────────────────────────────────────────────────────────
 var SCHED_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 var SCHED_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -1808,11 +1827,22 @@ function renderSchedule() {
       + scheduleBand(upcoming, SCHED.upcoming, 'upcoming', today)
       + '<div style="margin-top:28px"></div>';
   }
+  // One club in one division is a single team, so its record belongs beside the
+  // played count. Without both, the band spans several teams and a record would
+  // be meaningless.
+  var recordBadge = '';
+  if (SCHED.div && SCHED.club) {
+    var rec = schedTeamRecord(recent, SCHED.club);
+    if (rec.n) {
+      recordBadge = '<span class="badge sched-record" title="Wins–losses–ties">'
+        + rec.w + '-' + rec.l + '-' + rec.t + ' record</span>';
+    }
+  }
   html += '<div class="section-heading"><h2>'
     + (upcoming.length ? 'Recent results' : 'Results') + '</h2><span class="badge">'
     + (recent.length - noResult).toLocaleString() + ' played'
     + (noResult ? ' · ' + noResult.toLocaleString() + ' with no result' : '')
-    + '</span></div>'
+    + '</span>' + recordBadge + '</div>'
     + (recent.length
         ? scheduleBand(recent, SCHED.recent, 'recent', today)
         : '<div class="band-note">Nothing played yet.</div>');
