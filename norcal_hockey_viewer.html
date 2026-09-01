@@ -1566,17 +1566,18 @@ function schedulePasses(g, classes) {
 // team's, so their record is worth stating. A game the club played against
 // itself is neither a win nor a loss for it, and drops out.
 function schedTeamRecord(games, club) {
-  var w = 0, l = 0, t = 0;
+  var w = 0, l = 0, t = 0, gf = 0, ga = 0;
   games.forEach(function(g) {
     if (g.hg == null || g.ag == null) return;
     var home = schedClubOf(g, 'home') === club;
     var away = schedClubOf(g, 'away') === club;
     if (home === away) return;
-    var gf = home ? g.hg : g.ag;
-    var ga = home ? g.ag : g.hg;
-    if (gf > ga) w++; else if (gf < ga) l++; else t++;
+    var forGoals = home ? g.hg : g.ag;
+    var againstGoals = home ? g.ag : g.hg;
+    gf += forGoals; ga += againstGoals;
+    if (forGoals > againstGoals) w++; else if (forGoals < againstGoals) l++; else t++;
   });
-  return { w: w, l: l, t: t, n: w + l + t };
+  return { w: w, l: l, t: t, n: w + l + t, gf: gf, ga: ga };
 }
 
 // ── Rendering ─────────────────────────────────────────────────────────────
@@ -1834,8 +1835,9 @@ function renderSchedule() {
   if (SCHED.div && SCHED.club) {
     var rec = schedTeamRecord(recent, SCHED.club);
     if (rec.n) {
-      recordBadge = '<span class="badge sched-record" title="Wins–losses–ties">'
-        + rec.w + '-' + rec.l + '-' + rec.t + ' record</span>';
+      recordBadge = '<span class="badge sched-record" title="Wins–losses–ties · goals for–against">'
+        + rec.w + '-' + rec.l + '-' + rec.t + ' record'
+        + ' · ' + rec.gf + ' GF / ' + rec.ga + ' GA</span>';
     }
   }
   html += '<div class="section-heading"><h2>'
