@@ -2413,7 +2413,7 @@ function clubRetention(club, rows) {
   var seasonOpts = actSeasons.slice().reverse().map(function(s) {
     return '<option value="' + s + '"' + (s === latestActive ? ' selected' : '') + '>' + escHtml(SEASON_LABELS[s]) + '</option>';
   }).join('');
-  var flowSection = '<div class="dr-h" style="margin-top:24px">Where players come from &amp; go</div>'
+  var flowSection = '<div class="dr-h" style="margin-top:24px">Player movement</div>'
     + '<p class="dr-lede">The clubs this club\'s players arrived from and left for, season to season. Hover a block to trace one club.</p>'
     + '<label class="flow-season">Centre on <select id="club-flow-season" onchange="onClubFlowSeasonChange()">' + seasonOpts + '</select></label>'
     + '<div id="club-flow" style="overflow-x:auto;margin-top:12px"></div>'
@@ -2539,7 +2539,7 @@ function renderClubSeason(club, season, teams, content) {
     </div>
     <div id="club-roster-panel"></div>
     <div class="panel dr-panel">
-      <div class="dr-h">Where players come from &amp; go</div>
+      <div class="dr-h">Player movement</div>
       <p class="dr-lede">The clubs this club's players arrived from and left for around ${escHtml(SEASON_LABELS[season])}. Hover a block to trace one club.</p>
       <div id="club-flow" style="overflow-x:auto"></div>
       <div id="club-flow-legend" style="margin-top:10px"></div>
