@@ -3664,9 +3664,23 @@ function applyMobileColumns(root) {
 
 // Tables are rebuilt constantly -- every filter change, sort and drill-down --
 // so this watches for them rather than being called from each render.
+// Spell out the abbreviated stat headers on hover, in whatever table lands --
+// keyed on each cell's own label, so a table gets the tooltips by having the
+// header, not by opting in, and a cell that already carries a title is left be.
+function applyStatTips(root) {
+  var cells = root.querySelectorAll('thead th, tr.ph-goalie-subhdr td');
+  for (var i = 0; i < cells.length; i++) {
+    var cell = cells[i];
+    if (cell.title) continue;
+    var key = (cell.getAttribute('data-col') || cell.getAttribute('data-gcol')
+      || cell.textContent || '').trim();
+    if (STAT_TIPS[key]) cell.title = STAT_TIPS[key];
+  }
+}
+
 function watchForTables() {
   var pending = null;
-  var run = function() { pending = null; applyMobileColumns(document); };
+  var run = function() { pending = null; applyMobileColumns(document); applyStatTips(document); };
   // A timer rather than an animation frame: frames do not fire while the tab is
   // in the background, so a table rendered there would keep its full width
   // until something else happened to redraw it.
