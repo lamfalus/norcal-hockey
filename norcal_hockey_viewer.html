@@ -1471,23 +1471,30 @@ function coreDivision(name) {
 //      the fixture rather than the side, and in cross-tier play it is nobody's
 //      division -- but for the 92 games where a club plays itself and the site
 //      prints one name twice, it is right 91 times out of 92.
+// One side's division, by the same three-tier rule: the team's own division,
+// then the division its printed name states, then the one the game was filed
+// under. Kept per-side so a filter can ask that the SAME team be both the club
+// and in the division -- otherwise a Sharks 14AA game against a Kraken 14AAA
+// side passes a "Sharks + 14AAA" filter, each half matched by a different team.
+function schedSideDivision(g, side) {
+  var id = side === 'home' ? g.home : g.away;
+  if (id != null) {
+    var team = APP.teamByKey[teamKey(g.season, id)];
+    var div = team ? APP.divisionById[team.division] : null;
+    if (div) return coreDivision(div.name);
+  }
+  var stated = side === 'home' ? g.homeDiv : g.awayDiv;
+  if (stated) return coreDivision(stated);
+  var filed = APP.divisionById[g.division];
+  if (filed) return coreDivision(filed.name);
+  return '';
+}
+
 function schedDivisionsOf(g) {
   var out = [];
-  var add = function(name) {
-    name = coreDivision(name);
-    if (name && out.indexOf(name) < 0) out.push(name);
-  };
   ['home', 'away'].forEach(function(side) {
-    var id = side === 'home' ? g.home : g.away;
-    if (id != null) {
-      var team = APP.teamByKey[teamKey(g.season, id)];
-      var div = team ? APP.divisionById[team.division] : null;
-      if (div) { add(div.name); return; }
-    }
-    var stated = side === 'home' ? g.homeDiv : g.awayDiv;
-    if (stated) { add(stated); return; }
-    var filed = APP.divisionById[g.division];
-    if (filed) add(filed.name);
+    var d = schedSideDivision(g, side);
+    if (d && out.indexOf(d) < 0) out.push(d);
   });
   return out;
 }
@@ -1583,11 +1590,21 @@ function schedulePasses(g, classes) {
   if (isEmptyBracket(g)) return false;
   if (FILTERS.league && g.league !== parseInt(FILTERS.league)) return false;
   if (classes && !classes[g.cls]) return false;
-  // Either side is enough: a game is in your division if one of the teams
-  // playing it is, which is how somebody following a division thinks about it.
-  if (SCHED.div && schedDivisionsOf(g).indexOf(SCHED.div) < 0) return false;
-  if (SCHED.club && schedClubOf(g, 'home') !== SCHED.club
-                 && schedClubOf(g, 'away') !== SCHED.club) return false;
+  // With both a division and a club, the same team has to answer both -- a
+  // Sharks 14AAA filter means the Sharks' 14AAA side, not their 14AA side in a
+  // game whose other team happens to be a 14AAA club. With only one set, either
+  // side is enough: that is how somebody following just a division, or just a
+  // club, thinks about it.
+  if (SCHED.div && SCHED.club) {
+    var matched = ['home', 'away'].some(function(side) {
+      return schedClubOf(g, side) === SCHED.club && schedSideDivision(g, side) === SCHED.div;
+    });
+    if (!matched) return false;
+  } else {
+    if (SCHED.div && schedDivisionsOf(g).indexOf(SCHED.div) < 0) return false;
+    if (SCHED.club && schedClubOf(g, 'home') !== SCHED.club
+                   && schedClubOf(g, 'away') !== SCHED.club) return false;
+  }
   return true;
 }
 
@@ -1660,7 +1677,23 @@ function schedStandingsPanel(season) {
   var league = parseInt(FILTERS.league);
   if (!league || !SCHED.div) return '';
   var rows = schedStandings(season, league, SCHED.div);
-  if (!rows.length) return '';
+  if (!rows.length) {
+    // Nothing played yet. If the division has regular-season games on the
+    // schedule, say the table is coming rather than leave a silent gap that
+    // reads as missing -- an AAA division in preseason is the common case.
+    var scheduled = SCHEDULE.rows.some(function(g) {
+      return g.season === season && g.league === league && g.cls === 'regular'
+        && (g.hg == null || g.ag == null)
+        && schedSideDivision(g, 'home') === SCHED.div
+        && schedSideDivision(g, 'away') === SCHED.div;
+    });
+    if (!scheduled) return '';
+    return '<div class="section-heading"><h2>Standings</h2><span class="badge">'
+      + escHtml(SCHED.div) + ' · regular season</span></div>'
+      + '<div class="band-note">No regular-season games have been played yet &mdash;'
+      + ' the table appears once they are.</div>'
+      + '<div style="margin-top:28px"></div>';
+  }
   var body = rows.map(function(r, i) {
     var gd = (r.gd > 0 ? '+' : '') + r.gd;
     return '<tr>'
