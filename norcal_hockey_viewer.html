@@ -283,6 +283,13 @@
   .empty .icon{font-size:2.5rem;margin-bottom:10px;}
 
   /* ── Club view styles ── */
+  /* Regular vs all-games toggle on the team record. */
+  .rec-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
+  .rec-toggle{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;}
+  .rec-btn{background:var(--surface2);border:none;color:var(--muted);padding:5px 14px;font-size:.8rem;font-weight:500;cursor:pointer;transition:background .15s,color .15s;}
+  .rec-btn + .rec-btn{border-left:1px solid var(--border);}
+  .rec-btn:hover{color:var(--text);}
+  .rec-btn.active{background:var(--accent);color:#fff;}
   .club-totals-bar{display:flex;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px;overflow:hidden;}
   .ctb-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:18px 10px;border-right:1px solid var(--border);}
   .ctb-item:last-child{border-right:none;}
@@ -3835,27 +3842,7 @@ function renderTeam(key) {
 
   var div = APP.divisionById[team.division];
   var league = APP.leagueById[team.league];
-  var standing = APP.standingsByKey[key];
   var roster = ALL_ENTRIES.filter(function(e) { return e.teamKey === key; });
-
-  var record = '';
-  if (standing && standing.gp) {
-    var parts = [standing.w, standing.l];
-    var labels = 'W-L';
-    if (standing.t) { parts.push(standing.t); labels += '-T'; }
-    if (standing.otl) { parts.push(standing.otl); labels += '-OTL'; }
-    // The league's own table, which counts the regular season only. The
-    // schedule below counts everything, so the two game counts differ and the
-    // label has to say which is which.
-    record = '<div class="panel-title" style="margin-bottom:8px">League standings · regular season</div>'
-      + '<div class="club-totals-bar">'
-      + '<div class="ctb-item"><span class="ctb-val">' + parts.join('-') + '</span><span class="ctb-lbl">' + labels + '</span></div>'
-      + '<div class="ctb-item"><span class="ctb-val">' + standing.gp + '</span><span class="ctb-lbl">Games</span></div>'
-      + '<div class="ctb-item" style="color:var(--accent2)"><span class="ctb-val">' + standing.pts + '</span><span class="ctb-lbl">Points</span></div>'
-      + '<div class="ctb-item"><span class="ctb-val">' + standing.gf + '</span><span class="ctb-lbl">Goals For</span></div>'
-      + '<div class="ctb-item"><span class="ctb-val">' + standing.ga + '</span><span class="ctb-lbl">Goals Against</span></div>'
-      + '</div>';
-  }
 
   // The club half of the title links back to the club; the level after it stays
   // plain, so "SJ Jr. Sharks 13U AAA" reads with only the club as a link.
@@ -3878,8 +3865,7 @@ function renderTeam(key) {
     + (div ? '<span class="div-badge">' + escHtml(div.name) + '</span>' : '')
     + (league ? '<span class="div-badge">' + escHtml(league.name) + '</span>' : '')
     + '</div>'
-    + (standing && standing.gp ? '' : '<div class="team-sub">No standings published</div>')
-    + record
+    + '<div id="team-record"><div class="log-loading">Loading record…</div></div>'
     + '<div id="team-schedule"><div class="log-loading">Loading games…</div></div>'
     + '<div id="team-periods"></div>'
     + '<div id="team-roster"></div>'
@@ -3897,12 +3883,85 @@ function renderTeam(key) {
 
   loadSeasonGames(team.season).then(function(games) {
     var rows = teamGames(team.season, team.id, games);
+    TEAM_VIEW = { team: team, rows: rows };
+    renderTeamRecord(team, rows);
     renderTeamSchedule(rows, team);
     renderTeamPeriods(rows, team);
   }).catch(function(err) {
     document.getElementById('team-schedule').innerHTML =
       '<div class="log-loading">Games unavailable (' + escHtml(err.message) + ')</div>';
+    var rec = document.getElementById('team-record');
+    if (rec) rec.innerHTML = '';
   });
+}
+
+// The record above the schedule, with a Regular / All games toggle. Both are
+// added up from the games themselves rather than any published table, so the
+// current season and games no league table counts still show, and the two
+// scopes differ only by the non-regular games.
+// Null until the reader picks a scope, then that choice sticks from team to
+// team. Left alone, each team defaults to Regular, or to All where it has played
+// nothing but exhibitions yet -- so a preseason page opens on the games it has.
+var TEAM_RECORD_PREF = null;
+var TEAM_VIEW = null;
+
+function setTeamRecordScope(scope) {
+  TEAM_RECORD_PREF = scope;
+  if (TEAM_VIEW) renderTeamRecord(TEAM_VIEW.team, TEAM_VIEW.rows);
+}
+
+function renderTeamRecord(team, rows) {
+  var host = document.getElementById('team-record');
+  if (!host) return;
+  var scope = TEAM_RECORD_PREF;
+  if (scope == null) {
+    var hasRegular = rows.some(function(r) { return r.played && r.game['class'] === 'regular'; });
+    var hasAny = rows.some(function(r) { return r.played; });
+    scope = (hasRegular || !hasAny) ? 'regular' : 'all';
+  }
+  var toggle = '<div class="rec-head"><div class="rec-toggle">'
+    + '<button type="button" class="rec-btn' + (scope === 'regular' ? ' active' : '')
+    + '" onclick="setTeamRecordScope(\'regular\')">Regular</button>'
+    + '<button type="button" class="rec-btn' + (scope === 'all' ? ' active' : '')
+    + '" onclick="setTeamRecordScope(\'all\')">All games</button>'
+    + '</div></div>';
+  host.innerHTML = toggle + teamRecordPanel(team, rows, scope);
+}
+
+function teamRecordPanel(team, rows, scope) {
+  // Both scopes add up the same way -- one filters to regular-season games, the
+  // other keeps every type -- so switching between them moves only the
+  // non-regular games, and the two always reconcile against the schedule below.
+  var played = rows.filter(function(r) {
+    return r.played && (scope === 'all' || r.game['class'] === 'regular');
+  });
+  if (!played.length) {
+    return '<div class="team-sub">No ' + (scope === 'all' ? 'games' : 'regular-season games')
+      + ' played yet.</div>';
+  }
+  var w = 0, l = 0, t = 0, gf = 0, ga = 0;
+  played.forEach(function(r) {
+    gf += r.gf; ga += r.ga;
+    var res = resultOf(r);
+    if (res === 'W') w++; else if (res === 'L') l++; else t++;
+  });
+  var recLabels = 'W-L' + (t ? '-T' : '');
+  var rec = w + '-' + l + (t ? '-' + t : '');
+  var title = scope === 'all' ? 'Record · all games' : 'Record · regular season';
+  return teamRecordBar(title, rec, recLabels, played.length, 2 * w + t, gf, ga);
+}
+
+function teamRecordBar(title, rec, labels, gp, pts, gf, ga) {
+  function tile(val, lbl, accent) {
+    return '<div class="ctb-item"' + (accent ? ' style="color:var(--accent2)"' : '') + '>'
+      + '<span class="ctb-val">' + escHtml(String(val == null ? '—' : val)) + '</span>'
+      + '<span class="ctb-lbl">' + lbl + '</span></div>';
+  }
+  return '<div class="panel-title" style="margin-bottom:8px">' + escHtml(title) + '</div>'
+    + '<div class="club-totals-bar">'
+    + tile(rec, labels) + tile(gp, 'Games') + tile(pts, 'Points', true)
+    + tile(gf, 'Goals For') + tile(ga, 'Goals Against')
+    + '</div>';
 }
 
 function renderTeamSchedule(rows, team) {
