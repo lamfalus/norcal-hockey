@@ -359,6 +359,8 @@
   .dc-val{fill:var(--text);font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;}
   .dc-line{stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round;}
   .dc-dot{fill:var(--accent);stroke:var(--surface);stroke-width:1.5;}
+  /* Invisible but hoverable: the real hit target for each point's tooltip. */
+  .dc-hit{fill:transparent;pointer-events:all;cursor:help;}
   .birth-yr{display:inline-block;font-size:.68rem;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:0 4px;margin-left:5px;vertical-align:middle;white-space:nowrap;}
 
   .load-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:500;transition:all .15s;white-space:nowrap;}
@@ -3475,9 +3477,14 @@ function devCurveSvg(points) {
   var line = points.map(function(p, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p.value).toFixed(1); }).join(' ');
   var marks = points.map(function(p, i) {
     var x = X(i).toFixed(1), y = Y(p.value);
-    return '<circle class="dc-dot" cx="' + x + '" cy="' + y.toFixed(1) + '" r="4"><title>' + escHtml(p.label) + ': ' + p.value.toFixed(2) + ' (' + p.gp + ' GP)' + (p.teams ? '\n' + escHtml(p.teams) : '') + '</title></circle>'
+    var tip = escHtml(p.label) + ': ' + p.value.toFixed(2) + ' (' + p.gp + ' GP)'
+      + (p.teams ? '\n' + escHtml(p.teams) : '');
+    return '<circle class="dc-dot" cx="' + x + '" cy="' + y.toFixed(1) + '" r="4"/>'
       + '<text class="dc-val" x="' + x + '" y="' + (y - 10).toFixed(1) + '" text-anchor="middle">' + p.value.toFixed(2) + '</text>'
-      + '<text class="dc-x" x="' + x + '" y="' + (H - padB + 18) + '" text-anchor="middle">' + escHtml(p.label) + '</text>';
+      + '<text class="dc-x" x="' + x + '" y="' + (H - padB + 18) + '" text-anchor="middle">' + escHtml(p.label) + '</text>'
+      // A wide, invisible hit target over the dot so the tooltip is not a game
+      // of finding an 8px circle. Drawn last so it sits above the line and text.
+      + '<circle class="dc-hit" cx="' + x + '" cy="' + y.toFixed(1) + '" r="20"><title>' + tip + '</title></circle>';
   }).join('');
   return '<svg class="devcurve" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Development curve">'
     + grid + '<path class="dc-line" d="' + line + '" fill="none"/>' + marks + '</svg>';
