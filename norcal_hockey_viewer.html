@@ -242,6 +242,11 @@
   .team-link:hover{text-decoration:underline;}
   .num{text-align:right;font-variant-numeric:tabular-nums;}
   .pts{color:var(--accent2);font-weight:700;}
+  /* Standings: a plain table, not a sortable one, so its header does not offer
+     to sort. The rank column is a quiet index beside the names. */
+  .standings-table thead th{cursor:default;}
+  .standings-table thead th:hover{color:var(--muted);}
+  .standings-table .st-rk{color:var(--muted);width:2.2em;}
   .jersey{color:var(--muted);font-size:.82rem;}
   .goalie-row td:first-child::before{content:'🥅 ';font-size:.8rem;}
   .ph-section-divider td{background:var(--surface2);color:var(--muted);font-size:.72rem;font-weight:700;letter-spacing:.05em;padding:3px 8px;border-top:2px solid var(--border);}
@@ -1580,6 +1585,88 @@ function schedTeamRecord(games, club) {
   return { w: w, l: l, t: t, n: w + l + t, gf: gf, ga: ga };
 }
 
+// A division's table, computed from the game results themselves rather than any
+// published standings. Nothing is published for the current season in preseason,
+// and SCAHA has no history here at all, so the results are the one source that
+// works every season. Only regular-season games between two teams of the same
+// division count, which keeps it a closed round-robin -- the wins, losses and
+// goals across the table each balance, which is how we know it is right.
+function schedStandings(season, league, div) {
+  var rec = {};
+  function row(id) {
+    if (!rec[id]) rec[id] = { id: id, gp: 0, w: 0, l: 0, t: 0, gf: 0, ga: 0 };
+    return rec[id];
+  }
+  function divOf(id) {
+    var team = APP.teamByKey[teamKey(season, id)];
+    if (!team || team.division == null) return null;
+    var d = APP.divisionById[team.division];
+    return d ? coreDivision(d.name) : null;
+  }
+  SCHEDULE.rows.forEach(function(g) {
+    if (g.season !== season || g.league !== league || g.cls !== 'regular') return;
+    if (g.hg == null || g.ag == null || g.home == null || g.away == null) return;
+    if (divOf(g.home) !== div || divOf(g.away) !== div) return;
+    var h = row(g.home), a = row(g.away);
+    h.gp++; a.gp++; h.gf += g.hg; h.ga += g.ag; a.gf += g.ag; a.ga += g.hg;
+    if (g.hg > g.ag) { h.w++; a.l++; }
+    else if (g.ag > g.hg) { a.w++; h.l++; }
+    else { h.t++; a.t++; }
+  });
+  var rows = Object.keys(rec).map(function(id) {
+    var r = rec[id];
+    r.pts = 2 * r.w + r.t;
+    r.gd = r.gf - r.ga;
+    r.name = teamName(APP.teamByKey[teamKey(season, r.id)]);
+    return r;
+  });
+  // Points first, then goal difference and goals for -- the usual order -- and a
+  // name to settle the rest so the table does not reshuffle between renders.
+  rows.sort(function(x, y) {
+    return y.pts - x.pts || y.gd - x.gd || y.gf - x.gf || x.name.localeCompare(y.name);
+  });
+  return rows;
+}
+
+// The standings sit above the schedule, and only where one league and one
+// division are picked -- otherwise the rows would span teams that never shared a
+// table. A season with no regular-season games played yet (preseason) has none,
+// and none is shown.
+function schedStandingsPanel(season) {
+  var league = parseInt(FILTERS.league);
+  if (!league || !SCHED.div) return '';
+  var rows = schedStandings(season, league, SCHED.div);
+  if (!rows.length) return '';
+  var body = rows.map(function(r, i) {
+    var gd = (r.gd > 0 ? '+' : '') + r.gd;
+    return '<tr>'
+      + '<td class="num st-rk">' + (i + 1) + '</td>'
+      + '<td><span class="team-link" onclick="goToTeam(\'' + teamKey(season, r.id) + '\')">'
+      + escHtml(r.name) + '</span></td>'
+      + '<td class="num">' + r.gp + '</td>'
+      + '<td class="num">' + r.w + '</td>'
+      + '<td class="num">' + r.l + '</td>'
+      + '<td class="num">' + r.t + '</td>'
+      + '<td class="num pts">' + r.pts + '</td>'
+      + '<td class="num">' + r.gf + '</td>'
+      + '<td class="num">' + r.ga + '</td>'
+      + '<td class="num">' + escHtml(gd) + '</td>'
+      + '</tr>';
+  }).join('');
+  return '<div class="section-heading"><h2>Standings</h2><span class="badge">'
+    + escHtml(SCHED.div) + ' · regular season</span></div>'
+    + '<div class="band-note">Built from played regular-season games between the'
+    + ' division’s teams. 2 points for a win, 1 for a tie.</div>'
+    + '<div class="table-wrap"><table class="standings-table"><thead><tr>'
+    + '<th class="num">#</th><th>Team</th><th class="num" title="Games played">GP</th>'
+    + '<th class="num" title="Wins">W</th><th class="num" title="Losses">L</th>'
+    + '<th class="num" title="Ties">T</th><th class="num" title="Points">PTS</th>'
+    + '<th class="num" title="Goals for">GF</th><th class="num" title="Goals against">GA</th>'
+    + '<th class="num" title="Goal difference">DIFF</th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div>'
+    + '<div style="margin-top:28px"></div>';
+}
+
 // ── Rendering ─────────────────────────────────────────────────────────────
 var SCHED_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 var SCHED_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -1818,6 +1905,9 @@ function renderSchedule() {
       + ' cross-season index, so earlier seasons are not listed here — they are'
       + ' still on every team and player page. The nightly run writes one.</div>';
   }
+  // With a league and a division picked, the schedule is one division's, so its
+  // table belongs above it.
+  html += schedStandingsPanel(season);
   // A season with nothing left to play is an archive, not a schedule: there is
   // no "next", so there is no "recent" either -- everything in it is simply
   // the results. Both words go rather than sit over a band that has one game
