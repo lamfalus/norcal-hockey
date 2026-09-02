@@ -1134,6 +1134,20 @@ function buildEntries() {
   return rows;
 }
 
+// The player-flow diagrams trace where a roster went, which is a question about
+// every game a player appeared in -- never about the game types or league the
+// filter bar happens to be narrowing the stats to. They read this unfiltered
+// list instead of ALL_ENTRIES, built once since it never changes.
+var ALL_ENTRIES_FULL = null;
+function fullEntries() {
+  if (!ALL_ENTRIES_FULL) {
+    var rows = [];
+    APP.players.forEach(function(p) { rows = rows.concat(entriesForPlayer(p, null, null)); });
+    ALL_ENTRIES_FULL = rows;
+  }
+  return ALL_ENTRIES_FULL;
+}
+
 // ── Detail, fetched on demand ─────────────────────────────────────────────
 function loadPlayerLog(playerId) {
   var player = APP.playerById[playerId];
@@ -4572,6 +4586,9 @@ function _drawMigrationSVG(container, legendEl) {
   var seasonEnd      = SEASONS[SEASONS.length - 1];
   var minFlow        = parseInt(document.getElementById('mig-min-flow').value) || 1;
   var NO_DATA        = '— No Data';   // sentinel club for missing season data
+  // Always the full, unfiltered roster history -- the flow is about where
+  // players went, not what the filter bar is narrowing the stats to.
+  var FLOW_ENTRIES   = fullEntries();
 
   // ── 1. Populate team dropdown, then read team filter ─────────────
   // Teams are identified by their key: in the older seasons every one of a
@@ -4580,7 +4597,7 @@ function _drawMigrationSVG(container, legendEl) {
   var prevTeam         = teamSel.value;
   var currentFocusClub = document.getElementById('mig-focus-club').value;
   var teamSet = {};
-  ALL_ENTRIES.forEach(function(e) {
+  FLOW_ENTRIES.forEach(function(e) {
     if (e.season !== primarySeason) return;
     if (currentFocusClub && e.club !== currentFocusClub) return;
     teamSet[e.teamKey] = currentFocusClub ? e.teamShort : e.team;
@@ -4601,7 +4618,7 @@ function _drawMigrationSVG(container, legendEl) {
   var teamPlayerSet = null;
   if (teamFilter) {
     teamPlayerSet = {};
-    ALL_ENTRIES.forEach(function(e) {
+    FLOW_ENTRIES.forEach(function(e) {
       if (e.type !== 'skater' && e.type !== 'goalie') return;
       if (e.season !== primarySeason) return;   // primary season roster only
       if (e.teamKey === teamFilter) teamPlayerSet[e.playerId] = true;
@@ -4610,7 +4627,7 @@ function _drawMigrationSVG(container, legendEl) {
 
   // ── 2. Build player→season→club map (skaters + goalies) ──────────
   var playerClubs = {}; // player id -> {season -> primaryClub}
-  ALL_ENTRIES.forEach(function(e) {
+  FLOW_ENTRIES.forEach(function(e) {
     if (teamPlayerSet && !teamPlayerSet[e.playerId]) return;
     if (!e.club) return;
     if (!playerClubs[e.playerId]) playerClubs[e.playerId] = {};
