@@ -2106,6 +2106,19 @@ function jumpToDivisionBreakdown() {
 }
 // Shared first-6-column widths for skater/goalie browse tables so columns align.
 const BROWSE_SHARED_COLS='<col style="width:3%"><col style="width:20%"><col style="width:4%"><col style="width:19%"><col style="width:9%"><col style="width:5%">';
+// The abbreviated stat columns spelled out, shown on hovering the header.
+var STAT_TIPS = {
+  'GP': 'Games played', 'G': 'Goals', 'A': 'Assists',
+  'PTS': 'Points (goals + assists)', 'PIM': 'Penalty minutes',
+  'PPG': 'Power-play goals', 'SHG': 'Short-handed goals', 'Pts/GP': 'Points per game',
+  'Shots': 'Shots faced', 'GA': 'Goals against', 'GAA': 'Goals-against average',
+  'Save%': 'Save percentage', 'SO': 'Shutouts'
+};
+function statHdr(c, rightAlign) {
+  var r = rightAlign ? ' style="text-align:right"' : '';
+  var t = STAT_TIPS[c] ? ' title="' + escAttr(STAT_TIPS[c]) + '"' : '';
+  return '<th data-col="' + c + '"' + r + t + '>' + c + '</th>';
+}
 function renderSkaterTable(entries,showTeamDiv,tableId){
   const cols=showTeamDiv?['Rk','Player','#','Team','Division','GP','G','A','PTS','PIM','PPG','SHG','Pts/GP']:['Rk','Player','#','GP','G','A','PTS','PIM','PPG','SHG','Pts/GP'];
   const makeRow=(e,i)=>{
@@ -2116,7 +2129,7 @@ function renderSkaterTable(entries,showTeamDiv,tableId){
     base.push(td(e.GP||0,'num'),td(e.G||0,'num'),td(e.A||0,'num'),td(pts,'num pts'),td(e.PIM||0,'num'),td(e.PPG||0,'num'),td(e.SHG||0,'num'),td(entryPtsPerGame(e),'num'));
     return '<tr>'+base.join('')+'</tr>';
   };
-  const hdrs=cols.map((c,i)=>{const r=i>=(showTeamDiv?5:3)?' style="text-align:right"':'';return '<th data-col="'+c+'"'+r+'>'+c+'</th>';}).join('');
+  const hdrs=cols.map((c,i)=>statHdr(c, i>=(showTeamDiv?5:3))).join('');
   const cg=showTeamDiv?'<colgroup>'+BROWSE_SHARED_COLS+'<col style="width:6%"><col style="width:6%"><col style="width:7%"><col style="width:6%"><col style="width:5%"><col style="width:5%"><col style="width:8%"></colgroup>':'';
   const tableStyle=showTeamDiv?' style="table-layout:fixed;width:100%"':'';
   return '<div class="table-wrap"><table class="ranked" id="'+(tableId||'t')+'"'+tableStyle+'>'+cg+'<thead><tr>'+hdrs+'</tr></thead><tbody>'+entries.map(makeRow).join('')+'</tbody></table></div>';
@@ -2167,7 +2180,7 @@ function renderGoalieTable(entries,showTeamDiv,tableId){
     return '<tr>'+base.join('')+'</tr>';
   };
   const rightStart=showTeamDiv?5:3;
-  const hdrs=cols.map((c,i)=>{const r=i>=rightStart?' style="text-align:right"':'';return '<th data-col="'+c+'"'+r+'>'+c+'</th>';}).join('');
+  const hdrs=cols.map((c,i)=>statHdr(c, i>=rightStart)).join('');
   const cg=showTeamDiv?'<colgroup>'+BROWSE_SHARED_COLS+'<col style="width:8%"><col style="width:7%"><col style="width:8%"><col style="width:10%"><col style="width:7%"></colgroup>':'';
   const tableStyle=showTeamDiv?' style="table-layout:fixed;width:100%"':'';
   return '<div class="table-wrap"><table class="ranked" id="'+(tableId||'gt')+'"'+tableStyle+'>'+cg+'<thead><tr>'+hdrs+'</tr></thead><tbody>'+entries.map(makeRow).join('')+'</tbody></table></div>';
