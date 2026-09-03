@@ -579,7 +579,7 @@
          play a 14U AA team in a game the league files under 14U AAA, and
          picking a division should find that game from either side. -->
     <label data-views="schedule">Division
-      <select id="sel-sched-div" onchange="renderSchedule()">
+      <select id="sel-sched-div" onchange="onSchedDivChange()">
         <option value="">&mdash; all &mdash;</option>
       </select>
     </label>
@@ -1229,13 +1229,17 @@ function applyAppState(s) {
   if (s.view === 'schedule') {
     // The dropdowns may not be filled yet if the back button lands here before
     // the schedule has loaded; initSchedule renders once it is.
-    if (s.div   != null) document.getElementById('sel-sched-div').value = s.div;
-    if (s.club  != null) document.getElementById('sel-sched-club').value = s.club;
     if (s.season != null) {
       SCHED.season = s.season;
       var seasonSel = document.getElementById('sel-season');
       if (seasonSel) seasonSel.value = String(s.season);
     }
+    // Rebuild the cascading dropdowns for this season/league first, then set the
+    // saved division and club into the options that now exist.
+    rebuildSchedDivisions();
+    if (s.div != null) document.getElementById('sel-sched-div').value = s.div;
+    rebuildSchedClubs();
+    if (s.club != null) document.getElementById('sel-sched-club').value = s.club;
     // An empty list is a state that renders nothing. It is reachable -- untick
     // every box, then navigate -- and restoring it on the way back would look
     // like the page had failed, so the boxes keep whatever they have.
@@ -1512,36 +1516,6 @@ function initSchedule() {
   readSchedTypes();
 
   loadSchedule().then(function(rows) {
-    var divisions = {}, clubs = {};
-    rows.forEach(function(g) {
-      if (isEmptyBracket(g)) return;
-      schedDivisionsOf(g).forEach(function(name) { divisions[name] = true; });
-      [g.home, g.away].forEach(function(id) {
-        if (id == null) return;
-        var team = APP.teamByKey[teamKey(g.season, id)];
-        if (team && team.club && isBrowsableClub(team.club)) clubs[team.club] = true;
-      });
-    });
-
-    var divSel = document.getElementById('sel-sched-div');
-    Object.keys(divisions).sort(function(a, b) {
-      var x = schedAgeOrder(a), y = schedAgeOrder(b);
-      return x[0] - y[0] || x[1].localeCompare(y[1]);
-    }).forEach(function(name) {
-      var o = document.createElement('option');
-      o.value = name; o.textContent = name;
-      divSel.appendChild(o);
-    });
-
-    var clubSel = document.getElementById('sel-sched-club');
-    Object.keys(clubs).sort(function(a, b) {
-      return clubDisplayName(a).localeCompare(clubDisplayName(b));
-    }).forEach(function(c) {
-      var o = document.createElement('option');
-      o.value = c; o.textContent = clubDisplayName(c);
-      clubSel.appendChild(o);
-    });
-
     // The master Season select is populated by initBrowse with every season the
     // file holds; here we only make sure the schedule has landed on one that
     // actually has games, falling back to the newest played season and moving the
@@ -1554,6 +1528,7 @@ function initSchedule() {
       if (seasonSel && SCHED.season != null) seasonSel.value = String(SCHED.season);
     }
 
+    rebuildSchedFilters();
     renderSchedule();
   }).catch(function(err) {
     // A missing index is no longer an error -- loadSchedule falls back to the
@@ -1563,6 +1538,71 @@ function initSchedule() {
       + '<div style="margin-top:8px;font-size:.85rem">'
       + escHtml(err.message) + '</div></div>';
   });
+}
+
+// The schedule's Division and Club dropdowns cascade: each lists only what the
+// season and league in force actually hold -- Norcal has no AAA and no Jr. Kings
+// -- and picking a division narrows the clubs to the ones with a team in it. A
+// selection that survives the narrowing is kept; one that no longer fits resets.
+function rebuildSchedFilters() {
+  rebuildSchedDivisions();
+  rebuildSchedClubs();
+}
+
+function schedFilterScope(g) {
+  var season = SCHED.season;
+  var league = FILTERS.league ? parseInt(FILTERS.league) : null;
+  if (season != null && g.season !== season) return false;
+  if (league && g.league !== league) return false;
+  return !isEmptyBracket(g);
+}
+
+function rebuildSchedDivisions() {
+  var divSel = document.getElementById('sel-sched-div');
+  if (!divSel || !SCHEDULE.rows) return;
+  var prev = divSel.value;
+  var divisions = {};
+  SCHEDULE.rows.forEach(function(g) {
+    if (!schedFilterScope(g)) return;
+    schedDivisionsOf(g).forEach(function(name) { divisions[name] = true; });
+  });
+  var names = Object.keys(divisions).sort(function(a, b) {
+    var x = schedAgeOrder(a), y = schedAgeOrder(b);
+    return x[0] - y[0] || x[1].localeCompare(y[1]);
+  });
+  divSel.innerHTML = '<option value="">&mdash; all &mdash;</option>'
+    + names.map(function(n) { return '<option value="' + escAttr(n) + '">' + escHtml(n) + '</option>'; }).join('');
+  divSel.value = (prev && divisions[prev]) ? prev : '';
+}
+
+function rebuildSchedClubs() {
+  var clubSel = document.getElementById('sel-sched-club');
+  if (!clubSel || !SCHEDULE.rows) return;
+  var div = document.getElementById('sel-sched-div').value;
+  var prev = clubSel.value;
+  var clubs = {};
+  SCHEDULE.rows.forEach(function(g) {
+    if (!schedFilterScope(g)) return;
+    ['home', 'away'].forEach(function(side) {
+      // With a division chosen, only the side actually in it counts -- not its
+      // cross-division opponent, the same rule the filter itself now uses.
+      if (div && schedSideDivision(g, side) !== div) return;
+      var id = side === 'home' ? g.home : g.away;
+      if (id == null) return;
+      var team = APP.teamByKey[teamKey(g.season, id)];
+      if (team && team.club && isBrowsableClub(team.club)) clubs[team.club] = true;
+    });
+  });
+  var names = Object.keys(clubs).sort(function(a, b) { return clubDisplayName(a).localeCompare(clubDisplayName(b)); });
+  clubSel.innerHTML = '<option value="">&mdash; all &mdash;</option>'
+    + names.map(function(c) { return '<option value="' + escAttr(c) + '">' + escHtml(clubDisplayName(c)) + '</option>'; }).join('');
+  clubSel.value = (prev && clubs[prev]) ? prev : '';
+}
+
+// Division narrows the club list, then the schedule redraws.
+function onSchedDivChange() {
+  rebuildSchedClubs();
+  renderSchedule();
 }
 
 // ── Filtering ─────────────────────────────────────────────────────────────
@@ -1951,7 +1991,7 @@ function onGlobalSeasonChange() {
   else if (v === 'club') { CLUB_SEASON = season; renderClub(); }
   else if (v === 'team') switchTeamSeason(season);
   else if (v === 'player') scrollToPlayerSeason(season);
-  else renderSchedule();
+  else { rebuildSchedFilters(); renderSchedule(); }
 }
 
 // On a team page, the season control switches to the same club's team in the same
@@ -3776,7 +3816,7 @@ function onFilterChange() {
   var active = ['schedule', 'browse', 'club', 'player'].filter(function(v) {
     return document.getElementById('view-' + v).classList.contains('active');
   })[0] || 'schedule';
-  if (active === 'schedule') renderSchedule();
+  if (active === 'schedule') { rebuildSchedFilters(); renderSchedule(); }
   else if (active === 'browse') onSeasonChange();
   else if (active === 'club') renderClub();
   else if (active === 'player') {
