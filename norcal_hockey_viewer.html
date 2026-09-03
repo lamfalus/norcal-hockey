@@ -1629,10 +1629,11 @@ function schedTeamRecord(games, club) {
 // A division's table, computed from the game results themselves rather than any
 // published standings. Nothing is published for the current season in preseason,
 // and SCAHA has no history here at all, so the results are the one source that
-// works every season. Only regular-season games between two teams of the same
-// division count, which keeps it a closed round-robin -- the wins, losses and
-// goals across the table each balance, which is how we know it is right.
-function schedStandings(season, league, div) {
+// works every season. Only games between two teams of the same division count,
+// which keeps it a closed round-robin -- the wins, losses and goals across the
+// table each balance, which is how we know it is right. Scope 'regular' counts
+// the regular season; 'all' adds preseason, exhibition and the rest.
+function schedStandings(season, league, div, scope) {
   var rec = {};
   function row(id) {
     if (!rec[id]) rec[id] = { id: id, gp: 0, w: 0, l: 0, t: 0, gf: 0, ga: 0 };
@@ -1645,7 +1646,8 @@ function schedStandings(season, league, div) {
     return d ? coreDivision(d.name) : null;
   }
   SCHEDULE.rows.forEach(function(g) {
-    if (g.season !== season || g.league !== league || g.cls !== 'regular') return;
+    if (g.season !== season || g.league !== league) return;
+    if (scope !== 'all' && g.cls !== 'regular') return;
     if (g.hg == null || g.ag == null || g.home == null || g.away == null) return;
     if (divOf(g.home) !== div || divOf(g.away) !== div) return;
     var h = row(g.home), a = row(g.away);
@@ -1669,29 +1671,48 @@ function schedStandings(season, league, div) {
   return rows;
 }
 
+// Regular by default, matching how a standings table is meant to read; the
+// toggle widens it to every game type. Kept beside the other schedule state so
+// the setter can just re-render.
+var SCHED_STANDINGS_SCOPE = 'regular';
+function setSchedStandingsScope(scope) {
+  SCHED_STANDINGS_SCOPE = scope;
+  renderSchedule();
+}
+
 // The standings sit above the schedule, and only where one league and one
 // division are picked -- otherwise the rows would span teams that never shared a
-// table. A season with no regular-season games played yet (preseason) has none,
-// and none is shown.
+// table. A season with nothing played in scope yet (preseason) has none, and
+// says so rather than leaving a silent gap.
 function schedStandingsPanel(season) {
   var league = parseInt(FILTERS.league);
   if (!league || !SCHED.div) return '';
-  var rows = schedStandings(season, league, SCHED.div);
+  var scope = SCHED_STANDINGS_SCOPE;
+  var scopeWord = scope === 'all' ? 'all games' : 'regular season';
+  var head = '<div class="section-heading" style="margin-bottom:8px"><h2>Standings</h2>'
+    + '<span class="badge">' + escHtml(SCHED.div) + ' · ' + scopeWord + '</span></div>'
+    + '<div class="rec-head" style="margin-bottom:12px"><div class="rec-toggle">'
+    + '<button type="button" class="rec-btn' + (scope === 'regular' ? ' active' : '')
+    + '" onclick="setSchedStandingsScope(\'regular\')">Regular</button>'
+    + '<button type="button" class="rec-btn' + (scope === 'all' ? ' active' : '')
+    + '" onclick="setSchedStandingsScope(\'all\')">All games</button>'
+    + '</div></div>';
+
+  var rows = schedStandings(season, league, SCHED.div, scope);
   if (!rows.length) {
-    // Nothing played yet. If the division has regular-season games on the
-    // schedule, say the table is coming rather than leave a silent gap that
-    // reads as missing -- an AAA division in preseason is the common case.
+    // Nothing played in scope yet. If games are on the schedule, say the table
+    // is coming rather than leave a gap that reads as missing.
     var scheduled = SCHEDULE.rows.some(function(g) {
-      return g.season === season && g.league === league && g.cls === 'regular'
+      return g.season === season && g.league === league
+        && (scope === 'all' || g.cls === 'regular')
         && (g.hg == null || g.ag == null)
         && schedSideDivision(g, 'home') === SCHED.div
         && schedSideDivision(g, 'away') === SCHED.div;
     });
     if (!scheduled) return '';
-    return '<div class="section-heading"><h2>Standings</h2><span class="badge">'
-      + escHtml(SCHED.div) + ' · regular season</span></div>'
-      + '<div class="band-note">No regular-season games have been played yet &mdash;'
-      + ' the table appears once they are.</div>'
+    return head
+      + '<div class="band-note">No ' + (scope === 'all' ? 'games' : 'regular-season games')
+      + ' have been played yet &mdash; the table appears once they are.</div>'
       + '<div style="margin-top:28px"></div>';
   }
   var body = rows.map(function(r, i) {
@@ -1710,10 +1731,10 @@ function schedStandingsPanel(season) {
       + '<td class="num">' + escHtml(gd) + '</td>'
       + '</tr>';
   }).join('');
-  return '<div class="section-heading"><h2>Standings</h2><span class="badge">'
-    + escHtml(SCHED.div) + ' · regular season</span></div>'
-    + '<div class="band-note">Built from played regular-season games between the'
-    + ' division’s teams. 2 points for a win, 1 for a tie.</div>'
+  var lede = 'Built from played ' + (scope === 'all' ? '' : 'regular-season ')
+    + 'games between the division’s teams. 2 points for a win, 1 for a tie.';
+  return head
+    + '<div class="band-note">' + lede + '</div>'
     + '<div class="table-wrap"><table class="standings-table"><thead><tr>'
     + '<th class="num">#</th><th>Team</th><th class="num" title="Games played">GP</th>'
     + '<th class="num" title="Wins">W</th><th class="num" title="Losses">L</th>'
