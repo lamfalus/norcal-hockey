@@ -1485,17 +1485,20 @@ function coreDivision(name) {
 // under. Kept per-side so a filter can ask that the SAME team be both the club
 // and in the division -- otherwise a Sharks 14AA game against a Kraken 14AAA
 // side passes a "Sharks + 14AAA" filter, each half matched by a different team.
+//
+// The full, granular division -- "10U B East", not a merged "10U B" -- so the
+// filter and the standings match Time to Score's own per-division tables.
 function schedSideDivision(g, side) {
   var id = side === 'home' ? g.home : g.away;
   if (id != null) {
     var team = APP.teamByKey[teamKey(g.season, id)];
     var div = team ? APP.divisionById[team.division] : null;
-    if (div) return coreDivision(div.name);
+    if (div) return div.name;
   }
   var stated = side === 'home' ? g.homeDiv : g.awayDiv;
-  if (stated) return coreDivision(stated);
+  if (stated) return stated;
   var filed = APP.divisionById[g.division];
-  if (filed) return coreDivision(filed.name);
+  if (filed) return filed.name;
   return '';
 }
 
@@ -1706,7 +1709,8 @@ function schedStandings(season, league, div, scope) {
     var team = APP.teamByKey[teamKey(season, id)];
     if (!team || team.division == null) return null;
     var d = APP.divisionById[team.division];
-    return d ? coreDivision(d.name) : null;
+    // The granular division -- East and West are their own tables, as on TTS.
+    return d ? d.name : null;
   }
   SCHEDULE.rows.forEach(function(g) {
     if (g.season !== season || g.league !== league) return;
