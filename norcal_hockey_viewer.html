@@ -556,18 +556,12 @@
   <summary id="filter-summary">Filters</summary>
   <div class="controls" id="filter-controls">
 
-    <label data-views="schedule">Season
-      <select id="sel-sched-season" onchange="onSchedSeasonChange()"></select>
-    </label>
-    <label data-views="browse">Season
-      <select id="sel-season" onchange="onSeasonChange()">
-        <option value="">&mdash; select &mdash;</option>
-      </select>
-    </label>
-    <label data-views="club">Season
-      <select id="sel-club-season" onchange="onClubSeasonChange()">
-        <option value="">&mdash; all seasons &mdash;</option>
-      </select>
+    <!-- One master Season, shared by the schedule and stats views so the choice
+         follows the reader between them. The club view is inherently multi-season
+         and does its own season navigation on the page (season badges + a "back
+         to all seasons" link), so it is not among the views this controls. -->
+    <label data-views="schedule browse">Season
+      <select id="sel-season" onchange="onMasterSeasonChange()"></select>
     </label>
 
     <label data-views="schedule browse club">League
@@ -1207,7 +1201,7 @@ function captureAppState(viewOverride) {
     s.playerId = CURRENT_PLAYER_ID;
   } else if (v === 'club') {
     s.clubName   = document.getElementById('sel-club').value;
-    s.clubSeason = document.getElementById('sel-club-season').value;
+    s.clubSeason = CLUB_SEASON;
   } else if (v === 'team') {
     s.teamKey = CURRENT_TEAM_KEY;
   }
@@ -1235,7 +1229,7 @@ function applyAppState(s) {
     if (s.club  != null) document.getElementById('sel-sched-club').value = s.club;
     if (s.season != null) {
       SCHED.season = s.season;
-      var seasonSel = document.getElementById('sel-sched-season');
+      var seasonSel = document.getElementById('sel-season');
       if (seasonSel) seasonSel.value = String(s.season);
     }
     // An empty list is a state that renders nothing. It is reachable -- untick
@@ -1264,7 +1258,7 @@ function applyAppState(s) {
     if (s.playerId) renderPlayerHistory(s.playerId);
   } else if (s.view === 'club') {
     if (s.clubName)   document.getElementById('sel-club').value = s.clubName;
-    if (s.clubSeason) document.getElementById('sel-club-season').value = s.clubSeason;
+    CLUB_SEASON = s.clubSeason || '';
     renderClub();
   }
   window.scrollTo({top:0, behavior:'smooth'});
@@ -1293,6 +1287,11 @@ function showView(v, btn) {
   document.getElementById('view-'+v).classList.add('active');
   if(btn) btn.classList.add('active');
   markActiveView(v);
+  // Schedule and stats share one Season, so the view being opened re-syncs to it
+  // -- the other may have moved it while this one was hidden.
+  var master = parseInt((document.getElementById('sel-season') || {}).value);
+  if (v === 'schedule') { if (!isNaN(master)) SCHED.season = master; renderSchedule(); }
+  else if (v === 'browse') { if (BROWSE_RENDERED_SEASON !== master) onSeasonChange(); }
   history.pushState(captureAppState(v), '');
 }
 
@@ -1539,19 +1538,17 @@ function initSchedule() {
       clubSel.appendChild(o);
     });
 
-    // Only the seasons this file actually holds. Where there is no index that
-    // is the one season the fallback read, and the picker says so by having
-    // nothing else in it.
+    // The master Season select is populated by initBrowse with every season the
+    // file holds; here we only make sure the schedule has landed on one that
+    // actually has games, falling back to the newest played season and moving the
+    // shared select with it so the two views stay in step.
     var present = {};
     rows.forEach(function(g) { present[g.season] = true; });
-    var seasonSel = document.getElementById('sel-sched-season');
-    var seasons = Object.keys(present).map(Number).sort(function(a, b) { return b - a; });
-    seasonSel.innerHTML = seasons.map(function(id) {
-      return '<option value="' + id + '">' + escHtml(SEASON_LABELS[id] || ('Season ' + id))
-        + '</option>';
-    }).join('');
-    if (SCHED.season == null || !present[SCHED.season]) SCHED.season = currentScheduleSeason();
-    if (SCHED.season != null) seasonSel.value = String(SCHED.season);
+    if (SCHED.season == null || !present[SCHED.season]) {
+      SCHED.season = currentScheduleSeason();
+      var seasonSel = document.getElementById('sel-season');
+      if (seasonSel && SCHED.season != null) seasonSel.value = String(SCHED.season);
+    }
 
     renderSchedule();
   }).catch(function(err) {
@@ -1888,7 +1885,7 @@ function updateFilterSummary() {
     var minGP = parseInt(value('sel-min-gp')) || 1;
     if (minGP > 1) parts.push(minGP + '+ GP');
   } else if (view === 'club' || view === 'team') {
-    var cs = value('sel-club-season');
+    var cs = CLUB_SEASON;
     parts.push(cs ? (SEASON_LABELS[parseInt(cs)] || cs) : 'all seasons');
     parts.push(typeSummaryFor(FILTERS.classes));
     parts.push(value('sel-club') ? clubDisplayName(value('sel-club')) : 'no club chosen');
@@ -1938,10 +1935,14 @@ function onSchedTypeChange() {
   renderSchedule();
 }
 
-function onSchedSeasonChange() {
-  SCHED.season = parseInt(document.getElementById('sel-sched-season').value);
+// The master Season, shared by the schedule and stats views. It updates whichever
+// of the two is showing; the other re-syncs to it when the reader switches to it
+// (see showView), so a season picked in one carries to the other.
+function onMasterSeasonChange() {
+  SCHED.season = parseInt(document.getElementById('sel-season').value);
   SCHED.upcoming = SCHED.recent = SCHED_PAGE;
-  renderSchedule();
+  if (document.body.getAttribute('data-view') === 'browse') onSeasonChange();
+  else renderSchedule();
 }
 
 // Which season the picker opens on.
@@ -2055,14 +2056,19 @@ function renderSchedule() {
 // VIEW 1: Browse
 // ════════════════════════════════════════
 let browseSort={col:'PTS',dir:-1};
+// Populates the one shared Season select (newest first) and sets the default the
+// whole app opens on; SCHED.season mirrors it so the schedule opens there too.
+var BROWSE_RENDERED_SEASON = null;
 function initBrowse(){
   const sel=document.getElementById('sel-season');
-  SEASONS.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=SEASON_LABELS[s];sel.appendChild(o);});
+  SEASONS.slice().reverse().forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=SEASON_LABELS[s];sel.appendChild(o);});
   sel.value=latestSeasonWithData();
+  SCHED.season=parseInt(sel.value);
   onSeasonChange();
 }
 function onSeasonChange(){
   const season=parseInt(document.getElementById('sel-season').value);
+  BROWSE_RENDERED_SEASON=season;
   const clubSel=document.getElementById('sel-club-browse');
   const divSel=document.getElementById('sel-div-browse');
   // Reset both dropdowns
@@ -2098,6 +2104,19 @@ function onDivBrowseChange(){
   onBrowseRender();
 }
 function onClubBrowseChange(){ onBrowseRender(); }
+
+// The one team a season + club + division narrows to, so the stats view can link
+// out to that team's own page rather than be a second, lesser team view. Null
+// when it still spans more than one team.
+function browseFilteredTeamKey(season, club, div){
+  if(!club || !div) return null;
+  var keys={};
+  ALL_ENTRIES.forEach(function(e){
+    if(e.season===season && e.club===club && e.division===div && e.teamKey) keys[e.teamKey]=true;
+  });
+  var arr=Object.keys(keys);
+  return arr.length===1 ? arr[0] : null;
+}
 // What the collapsed filter panel says it is showing. Only the season is
 // always named; the rest appear when they are actually narrowing something, so
 // the line stays short enough to read on a phone.
@@ -2118,6 +2137,12 @@ function onBrowseRender(){
   if(div)subLabel+=' · '+div;
   const content=document.getElementById('browse-content');
   let html='';
+  // Narrowed to a single team? This is the stats view, not the team's page --
+  // link out to that page rather than duplicate it here.
+  const tkey=browseFilteredTeamKey(season,club,div);
+  if(tkey){
+    html+='<div class="band-note" style="margin:0 0 14px"><span class="team-link sched-teamlink" onclick="goToTeam(\''+escAttr(tkey)+'\')">Open team page →</span></div>';
+  }
   // Helper to filter entries
   const baseFilter=e=>e.season===season&&(club?e.club===club:true)&&(div?e.division===div:true);
   if(type==='skater'||type==='all'){
@@ -2369,15 +2394,14 @@ function entryGAADisplay(e) {
 // Anaheim Jr Ducks squads are all called "Anaheim Jr Ducks" in 2021 -- so
 // grouping by name would fuse a whole club into a single card.
 
+// The club view's season lives here, not in the shared bar: '' is the all-seasons
+// overview (its landing), a number is that one season. The reader moves between
+// them with the season badges in the overview and the "back to all seasons" link
+// on a season, so the control is the page itself.
+var CLUB_SEASON = '';
+
 function initClub() {
   refreshClubOptions();
-  const sSel = document.getElementById('sel-club-season');
-  sSel.innerHTML = '<option value="">— all seasons —</option>';
-  SEASONS.forEach(s => {
-    const o = document.createElement('option');
-    o.value = s; o.textContent = SEASON_LABELS[s];
-    sSel.appendChild(o);
-  });
 }
 
 function refreshClubOptions() {
@@ -2397,8 +2421,8 @@ function refreshClubOptions() {
   if (prev && present[prev]) sel.value = prev;
 }
 
-function onClubChange() { renderClub(); }
-function onClubSeasonChange() { renderClub(); }
+// A new club opens on its all-seasons overview.
+function onClubChange() { CLUB_SEASON = ''; renderClub(); }
 
 // The teams a club iced in a season, as {key, team, entries}.
 function clubTeams(club, season) {
@@ -2421,7 +2445,7 @@ function clubTeams(club, season) {
 
 function renderClub() {
   const club = document.getElementById('sel-club').value;
-  const season = parseInt(document.getElementById('sel-club-season').value);
+  const season = parseInt(CLUB_SEASON);
   const content = document.getElementById('club-content');
   updateFilterSummary();
 
@@ -2571,7 +2595,7 @@ function fillClubRecords(club, season, teams) {
   loadSeasonGames(season).then(function(games) {
     // The reader may have moved to another club or season while it loaded.
     if (document.getElementById('sel-club').value !== club) return;
-    if (parseInt(document.getElementById('sel-club-season').value) !== season) return;
+    if (parseInt(CLUB_SEASON) !== season) return;
 
     var classes = classFilter();
     var league = FILTERS.league ? parseInt(FILTERS.league) : null;
@@ -2664,7 +2688,7 @@ function renderClubSeason(club, season, teams, content) {
 }
 
 function setClubSeason(season) {
-  document.getElementById('sel-club-season').value = season;
+  CLUB_SEASON = (season === '' || season == null) ? '' : season;
   renderClub();
 }
 
@@ -4087,7 +4111,7 @@ function goToClub(club, season) {
   markActiveView('club');
   refreshClubOptions();
   document.getElementById('sel-club').value = club;
-  document.getElementById('sel-club-season').value = season || '';
+  CLUB_SEASON = season || '';
   renderClub();
   history.pushState({ view: 'club', clubName: club, clubSeason: String(season || '') }, '');
   window.scrollTo({ top: 0, behavior: 'smooth' });
