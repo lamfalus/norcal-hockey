@@ -22,7 +22,13 @@
   header h1:hover{opacity:.82;}
   header h1:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px;}
   header h1 span{color:var(--accent);}
-  .tab-bar{display:flex;gap:4px;margin-left:auto;}
+  /* The always-present season control in the header. margin-left:auto puts it and
+     the tabs together on the right; on a phone the header wraps and it drops to a
+     line with the tabs. */
+  .hdr-season{display:flex;flex-direction:row;align-items:center;gap:7px;margin-left:auto;
+              font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);white-space:nowrap;}
+  .hdr-season select{min-width:104px;height:34px;}
+  .tab-bar{display:flex;gap:4px;}
   .tab-btn{background:transparent;border:1px solid transparent;color:var(--muted);padding:7px 18px;border-radius:6px;cursor:pointer;font-size:.9rem;font-weight:500;transition:all .15s;}
   .tab-btn:hover{color:var(--text);background:var(--surface2);}
   /* The header search grows to fill the gap between the wordmark and the tabs,
@@ -536,6 +542,12 @@
     <div class="autocomplete-list" id="global-ac" style="display:none"></div>
   </div>
   <span class="load-status" id="load-status">✓ Loaded</span>
+  <!-- The season lives in the header, present in every view -- change it and the
+       page you are on redraws for that season: the schedule, the stats, a club, or
+       the very same team a year earlier. -->
+  <label class="hdr-season" title="The season everything on the page is for">Season
+    <select id="sel-season" onchange="onGlobalSeasonChange()"></select>
+  </label>
   <div class="tab-bar">
     <button class="tab-btn active" onclick="showView('schedule',this)">Schedule</button>
     <button class="tab-btn" onclick="showView('browse',this)">Stats</button>
@@ -555,14 +567,6 @@
 <details class="filter-panel" id="filters" open>
   <summary id="filter-summary">Filters</summary>
   <div class="controls" id="filter-controls">
-
-    <!-- One master Season, shared by the schedule and stats views so the choice
-         follows the reader between them. The club view is inherently multi-season
-         and does its own season navigation on the page (season badges + a "back
-         to all seasons" link), so it is not among the views this controls. -->
-    <label data-views="schedule browse">Season
-      <select id="sel-season" onchange="onMasterSeasonChange()"></select>
-    </label>
 
     <label data-views="schedule browse club">League
       <select id="sel-league" onchange="onFilterChange()">
@@ -1935,14 +1939,46 @@ function onSchedTypeChange() {
   renderSchedule();
 }
 
-// The master Season, shared by the schedule and stats views. It updates whichever
-// of the two is showing; the other re-syncs to it when the reader switches to it
-// (see showView), so a season picked in one carries to the other.
-function onMasterSeasonChange() {
-  SCHED.season = parseInt(document.getElementById('sel-season').value);
+// The one global Season, always in the header. Whatever view is open redraws for
+// the chosen season: the schedule, the stats, a club's season, or the same team a
+// year earlier. The player page spans every season, so it scrolls to that one.
+function onGlobalSeasonChange() {
+  var season = parseInt(document.getElementById('sel-season').value);
+  SCHED.season = season;
   SCHED.upcoming = SCHED.recent = SCHED_PAGE;
-  if (document.body.getAttribute('data-view') === 'browse') onSeasonChange();
+  var v = document.body.getAttribute('data-view');
+  if (v === 'browse') onSeasonChange();
+  else if (v === 'club') { CLUB_SEASON = season; renderClub(); }
+  else if (v === 'team') switchTeamSeason(season);
+  else if (v === 'player') scrollToPlayerSeason(season);
   else renderSchedule();
+}
+
+// On a team page, the season control switches to the same club's team in the same
+// division that season. Where the club iced no such team, the page says so rather
+// than jump somewhere unrelated.
+function switchTeamSeason(season) {
+  var cur = APP.teamByKey[CURRENT_TEAM_KEY];
+  if (!cur) return;
+  var curDiv = cur.division != null ? coreDivision((APP.divisionById[cur.division] || {}).name || '') : '';
+  var match = (APP.core.teams || []).find(function(t) {
+    if (t.season !== season || t.club !== cur.club) return false;
+    return coreDivision((APP.divisionById[t.division] || {}).name || '') === curDiv;
+  });
+  if (match) { goToTeam(teamKey(season, match.id)); return; }
+  var host = document.getElementById('team-content');
+  if (host) {
+    host.innerHTML = '<div class="empty"><div class="icon">📭</div>'
+      + escHtml(clubDisplayName(cur.club)) + (curDiv ? ' ' + escHtml(curDiv) : '')
+      + ' has no ' + escHtml(SEASON_LABELS[season] || ('season ' + season)) + ' record.</div>';
+  }
+}
+
+// The player page already lists every season; nudge to the chosen one if it is
+// there, and otherwise leave the page where it is.
+function scrollToPlayerSeason(season) {
+  var el = document.querySelector('#player-content [data-season="' + season + '"]');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // Which season the picker opens on.
@@ -2689,6 +2725,7 @@ function renderClubSeason(club, season, teams, content) {
 
 function setClubSeason(season) {
   CLUB_SEASON = (season === '' || season == null) ? '' : season;
+  if (CLUB_SEASON) setSeasonSelect(CLUB_SEASON);
   renderClub();
 }
 
@@ -3385,7 +3422,7 @@ function renderPlayerHistory(playerId) {
         + '</tr></thead>'
         + '<tbody>' + goalies.map(goalieRow).join('') + '</tbody></table></div>';
     }
-    return '<div class="season-section"><div class="season-section-header">'
+    return '<div class="season-section" data-season="' + s + '"><div class="season-section-header">'
       + '<span class="season-badge">' + SEASON_LABELS[s] + '</span></div>' + body
       + '<div class="game-log" id="gamelog-' + s + '"></div></div>';
   }).join('');
@@ -3802,6 +3839,10 @@ var CURRENT_TEAM_KEY = null;
 
 function goToTeam(key) {
   CURRENT_TEAM_KEY = key;
+  // Keep the header season pointed at the team you're looking at, so it reads
+  // right and a change from it moves this team, not some other season.
+  var t = APP.teamByKey[key];
+  if (t) setSeasonSelect(t.season);
   document.querySelectorAll('.view').forEach(function(el) { el.classList.remove('active'); });
   document.querySelectorAll('.tab-btn').forEach(function(el) { el.classList.remove('active'); });
   document.getElementById('view-team').classList.add('active');
@@ -3809,6 +3850,14 @@ function goToTeam(key) {
   history.pushState({ view: 'team', teamKey: key }, '');
   window.scrollTo({ top: 0, behavior: 'smooth' });
   renderTeam(key);
+}
+
+// Point the header season control at a given season when it has that option.
+function setSeasonSelect(season) {
+  var sel = document.getElementById('sel-season');
+  if (sel && season != null && sel.querySelector('option[value="' + season + '"]')) {
+    sel.value = String(season);
+  }
 }
 
 // Every game a team appears in that season, oldest first.
@@ -4112,6 +4161,7 @@ function goToClub(club, season) {
   refreshClubOptions();
   document.getElementById('sel-club').value = club;
   CLUB_SEASON = season || '';
+  if (CLUB_SEASON) setSeasonSelect(CLUB_SEASON);
   renderClub();
   history.pushState({ view: 'club', clubName: club, clubSeason: String(season || '') }, '');
   window.scrollTo({ top: 0, behavior: 'smooth' });
