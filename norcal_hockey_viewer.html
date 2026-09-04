@@ -3979,6 +3979,10 @@ function renderTeam(key) {
   var div = APP.divisionById[team.division];
   var league = APP.leagueById[team.league];
   var roster = ALL_ENTRIES.filter(function(e) { return e.teamKey === key; });
+  // With no roster (a team whose games are all still to come), the player-flow
+  // chart has nothing of this team's to trace and would fall back to the whole
+  // club's -- misleading -- so it is dropped and the roster panel says so.
+  var hasRoster = roster.length > 0;
 
   // The club half of the title links back to the club; the level after it stays
   // plain, so "SJ Jr. Sharks 13U AAA" reads with only the club as a link.
@@ -4006,7 +4010,7 @@ function renderTeam(key) {
     + '<div id="team-roster"></div>'
     + '<div id="team-periods"></div>'
     + '<div id="team-breakdown"></div>'
-    + (team.club ? '<div class="panel dr-panel">'
+    + ((team.club && hasRoster) ? '<div class="panel dr-panel">'
         + '<div class="dr-h">Player movement</div>'
         + '<p class="dr-lede">Tracing this exact roster &mdash; the clubs these players were with the season before, and the season after. Hover a block to follow one club.</p>'
         + '<div id="team-flow" style="overflow-x:auto"></div>'
@@ -4020,7 +4024,7 @@ function renderTeam(key) {
   if (roster.some(function(e){ return e.type === 'skater'; })) {
     renderDivisionInto(document.getElementById('team-breakdown'), roster, team.season);
   }
-  if (team.club) {
+  if (team.club && hasRoster) {
     renderFlowInto(document.getElementById('team-flow'), document.getElementById('team-flow-legend'),
       { season: team.season, focusClub: team.club, focusTeam: key });
   }
@@ -4207,8 +4211,7 @@ function renderTeamRoster(roster) {
     .sort(function(a, b) { return entryGAA(a) - entryGAA(b); });
   if (!skaters.length && !goalies.length) {
     host.innerHTML = '<div class="panel"><h2 style="font-size:1rem;margin-bottom:12px">Roster</h2>'
-      + '<p style="color:var(--muted);padding:4px 2px">No roster recorded — the games'
-      + ' counted filter may be excluding them.</p></div>';
+      + '<p style="color:var(--muted);padding:4px 2px">No roster recorded yet.</p></div>';
     return;
   }
   browseSort = { col: 'PTS', dir: -1 };
