@@ -4852,13 +4852,37 @@ function _drawMigrationSVG(container, legendEl) {
   var PT = 42, PB = 16, PL = 4, PR = 4;
   var chartH    = H - PT - PB;
   var BAR_GAP   = 5;
-  var NO_DATA_H = 24;  // fixed height for No Data block
+  // The No-Data catch-all is a fixed-height sentinel, never scaled: it can hold
+  // more players than every real club combined, and scaling it would drive the
+  // scale to nothing and squash the clubs that matter.
+  var NO_DATA_H = 24;
   var colSpacing = (W - PL - PR - BAR_W) / (SEASONS.length - 1);
 
   var seasonX = {};
   SEASONS.forEach(function(s, i){ seasonX[s] = PL + i * colSpacing; });
 
-  // Compute block positions per (season, club)
+  // One players-per-pixel scale for the real clubs, shared by every column, so a
+  // block's height and a ribbon's width mean the same number of players wherever
+  // they appear. The busiest season fills the height; the rest are shorter in
+  // proportion, rather than each column being stretched to fill regardless of how
+  // many it holds -- which is what made a bar's size not track its count, and a
+  // flow taper between its two ends because each was scaled to its own column.
+  var pxPerPlayer = Infinity;
+  SEASONS.forEach(function(season) {
+    var cc = seasonClubCounts[season];
+    if (!cc) return;
+    var real = Object.keys(cc).filter(function(c){ return c !== NO_DATA; });
+    var total = real.reduce(function(s, c){ return s + cc[c]; }, 0);
+    if (!total) return;
+    var gaps = (Object.keys(cc).length - 1) * BAR_GAP;
+    var noDataReserve = (cc[NO_DATA] !== undefined) ? (NO_DATA_H + BAR_GAP) : 0;
+    var avail = chartH - gaps - noDataReserve;
+    if (avail > 0) pxPerPlayer = Math.min(pxPerPlayer, avail / total);
+  });
+  if (!isFinite(pxPerPlayer)) pxPerPlayer = 0;
+
+  // Compute block positions per (season, club): real clubs on the one scale, the
+  // No-Data block fixed at the foot.
   var blockPos = {}; // {season: {club: {y0,h,count}}}
   SEASONS.forEach(function(season) {
     var cc = seasonClubCounts[season];
@@ -4869,16 +4893,10 @@ function _drawMigrationSVG(container, legendEl) {
       return cc[b] - cc[a];
     });
     var hasNoData = cc[NO_DATA] !== undefined;
-    // Reserve space for No Data block at the bottom; distribute the rest by count
-    var realClubs = clubs.filter(function(c){ return c !== NO_DATA; });
-    var total  = realClubs.reduce(function(s,c){ return s+cc[c]; }, 0);
-    var gaps   = (clubs.length - 1) * BAR_GAP;
-    var noDataReserve = hasNoData ? (NO_DATA_H + BAR_GAP) : 0;
-    var avail  = chartH - gaps - noDataReserve;
     var y = PT;
     blockPos[season] = {};
-    realClubs.forEach(function(club) {
-      var h = Math.max(4, (cc[club] / total) * avail);
+    clubs.filter(function(c){ return c !== NO_DATA; }).forEach(function(club) {
+      var h = Math.max(3, cc[club] * pxPerPlayer);
       blockPos[season][club] = {y0: y, h: h, count: cc[club]};
       y += h + BAR_GAP;
     });
