@@ -216,6 +216,35 @@ class TestSweepRun(SweepTestCase):
         self.assertTrue(any("display-schedule" in p for p in fetcher.paths))
         self.assertTrue(any("oss-scoresheet" in p for p in fetcher.paths))
 
+    def test_due_game_dropped_from_window_is_collected_via_scoresheet(self):
+        # The site drops a game from the day-window once it is scored. Here the
+        # window (empty) does not list the due game, so the sweep falls back to
+        # its scoresheet -- game.html is game 50647's sheet, dated to today.
+        self.add_game(50647, time_text="8:30 AM")
+        self.config.collect_scorecards = False
+        sheet = load("game.html").replace("08-29-25", "09-05-26")  # -> TODAY
+        fetcher = _StubFetcher(day_window="<html><body></body></html>",
+                               scoresheet=sheet)
+
+        info = self.pipe(fetcher).sweep(self.NOW)
+
+        self.assertEqual(info["probed"], 1)
+        row = self.conn.execute(
+            "SELECT status, home_goals, away_goals, scoresheet_at "
+            "FROM games WHERE game_id = 50647").fetchone()
+        self.assertEqual(row["status"], "final")
+        self.assertIsNotNone(row["home_goals"])
+        self.assertIsNotNone(row["scoresheet_at"])
+        self.assertTrue(any("oss-scoresheet" in p for p in fetcher.paths))
+
+    def test_probe_returns_false_for_an_unscored_sheet(self):
+        self.add_game(50647, time_text="8:30 AM")
+        pipe = self.pipe(_StubFetcher(scoresheet="<html><body>not played</body></html>"))
+        self.assertFalse(pipe.probe_scoresheet(50647))
+        self.assertEqual(self.conn.execute(
+            "SELECT status FROM games WHERE game_id = 50647").fetchone()["status"],
+            "scheduled")
+
     def test_a_due_game_lets_a_blank_neighbour_in_the_same_league_refresh(self):
         # 50647 (due) triggers the league day-window; 50684 is a blank stub in
         # the same league, present on that same page with both teams named, so

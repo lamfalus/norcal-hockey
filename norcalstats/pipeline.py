@@ -978,15 +978,66 @@ class Pipeline:
         )
         return True
 
+    def probe_scoresheet(self, game_id: int) -> bool:
+        """Collect a due game straight from its scoresheet, bypassing the
+        day-window.
+
+        The whole-league ``display-schedule`` is really a list of games still
+        *awaiting* a result -- a game drops off it once the score is entered
+        (after a short, unpredictable lag). So a game can go final and vanish
+        from the window between two sweeps, and reconciling only against the
+        window would miss it. When a due game is not in its league's window, this
+        fetches the scoresheet by id (which always exists once the game is
+        scored, even for a game whose team ids we never resolved), reads the
+        final score from the sheet itself, marks the game final and stores the
+        detail. Returns ``True`` when the game was collected; ``False`` when the
+        sheet is not scored yet (try again next cycle).
+        """
+        row = self.conn.execute(
+            "SELECT season_id FROM games WHERE game_id = ?", (game_id,)
+        ).fetchone()
+        if row is None:
+            return False
+        try:
+            page = self.fetcher.get(
+                tts.scoresheet_path(game_id),
+                key=f"s{row['season_id']}/game/{game_id}",
+                use_cache=False,
+            )
+        except (RequestCeilingReached, RateLimited) as exc:
+            log.warning("sweep: %s -- stopping", exc)
+            self.stats.stopped_early = True
+            return False
+        except FetchError as exc:
+            log.error("sweep: game %s scoresheet probe: %s", game_id, exc)
+            self.stats.errors += 1
+            return False
+
+        sheet = tts.parse_scoresheet(page.html, game_id)
+        if not sheet.is_usable or sheet.home.final is None or sheet.away.final is None:
+            return False  # not scored yet
+        self.conn.execute(
+            "UPDATE games SET status = 'final', home_goals = ?, away_goals = ?, "
+            "has_scoresheet = 1, updated_at = ? WHERE game_id = ?",
+            (sheet.home.final, sheet.away.final, now(), game_id),
+        )
+        # store_scoresheet re-parses and writes the roster/goal detail and
+        # scoresheet_at; the score above is what the scorecard reconcile needs.
+        self.store_scoresheet(game_id, page.html, page.sha256)
+        self.stats.scoresheets += 1
+        return True
+
     def sweep(self, now_local: datetime) -> dict:
         """One targeted results pass. Returns a summary dict.
 
-        Fetches the day-window for only the leagues that have a due game,
-        reconciles those games' results, then fetches the scoresheet and PDF for
-        any that are now final. Makes zero requests when nothing is due.
+        Fetches the day-window for only the leagues that have a due game and
+        reconciles those games. A due game the window does not list (the site
+        drops a game once it is scored) is collected straight from its scoresheet
+        instead. Then fetches the scoresheet and PDF for any now final. Makes
+        zero requests when nothing is due.
         """
         info = {"due": 0, "leagues": 0, "changed": 0, "unblanked": 0,
-                "scoresheets": 0, "scorecards": 0, "new_cards": 0}
+                "probed": 0, "scoresheets": 0, "scorecards": 0, "new_cards": 0}
         due = self.due_games(now_local)
         info["due"] = len(due)
         if not due:
@@ -1002,6 +1053,7 @@ class Pipeline:
         # Blank-side games get their names refreshed for free from any league
         # page we are already fetching -- no extra request of their own.
         blank_ids = self.blank_side_games_today(now_local)
+        seen_ids: set[int] = set()
         log.info("sweep: %d game(s) due across %d league(s), season S%d",
                  len(due), len(by_league), season_id)
 
@@ -1023,6 +1075,7 @@ class Pipeline:
             info["leagues"] += 1
             for game in tts.parse_team_page(page.html).games:
                 if game.game_id in due_ids:
+                    seen_ids.add(game.game_id)
                     if self.apply_schedule_result(game):
                         info["changed"] += 1
                 elif game.game_id in blank_ids and self.refresh_missing_side(game):
@@ -1030,6 +1083,17 @@ class Pipeline:
                     log.info("sweep game %d: opponent now assigned (%s @ %s); "
                              "will be picked up next cycle",
                              game.game_id, game.away_name, game.home_name)
+        self.conn.commit()
+
+        # A due game the window did not list has almost certainly been scored and
+        # dropped from the schedule display; collect it straight from its
+        # scoresheet so the racy window never loses a result.
+        for row in due:
+            if row["game_id"] in seen_ids or self.stats.stopped_early:
+                continue
+            if self.probe_scoresheet(row["game_id"]):
+                info["probed"] += 1
+                info["changed"] += 1
         self.conn.commit()
 
         # Now pull the sheet and PDF for any due game that is final and missing
