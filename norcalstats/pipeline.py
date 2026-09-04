@@ -797,6 +797,166 @@ class Pipeline:
         """, [*season_list, tts.SCORECARD_PARSE_VERSION, recent]).fetchall()
         return {row["game_id"] for row in rows}
 
+    # ------------------------------------------------------------- sweep
+    def due_games(self, now_local: datetime) -> list[sqlite3.Row]:
+        """Today's games whose result should be checked right now.
+
+        A game is *due* when its scheduled start is between ``first_look`` and
+        ``giveup`` behind the clock **and** we do not yet have everything it can
+        give: no result yet, a scoresheet posted but not parsed, or a final
+        score whose PDF scorecard has not been fetched. Everything else -- games
+        not yet started, long past, or already complete -- is filtered out here,
+        so a sweep that finds an empty list makes no request at all.
+        """
+        today = now_local.date().isoformat()
+        rows = self.conn.execute(
+            """
+            SELECT game_id, season_id, league_id, date_iso, time_text, status,
+                   has_scoresheet, home_goals, away_goals,
+                   scoresheet_at, scorecard_at
+              FROM games
+             WHERE date_iso = ?
+               AND (
+                     status != 'final'
+                  OR (has_scoresheet = 1 AND scoresheet_at IS NULL)
+                  OR (has_scoresheet = 1 AND home_goals IS NOT NULL
+                      AND away_goals IS NOT NULL AND scorecard_at IS NULL)
+               )
+            """,
+            (today,),
+        ).fetchall()
+
+        first = timedelta(minutes=self.config.sweep_first_look_minutes)
+        giveup = timedelta(hours=self.config.sweep_giveup_hours)
+        due = []
+        for row in rows:
+            start = parse_schedule_time(row["date_iso"], row["time_text"])
+            if start is None:
+                continue
+            if first <= (now_local - start) < giveup:
+                due.append(row)
+        return due
+
+    def apply_schedule_result(self, game: tts.ScheduleGame) -> bool:
+        """Update only the result columns of a game already in the database.
+
+        The sweep reads a whole-league day-window, which cannot resolve which
+        club is home when two share a name, so it never creates games or touches
+        team ids -- that is the nightly scan's job. It writes back just the
+        score, the final flag, and whether the scoresheet link has appeared.
+        Returns ``True`` when any of those changed.
+        """
+        existing = self.conn.execute(
+            "SELECT schedule_hash FROM games WHERE game_id = ?", (game.game_id,)
+        ).fetchone()
+        if existing is None:
+            return False
+        new_hash = _hash_game(game)
+        if new_hash == existing["schedule_hash"]:
+            return False
+        self.conn.execute(
+            "UPDATE games SET away_goals = ?, home_goals = ?, status = ?, "
+            "has_scoresheet = ?, schedule_hash = ?, updated_at = ? "
+            "WHERE game_id = ?",
+            (game.away_goals, game.home_goals,
+             "final" if game.is_final else "scheduled",
+             int(game.has_scoresheet), new_hash, now(), game.game_id),
+        )
+        return True
+
+    def sweep(self, now_local: datetime) -> dict:
+        """One targeted results pass. Returns a summary dict.
+
+        Fetches the day-window for only the leagues that have a due game,
+        reconciles those games' results, then fetches the scoresheet and PDF for
+        any that are now final. Makes zero requests when nothing is due.
+        """
+        info = {"due": 0, "leagues": 0, "changed": 0,
+                "scoresheets": 0, "scorecards": 0, "new_cards": 0}
+        due = self.due_games(now_local)
+        info["due"] = len(due)
+        if not due:
+            log.info("sweep: no games due -- 0 requests")
+            return info
+
+        by_league: dict[int, list] = {}
+        for row in due:
+            by_league.setdefault(row["league_id"], []).append(row)
+        # A due game's own season is the current one; every due game shares it.
+        season_id = max(row["season_id"] for row in due)
+        due_ids = {row["game_id"] for row in due}
+        log.info("sweep: %d game(s) due across %d league(s), season S%d",
+                 len(due), len(by_league), season_id)
+
+        for league_id in sorted(by_league):
+            try:
+                page = self.fetcher.get(
+                    tts.league_schedule_path(league_id, season_id),
+                    key=f"sweep/s{season_id}/l{league_id}",
+                    use_cache=False,
+                )
+            except (RequestCeilingReached, RateLimited) as exc:
+                log.warning("sweep: %s -- stopping", exc)
+                self.stats.stopped_early = True
+                break
+            except FetchError as exc:
+                log.error("sweep: league %s day-window: %s", league_id, exc)
+                self.stats.errors += 1
+                continue
+            info["leagues"] += 1
+            for game in tts.parse_team_page(page.html).games:
+                if game.game_id in due_ids and self.apply_schedule_result(game):
+                    info["changed"] += 1
+        self.conn.commit()
+
+        # Now pull the sheet and PDF for any due game that is final and missing
+        # them -- computed from the freshly reconciled rows, not a season scan.
+        ready = self.conn.execute(
+            f"""
+            SELECT game_id, has_scoresheet, home_goals, away_goals,
+                   scoresheet_at, scorecard_at
+              FROM games
+             WHERE game_id IN ({",".join("?" for _ in due_ids)})
+               AND status = 'final'
+            """,
+            list(due_ids),
+        ).fetchall()
+        sheets = [r["game_id"] for r in ready
+                  if r["has_scoresheet"] and r["scoresheet_at"] is None]
+        if sheets:
+            self.fetch_scoresheets(sheets)
+        cards = [r["game_id"] for r in ready
+                 if r["has_scoresheet"] and r["home_goals"] is not None
+                 and r["away_goals"] is not None and r["scorecard_at"] is None]
+        if self.config.collect_scorecards and cards:
+            self.fetch_scorecards(cards)
+
+        info["scoresheets"] = self.stats.scoresheets
+        info["scorecards"] = self.stats.scorecards
+        info["new_cards"] = self.stats.scorecards + self.stats.scorecards_empty
+
+        # A line per due game, so a weekend of journals shows how long after the
+        # scheduled start each result actually became available -- the number we
+        # tune the 100-minute first look against.
+        for row in due:
+            state = self.conn.execute(
+                "SELECT status, has_scoresheet, scoresheet_at, scorecard_at "
+                "FROM games WHERE game_id = ?", (row["game_id"],)
+            ).fetchone()
+            start = parse_schedule_time(row["date_iso"], row["time_text"])
+            mins = int((now_local - start).total_seconds() // 60) if start else -1
+            complete = (state["status"] == "final"
+                        and (not state["has_scoresheet"]
+                             or (state["scoresheet_at"] is not None
+                                 and state["scorecard_at"] is not None)))
+            log.info("sweep game %d: T+%dm final=%s sheet=%s card=%s %s",
+                     row["game_id"], mins,
+                     "yes" if state["status"] == "final" else "no",
+                     "yes" if state["scoresheet_at"] else "no",
+                     "yes" if state["scorecard_at"] else "no",
+                     "(complete)" if complete else "(pending)")
+        return info
+
     def fetch_scoresheets(
         self, game_ids: Iterable[int], *, use_cache: bool = False, limit: Optional[int] = None
     ) -> None:
@@ -1844,6 +2004,44 @@ def _recompute_schedule_dates(conn: sqlite3.Connection, season_id: int, start_ye
 def _json(data: dict) -> str:
     import json
     return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+
+
+_SCHEDULE_TIME = re.compile(r"^\s*(\d{1,2}):(\d{2})\s*([AaPp])[Mm]\s*$")
+
+
+def parse_schedule_time(date_iso: Optional[str], time_text: Optional[str]) -> Optional[datetime]:
+    """Combine a game's ``date_iso`` and printed ``time_text`` into a naive
+    local datetime, or ``None`` when either is missing or unparseable.
+
+    The result carries no timezone: it is a wall-clock time in the league's
+    zone, compared against a wall-clock ``now`` in the same zone.
+    """
+    if not date_iso or not time_text:
+        return None
+    match = _SCHEDULE_TIME.match(time_text)
+    if not match:
+        return None
+    try:
+        day = date.fromisoformat(date_iso)
+    except ValueError:
+        return None
+    hour = int(match.group(1)) % 12
+    if match.group(3).lower() == "p":
+        hour += 12
+    return datetime(day.year, day.month, day.day, hour, int(match.group(2)))
+
+
+def local_now(tz_name: str) -> datetime:
+    """Current wall-clock time in ``tz_name`` as a naive datetime.
+
+    Falls back to the system clock where the zone database is unavailable (a
+    bare Windows dev box), which on the Pi is already the league's zone.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo(tz_name)).replace(tzinfo=None)
+    except Exception:
+        return datetime.now()
 
 
 def _hash_game(game: tts.ScheduleGame) -> str:

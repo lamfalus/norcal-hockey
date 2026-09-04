@@ -256,6 +256,19 @@ def team_path(league: int, season: int, team_id: int) -> str:
             f"&league={league}&stat_class=1")
 
 
+def league_schedule_path(league: int, season: int) -> str:
+    """Whole-league schedule: every division's games for one season, one page.
+
+    ``parse_team_page`` reads it exactly like a single team's page. Without a
+    ``season`` the site serves the league's *current* season -- which for a
+    dormant league is years stale -- so it is always pinned. For an in-season
+    league the page is a rolling *window* of roughly the current fortnight, so
+    it answers "what just finished this weekend" in one request rather than one
+    per team; it is the wrong tool for a whole-season crawl.
+    """
+    return f"/display-schedule.php?stat_class=1&league={league}&season={season}"
+
+
 def scoresheet_path(game_id: int) -> str:
     return f"/oss-scoresheet?game_id={game_id}&mode=display"
 

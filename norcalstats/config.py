@@ -79,6 +79,21 @@ class Config:
     #: deliberate opt-in and scoped to the newest season until backfilled.
     collect_scorecards: bool = True
 
+    # -- sweep (same-day result checks on game days) --------------------
+    #: A game first becomes eligible for a result check this many minutes after
+    #: its scheduled start. Youth games run ~90 minutes and the PDF is posted
+    #: shortly after the buzzer, so a game rarely enters the window before its
+    #: sheet exists. Once eligible it is re-checked every sweep until complete.
+    sweep_first_look_minutes: int = 100
+    #: Stop sweeping a game this many hours after its scheduled start and leave
+    #: it to the nightly run -- a sheet that has not appeared by then usually
+    #: needs a hand, and there is no point pinging the site for it all day.
+    sweep_giveup_hours: float = 5.0
+    #: The wall-clock zone the schedule's printed times are in. Used to decide
+    #: which games are due; falls back to the system clock where the zone
+    #: database is unavailable (which on the Pi is already this zone).
+    sweep_timezone: str = "America/Los_Angeles"
+
     # -- export / publish ----------------------------------------------
     export_dir: Path = Path(".")
     legacy_json: str = "norcal_hockey_players_s27-s31.json"

@@ -1,0 +1,19 @@
+[Unit]
+Description=NorCal hockey same-day result sweep (game days)
+Documentation=https://github.com/lamfalus/norcal-hockey
+
+[Timer]
+# Every ten minutes. The service itself is gated: it queries the local
+# schedule first and exits without a single request unless a game is actually
+# due to have finished (scheduled start + ~100 min), so a tick with no games is
+# a cheap no-op. A small jitter avoids hitting the site at an exact ten-minute
+# boundary.
+OnCalendar=*:0/10
+RandomizedDelaySec=2m
+
+# A missed tick is moot -- the next one (or the nightly update) catches up -- so
+# do not replay skipped runs after the Pi was off.
+Persistent=false
+
+[Install]
+WantedBy=timers.target

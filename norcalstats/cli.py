@@ -1,6 +1,7 @@
 """Command-line interface.
 
     norcalstats update              nightly incremental run (the cron job)
+    norcalstats sweep               same-day result check for due games only
     norcalstats backfill            one-time historical crawl
     norcalstats reparse             re-parse archived pages, no network
     norcalstats derive              rebuild identities and stats only
@@ -74,6 +75,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_update = sub.add_parser("update", help="incremental run (nightly)")
     add_crawl_args(p_update)
+
+    p_sweep = sub.add_parser(
+        "sweep",
+        help="targeted same-day result check: only games due to have finished")
+    add_crawl_args(p_sweep)
 
     p_backfill = sub.add_parser("backfill", help="one-time historical crawl")
     add_crawl_args(p_backfill)
@@ -209,6 +215,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         if command in ("update", "backfill"):
             return _cmd_crawl(conn, config, args, mode=command)
+        if command == "sweep":
+            return _cmd_sweep(conn, config, args)
         if command == "reparse":
             return _cmd_reparse(conn, config, args)
         if command == "derive":
@@ -357,6 +365,48 @@ def _cmd_crawl(conn, config: Config, args, *, mode: str) -> int:
     # failed to fetch are reported by `audit`; letting them fail the process
     # made systemd mark every single night as failed, which hides a real one.
     return 2 if stats.stopped_early else 0
+
+
+def _cmd_sweep(conn, config: Config, args) -> int:
+    """Same-day result check. Cheap and gated: it does real work only when a
+    game is due to have finished, and publishes only when something changed.
+    """
+    pipe = pipeline.Pipeline(conn, config, _fetcher(config))
+    now_local = pipeline.local_now(config.sweep_timezone)
+
+    with db.Run(conn, "sweep") as record:
+        info = pipe.sweep(now_local)
+        record.pages = pipe.fetcher.requests_made
+        record.games_seen = info["due"]
+        record.games_parsed = info["scoresheets"]
+        record.errors = pipe.stats.errors
+        record.note = (f"{info['changed']} changed, {info['scoresheets']} sheets, "
+                       f"{info['scorecards']} cards")
+
+    changed = info["changed"] or info["scoresheets"] or info["new_cards"]
+    print(f"sweep: {info['due']} due, {record.pages} request(s), "
+          f"{info['changed']} result(s) changed, {info['scoresheets']} sheet(s), "
+          f"{info['scorecards']} scorecard(s)")
+    if not changed:
+        return 0
+
+    pipe.derive()
+    if not args.no_export:
+        _cmd_export(conn, config)
+    wants_publish = config.publish or config.publish_app
+    if args.publish or (wants_publish and not args.dry_run):
+        _cmd_publish(conn, config, args)
+
+    # Leave a marker when a new PDF was archived, so the systemd unit's Drive
+    # step mirrors it this cycle instead of waiting for the nightly push. Kept
+    # out of Python on purpose -- nothing here touches rclone or credentials.
+    if info["new_cards"]:
+        try:
+            (Path(config.data_dir) / ".sweep-drive-pending").write_text(
+                db.now(), encoding="utf-8")
+        except OSError as exc:
+            log.warning("could not write Drive-pending marker: %s", exc)
+    return 0
 
 
 def _cmd_reparse(conn, config: Config, args) -> int:

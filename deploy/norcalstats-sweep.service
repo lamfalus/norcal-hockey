@@ -1,0 +1,46 @@
+[Unit]
+Description=NorCal hockey same-day result sweep (targeted, gated)
+Documentation=https://github.com/lamfalus/norcal-hockey
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=%i
+WorkingDirectory=/home/%i/norcal-hockey
+Environment=PYTHONUNBUFFERED=1
+
+# 1) The sweep: fetch the day-window only for leagues with a game due, reconcile
+#    those results, pull the sheet + PDF for any now final, then derive, export
+#    and publish -- but only when something actually changed.
+ExecStart=/usr/bin/python3 -m norcalstats.cli --config /home/%i/norcal-hockey/norcalstats.json sweep
+
+# 2) Drive mirror, only when the sweep archived a new PDF. The sweep drops a
+#    marker file in that case; here we decompress the new scorecard into the
+#    named tree and rclone-copy it (both incremental), then clear the marker. No
+#    marker -> nothing runs, so a quiet cycle never touches Drive. Kept as a
+#    shell step so rclone and its credentials stay out of the Python.
+ExecStart=/bin/sh -c 'test -f data/.sweep-drive-pending && { /usr/bin/python3 deploy/export-scorecards.py --config /home/%i/norcal-hockey/norcalstats.json && /usr/bin/rclone copy data/scorecards "gdrive:NorCal Scorecards" --transfers=4 --stats-one-line && rm -f data/.sweep-drive-pending; } || true'
+
+# A sweep is small, but a stuck fetch must not run into the next tick.
+TimeoutStartSec=8m
+Nice=10
+IOSchedulingClass=idle
+
+# Hardening: read the repo, write the data dir and (for the Drive step) rclone's
+# own config and cache; talk to the one website and to Drive.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/%i/norcal-hockey /home/%i/.config/rclone /home/%i/.cache/rclone
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
