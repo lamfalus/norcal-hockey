@@ -273,6 +273,9 @@
   .note-link{color:var(--accent);cursor:pointer;font-weight:600;text-decoration:underline;
              background:none;border:none;padding:0;font:inherit;}
   .div-badge{display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 7px;font-size:.75rem;color:var(--muted);}
+  /* A division badge that links to that division's schedule. */
+  .div-link{cursor:pointer;transition:border-color .15s,color .15s;}
+  .div-link:hover{border-color:var(--accent);color:var(--text);}
   .autocomplete-list{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;max-height:260px;overflow-y:auto;z-index:200;}
   .autocomplete-item{padding:9px 14px;cursor:pointer;font-size:.9rem;border-bottom:1px solid var(--border);transition:background .1s;display:flex;justify-content:space-between;align-items:center;}
   .autocomplete-item:last-child{border-bottom:none;}
@@ -2211,9 +2214,29 @@ function browseHeadingLabel(season, club, div){
   var parts = [escHtml(SEASON_LABELS[season] || String(season))];
   if(club) parts.push('<span class="team-link" onclick="goToClub(\''+escAttr(club)+'\','+season+')">'
     + escHtml(clubDisplayName(club)) + '</span>');
-  if(div) parts.push(escHtml(div));
+  if(div) parts.push('<span class="team-link" onclick="goToScheduleDivision(\''+escAttr(div)+'\')">'
+    + escHtml(div) + '</span>');
   if(!club && !div) parts.push('All');
   return parts.join(' · ');
+}
+
+// From a division in the stats view to that division's schedule: the same league
+// and season carry over, and the schedule opens on that division alone.
+function goToScheduleDivision(div){
+  document.querySelectorAll('.view').forEach(function(el){el.classList.remove('active');});
+  document.getElementById('view-schedule').classList.add('active');
+  markTab('schedule');
+  markActiveView('schedule');
+  var master = parseInt(document.getElementById('sel-season').value);
+  if(!isNaN(master)) SCHED.season = master;
+  SCHED.upcoming = SCHED.recent = SCHED_PAGE;
+  rebuildSchedDivisions();
+  document.getElementById('sel-sched-div').value = div;
+  rebuildSchedClubs();
+  document.getElementById('sel-sched-club').value = '';
+  renderSchedule();
+  history.pushState(captureAppState('schedule'), '');
+  window.scrollTo({top:0, behavior:'smooth'});
 }
 
 
@@ -2342,7 +2365,7 @@ function renderSkaterTable(entries,showTeamDiv,tableId){
     const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
     const pts=entryPts(e);
     const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer('+e.playerId+')">'+escHtml(e.playerName)+byLabel(e.playerId)+'</span>'),td(e.jersey||'','jersey')];
-    if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToTeam(\''+escAttr(e.teamKey)+'\')">'+escHtml(e.team)+'</span>'),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
+    if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToTeam(\''+escAttr(e.teamKey)+'\')">'+escHtml(e.team)+'</span>'),td(e.division?'<span class="div-badge div-link" onclick="goToScheduleDivision(\''+escAttr(e.division)+'\')" title="See this division\'s schedule">'+escHtml(e.division)+'</span>':''));
     base.push(td(e.GP||0,'num'),td(e.G||0,'num'),td(e.A||0,'num'),td(pts,'num pts'),td(e.PIM||0,'num'),td(e.PPG||0,'num'),td(e.SHG||0,'num'),td(entryPtsPerGame(e),'num'));
     return '<tr>'+base.join('')+'</tr>';
   };
@@ -2375,7 +2398,7 @@ function attachSortHandlers(tableId,entries,showTeamDiv){
         const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
         const pts=entryPts(e);
         const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer('+e.playerId+')">'+escHtml(e.playerName)+byLabel(e.playerId)+'</span>'),td(e.jersey||'','jersey')];
-        if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToTeam(\''+escAttr(e.teamKey)+'\')">'+escHtml(e.team)+'</span>'),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
+        if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToTeam(\''+escAttr(e.teamKey)+'\')">'+escHtml(e.team)+'</span>'),td(e.division?'<span class="div-badge div-link" onclick="goToScheduleDivision(\''+escAttr(e.division)+'\')" title="See this division\'s schedule">'+escHtml(e.division)+'</span>':''));
         base.push(td(e.GP||0,'num'),td(e.G||0,'num'),td(e.A||0,'num'),td(pts,'num pts'),td(e.PIM||0,'num'),td(e.PPG||0,'num'),td(e.SHG||0,'num'),td(entryPtsPerGame(e),'num'));
         return '<tr>'+base.join('')+'</tr>';
       }).join('');
@@ -2392,7 +2415,7 @@ function renderGoalieTable(entries,showTeamDiv,tableId){
   const makeRow=(e,i)=>{
     const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
     const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer('+e.playerId+')">'+escHtml(e.playerName)+byLabel(e.playerId)+'</span>'),td(e.jersey||'','jersey')];
-    if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToTeam(\''+escAttr(e.teamKey)+'\')">'+escHtml(e.team)+'</span>'),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
+    if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToTeam(\''+escAttr(e.teamKey)+'\')">'+escHtml(e.team)+'</span>'),td(e.division?'<span class="div-badge div-link" onclick="goToScheduleDivision(\''+escAttr(e.division)+'\')" title="See this division\'s schedule">'+escHtml(e.division)+'</span>':''));
         base.push(td(e.GP||0,'num'),td(entryShots(e),'num'),td(entryGA(e),'num'),td(entryGAADisplay(e),'num'),td(entrySavePct(e)||'—','num'),td(e.SO!=null?e.SO:'','num'));
     return '<tr>'+base.join('')+'</tr>';
   };
@@ -2424,7 +2447,7 @@ function attachGoalieSortHandlers(tableId,entries,showTeamDiv){
       tbody.innerHTML=entries.map((e,i)=>{
         const td=(v,cls='')=>'<td'+(cls?' class="'+cls+'"':'')+'>'+v+'</td>';
         const base=[td(i+1,'num'),td('<span class="player-link" onclick="goToPlayer('+e.playerId+')">'+escHtml(e.playerName)+byLabel(e.playerId)+'</span>'),td(e.jersey||'','jersey')];
-        if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToTeam(\''+escAttr(e.teamKey)+'\')">'+escHtml(e.team)+'</span>'),td('<span class="div-badge">'+escHtml(e.division||'')+'</span>'));
+        if(showTeamDiv)base.push(td('<span class="team-link" onclick="goToTeam(\''+escAttr(e.teamKey)+'\')">'+escHtml(e.team)+'</span>'),td(e.division?'<span class="div-badge div-link" onclick="goToScheduleDivision(\''+escAttr(e.division)+'\')" title="See this division\'s schedule">'+escHtml(e.division)+'</span>':''));
         base.push(td(e.GP||0,'num'),td(entryShots(e),'num'),td(entryGA(e),'num'),td(entryGAADisplay(e),'num'),td(entrySavePct(e)||'—','num'),td(e.SO!=null?e.SO:'','num'));
         return '<tr>'+base.join('')+'</tr>';
       }).join('');
