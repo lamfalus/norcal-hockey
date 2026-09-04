@@ -2185,14 +2185,17 @@ function onDivBrowseChange(){
 }
 function onClubBrowseChange(){ onBrowseRender(); }
 
-// The one team a season + club + division narrows to, so the stats view can link
-// out to that team's own page rather than be a second, lesser team view. Null
-// when it still spans more than one team.
+// The one team the stats filters have narrowed to, so the view can hand off to
+// that team's page rather than be a second, lesser team view. Needs a club (a
+// division alone is many teams); a division narrows further. Null while it still
+// spans more than one team.
 function browseFilteredTeamKey(season, club, div){
-  if(!club || !div) return null;
+  if(!club) return null;
   var keys={};
   ALL_ENTRIES.forEach(function(e){
-    if(e.season===season && e.club===club && e.division===div && e.teamKey) keys[e.teamKey]=true;
+    if(e.season!==season || e.club!==club) return;
+    if(div && e.division!==div) return;
+    if(e.teamKey) keys[e.teamKey]=true;
   });
   var arr=Object.keys(keys);
   return arr.length===1 ? arr[0] : null;
@@ -2211,18 +2214,21 @@ function onBrowseRender(){
   const type=document.getElementById('sel-type').value;
   const minGP=parseInt(document.getElementById('sel-min-gp').value)||1;
   if(!season){document.getElementById('browse-content').innerHTML='<div class="empty"><div class="icon">🏒</div>Select a season above to begin.</div>';return;}
+  // Narrowed to a single team? That team has one home -- its page -- so go there
+  // rather than draw a second, lesser team view here. Clear the club so the stats
+  // view sits back on the division it was narrowed from, ready for another team.
+  const tkey=browseFilteredTeamKey(season,club,div);
+  if(tkey && document.body.getAttribute('data-view')==='browse'){
+    document.getElementById('sel-club-browse').value='';
+    goToTeam(tkey);
+    return;
+  }
   // Build label
   let subLabel='';
   if(club)subLabel+=' · '+clubDisplayName(club);
   if(div)subLabel+=' · '+div;
   const content=document.getElementById('browse-content');
   let html='';
-  // Narrowed to a single team? This is the stats view, not the team's page --
-  // link out to that page rather than duplicate it here.
-  const tkey=browseFilteredTeamKey(season,club,div);
-  if(tkey){
-    html+='<div class="band-note" style="margin:0 0 14px"><span class="team-link sched-teamlink" onclick="goToTeam(\''+escAttr(tkey)+'\')">Open team page →</span></div>';
-  }
   // Helper to filter entries
   const baseFilter=e=>e.season===season&&(club?e.club===club:true)&&(div?e.division===div:true);
   if(type==='skater'||type==='all'){
@@ -4144,6 +4150,10 @@ function periodLabel(p) {
   return { '1': '1st', '2': '2nd', '3': '3rd', '4': 'OT', 'OT': 'OT', 'SO': 'SO' }[String(p)] || String(p);
 }
 
+// The same sortable skater/goalie tables the stats view builds -- this IS the
+// team's stats breakdown, so the stats view hands off here rather than draw its
+// own. showTeamDiv is false: every row is this one team, so the team and division
+// columns would just repeat.
 function renderTeamRoster(roster) {
   var host = document.getElementById('team-roster');
   var skaters = roster.filter(function(e) { return e.type === 'skater'; })
@@ -4156,45 +4166,15 @@ function renderTeamRoster(roster) {
       + ' counted filter may be excluding them.</p></div>';
     return;
   }
-  var skaterRows = skaters.map(function(e, i) {
-    return '<tr><td class="num">' + (i + 1) + '</td>'
-      + '<td class="player-link" onclick="goToPlayer(' + e.playerId + ')">'
-      + escHtml(e.playerName) + byLabel(e.playerId) + '</td>'
-      + '<td class="jersey">' + escHtml(e.jersey) + '</td>'
-      + '<td class="num">' + (e.GP || 0) + '</td><td class="num">' + (e.G || 0) + '</td>'
-      + '<td class="num">' + (e.A || 0) + '</td><td class="num pts">' + entryPts(e) + '</td>'
-      + '<td class="num">' + (e.PIM || 0) + '</td><td class="num">' + (e.PPG || 0) + '</td>'
-      + '<td class="num">' + (e.SHG || 0) + '</td>'
-      + '<td class="num">' + entryPtsPerGame(e) + '</td></tr>';
-  }).join('');
-  var goalieRows = goalies.map(function(e, i) {
-    return '<tr><td class="num">' + (i + 1) + '</td>'
-      + '<td class="player-link" onclick="goToPlayer(' + e.playerId + ')">'
-      + escHtml(e.playerName) + byLabel(e.playerId) + '</td>'
-      + '<td class="jersey">' + escHtml(e.jersey) + '</td>'
-      + '<td class="num">' + (e.GP || 0) + '</td>'
-      + '<td class="num">' + entryShots(e) + '</td><td class="num">' + entryGA(e) + '</td>'
-      + '<td class="num">' + entryGAADisplay(e) + '</td>'
-      + '<td class="num" style="color:var(--green)">' + (entrySavePct(e) || '—') + '</td>'
-      + '<td class="num">' + (e.SO != null ? e.SO : '') + '</td></tr>';
-  }).join('');
-
+  browseSort = { col: 'PTS', dir: -1 };
+  browseGoalieSort = { col: 'GAA', dir: 1 };
   host.innerHTML = '<div class="panel"><div class="panel-title">Roster</div>'
-    + (skaters.length ? '<div class="table-wrap"><table class="ranked"><thead><tr>'
-        + '<th style="text-align:right">Rk</th><th>Player</th><th>#</th>'
-        + '<th style="text-align:right">GP</th><th style="text-align:right">G</th>'
-        + '<th style="text-align:right">A</th><th style="text-align:right">PTS</th>'
-        + '<th style="text-align:right">PIM</th><th style="text-align:right">PPG</th>'
-        + '<th style="text-align:right">SHG</th><th style="text-align:right">Pts/GP</th>'
-        + '</tr></thead><tbody>' + skaterRows + '</tbody></table></div>' : '')
+    + (skaters.length ? renderSkaterTable(skaters, false, 'team-roster-skaters') : '')
     + (goalies.length ? '<div class="panel-title" style="margin-top:18px">Goaltending</div>'
-        + '<div class="table-wrap"><table class="ranked"><thead><tr>'
-        + '<th style="text-align:right">Rk</th><th>Goalie</th><th>#</th>'
-        + '<th style="text-align:right">GP</th><th style="text-align:right">Shots</th>'
-        + '<th style="text-align:right">GA</th><th style="text-align:right">GAA</th>'
-        + '<th style="text-align:right">Save%</th><th style="text-align:right">SO</th>'
-        + '</tr></thead><tbody>' + goalieRows + '</tbody></table></div>' : '')
+        + renderGoalieTable(goalies, false, 'team-roster-goalies') : '')
     + '</div>';
+  if (skaters.length) attachSortHandlers('team-roster-skaters', skaters, false);
+  if (goalies.length) attachGoalieSortHandlers('team-roster-goalies', goalies, false);
 }
 
 function goToClub(club, season) {
