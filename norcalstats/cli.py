@@ -386,7 +386,8 @@ def _cmd_sweep(conn, config: Config, args) -> int:
     changed = info["changed"] or info["scoresheets"] or info["new_cards"]
     print(f"sweep: {info['due']} due, {record.pages} request(s), "
           f"{info['changed']} result(s) changed, {info['scoresheets']} sheet(s), "
-          f"{info['scorecards']} scorecard(s)")
+          f"{info['scorecards']} scorecard(s)"
+          + (f", {info['unblanked']} opponent(s) assigned" if info["unblanked"] else ""))
     if not changed:
         return 0
 

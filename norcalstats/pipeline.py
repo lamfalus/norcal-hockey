@@ -872,6 +872,47 @@ class Pipeline:
         )
         return True
 
+    def blank_side_games_today(self, now_local: datetime) -> set[int]:
+        """Today's games we hold with a blank home or away name.
+
+        These are excluded from ``due_games`` -- a stub can never go final --
+        but a tournament bracket slot can have its opponent assigned during the
+        day. When the sweep is already fetching that game's league (for some
+        other due game), it refreshes the name from the same page, so the game
+        graduates to due on the next cycle without any extra request.
+        """
+        today = now_local.date().isoformat()
+        rows = self.conn.execute(
+            "SELECT game_id FROM games WHERE date_iso = ? "
+            "AND (away_name IS NULL OR away_name = '' "
+            "     OR home_name IS NULL OR home_name = '')",
+            (today,),
+        ).fetchall()
+        return {row["game_id"] for row in rows}
+
+    def refresh_missing_side(self, game: tts.ScheduleGame) -> bool:
+        """Fill in the names of a game we hold with a blank side, once the
+        schedule shows both teams. Names only -- resolving which team id is home
+        stays the nightly's job (a whole-league page cannot say), and the sheet
+        fetch does not need the id. Returns ``True`` when a blank was filled.
+        """
+        if not (game.away_name or "").strip() or not (game.home_name or "").strip():
+            return False  # the page still has no opponent
+        row = self.conn.execute(
+            "SELECT away_name, home_name FROM games WHERE game_id = ?",
+            (game.game_id,),
+        ).fetchone()
+        if row is None:
+            return False
+        if (row["away_name"] or "").strip() and (row["home_name"] or "").strip():
+            return False  # not actually blank
+        self.conn.execute(
+            "UPDATE games SET away_name = ?, home_name = ?, schedule_hash = ?, "
+            "updated_at = ? WHERE game_id = ?",
+            (game.away_name, game.home_name, _hash_game(game), now(), game.game_id),
+        )
+        return True
+
     def sweep(self, now_local: datetime) -> dict:
         """One targeted results pass. Returns a summary dict.
 
@@ -879,7 +920,7 @@ class Pipeline:
         reconciles those games' results, then fetches the scoresheet and PDF for
         any that are now final. Makes zero requests when nothing is due.
         """
-        info = {"due": 0, "leagues": 0, "changed": 0,
+        info = {"due": 0, "leagues": 0, "changed": 0, "unblanked": 0,
                 "scoresheets": 0, "scorecards": 0, "new_cards": 0}
         due = self.due_games(now_local)
         info["due"] = len(due)
@@ -893,6 +934,9 @@ class Pipeline:
         # A due game's own season is the current one; every due game shares it.
         season_id = max(row["season_id"] for row in due)
         due_ids = {row["game_id"] for row in due}
+        # Blank-side games get their names refreshed for free from any league
+        # page we are already fetching -- no extra request of their own.
+        blank_ids = self.blank_side_games_today(now_local)
         log.info("sweep: %d game(s) due across %d league(s), season S%d",
                  len(due), len(by_league), season_id)
 
@@ -913,8 +957,14 @@ class Pipeline:
                 continue
             info["leagues"] += 1
             for game in tts.parse_team_page(page.html).games:
-                if game.game_id in due_ids and self.apply_schedule_result(game):
-                    info["changed"] += 1
+                if game.game_id in due_ids:
+                    if self.apply_schedule_result(game):
+                        info["changed"] += 1
+                elif game.game_id in blank_ids and self.refresh_missing_side(game):
+                    info["unblanked"] += 1
+                    log.info("sweep game %d: opponent now assigned (%s @ %s); "
+                             "will be picked up next cycle",
+                             game.game_id, game.away_name, game.home_name)
         self.conn.commit()
 
         # Now pull the sheet and PDF for any due game that is final and missing

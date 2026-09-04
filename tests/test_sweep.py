@@ -159,6 +159,36 @@ class TestApplyResult(SweepTestCase):
             "SELECT 1 FROM games WHERE game_id = 999").fetchone())
 
 
+class TestRefreshMissingSide(SweepTestCase):
+    def _page_game(self, game_id, away, home):
+        return tts.ScheduleGame(
+            game_id=game_id, date_text="Sat Sep 5", time_text="7:00 PM", rink="X",
+            league="CAHA", level="16U AA", away_name=away, home_name=home,
+            away_goals=None, home_goals=None, game_type="Tournament",
+            has_scoresheet=False)
+
+    def test_fills_a_blank_side_once_the_opponent_is_assigned(self):
+        self.add_game(60, away_name="", time_text="7:00 PM")
+        pipe = self.pipe(_StubFetcher())
+        self.assertTrue(pipe.refresh_missing_side(
+            self._page_game(60, "Reno Ice 16A", "Anaheim Jr Ducks 16AA")))
+        row = self.conn.execute(
+            "SELECT away_name, home_name FROM games WHERE game_id = 60").fetchone()
+        self.assertEqual(row["away_name"], "Reno Ice 16A")
+        # Now that both sides are named, it is no longer a blank stub.
+        self.assertFalse(pipe.refresh_missing_side(
+            self._page_game(60, "Reno Ice 16A", "Anaheim Jr Ducks 16AA")))
+
+    def test_page_still_blank_changes_nothing(self):
+        self.add_game(61, away_name="", time_text="7:00 PM")
+        pipe = self.pipe(_StubFetcher())
+        self.assertFalse(pipe.refresh_missing_side(
+            self._page_game(61, "", "Anaheim Jr Ducks 16AA")))
+        self.assertEqual(self.conn.execute(
+            "SELECT away_name FROM games WHERE game_id = 61").fetchone()["away_name"],
+            "")
+
+
 class TestSweepRun(SweepTestCase):
     def test_no_due_games_makes_no_request(self):
         self.add_game(1, time_text="11:45 AM")   # too soon to be due
@@ -185,6 +215,25 @@ class TestSweepRun(SweepTestCase):
             "final")
         self.assertTrue(any("display-schedule" in p for p in fetcher.paths))
         self.assertTrue(any("oss-scoresheet" in p for p in fetcher.paths))
+
+    def test_a_due_game_lets_a_blank_neighbour_in_the_same_league_refresh(self):
+        # 50647 (due) triggers the league day-window; 50684 is a blank stub in
+        # the same league, present on that same page with both teams named, so
+        # it is un-blanked for free -- no request of its own.
+        self.add_game(50647, time_text="8:30 AM")
+        self.add_game(50684, time_text="8:30 AM", away_name="")
+        self.config.collect_scorecards = False
+        fetcher = _StubFetcher(day_window=load("team58.html"),
+                               scoresheet="<html><body>no roster</body></html>")
+
+        info = self.pipe(fetcher).sweep(self.NOW)
+
+        self.assertEqual(info["unblanked"], 1)
+        self.assertNotEqual(self.conn.execute(
+            "SELECT away_name FROM games WHERE game_id = 50684").fetchone()["away_name"],
+            "")
+        # It was refreshed off the page already fetched -- no extra league fetch.
+        self.assertEqual(sum("display-schedule" in p for p in fetcher.paths), 1)
 
 
 if __name__ == "__main__":
