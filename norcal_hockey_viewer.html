@@ -4170,7 +4170,7 @@ function renderTeamRoster(roster) {
   browseGoalieSort = { col: 'GAA', dir: 1 };
   host.innerHTML = '<div class="panel"><h2 style="font-size:1rem;margin-bottom:12px">Roster</h2>'
     + (skaters.length ? renderSkaterTable(skaters, false, 'team-roster-skaters') : '')
-    + (goalies.length ? '<div class="panel-title" style="margin-top:18px">Goaltending</div>'
+    + (goalies.length ? '<h2 style="font-size:1rem;margin:18px 0 12px">Goaltending</h2>'
         + renderGoalieTable(goalies, false, 'team-roster-goalies') : '')
     + '</div>';
   if (skaters.length) attachSortHandlers('team-roster-skaters', skaters, false);
