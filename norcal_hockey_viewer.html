@@ -2205,6 +2205,17 @@ function browseFilteredTeamKey(season, club, div){
 // the line stays short enough to read on a phone.
 function updateBrowseSummary(){ updateFilterSummary(); }
 
+// The leaderboard heading -- season, and where narrowed, the club (a link to its
+// page) and the division. HTML, so the club name can be clickable.
+function browseHeadingLabel(season, club, div){
+  var parts = [escHtml(SEASON_LABELS[season] || String(season))];
+  if(club) parts.push('<span class="team-link" onclick="goToClub(\''+escAttr(club)+'\','+season+')">'
+    + escHtml(clubDisplayName(club)) + '</span>');
+  if(div) parts.push(escHtml(div));
+  if(!club && !div) parts.push('All');
+  return parts.join(' · ');
+}
+
 
 function onBrowseRender(){
   updateBrowseSummary();
@@ -2223,10 +2234,6 @@ function onBrowseRender(){
     goToTeam(tkey);
     return;
   }
-  // Build label
-  let subLabel='';
-  if(club)subLabel+=' · '+clubDisplayName(club);
-  if(div)subLabel+=' · '+div;
   const content=document.getElementById('browse-content');
   let html='';
   // Helper to filter entries
@@ -2236,7 +2243,7 @@ function onBrowseRender(){
     browseSort={col:'PTS',dir:-1};
     sk.sort((a,b)=>entryPts(b)-entryPts(a));
     if(sk.length){
-      html+='<div class="section-heading"><h2>'+escHtml(SEASON_LABELS[season]+(subLabel||' · All'))+'</h2><span class="badge">'+sk.length+' skaters</span></div>'+renderSkaterTable(sk,true,'browse-table');
+      html+='<div class="section-heading"><h2>'+browseHeadingLabel(season,club,div)+'</h2><span class="badge">'+sk.length+' skaters</span></div>'+renderSkaterTable(sk,true,'browse-table');
     } else {
       html+='<div class="empty" style="padding:12px 0"><div class="icon">📭</div>No skater data found.</div>';
     }
@@ -2247,7 +2254,7 @@ function onBrowseRender(){
     gl.sort((a,b)=>(parseFloat(a.GAA)||0)-(parseFloat(b.GAA)||0));
     if(gl.length){
       if(type==='all')html+='<div style="margin-top:24px"></div>';
-      const heading=type==='goalie'?'<div class="section-heading"><h2>'+escHtml(SEASON_LABELS[season]+(subLabel||' · All'))+'</h2><span class="badge">'+gl.length+' goalies</span></div>':'<div class="section-heading"><h2>Goalies</h2><span class="badge">'+gl.length+'</span></div>';
+      const heading=type==='goalie'?'<div class="section-heading"><h2>'+browseHeadingLabel(season,club,div)+'</h2><span class="badge">'+gl.length+' goalies</span></div>':'<div class="section-heading"><h2>Goalies</h2><span class="badge">'+gl.length+'</span></div>';
       html+=heading+renderGoalieTable(gl,true,'browse-goalie-table');
     } else {
       html+='<div class="empty" style="padding:12px 0"><div class="icon">📭</div>No goalie data found.</div>';
