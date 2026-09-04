@@ -74,12 +74,14 @@ class SweepTestCase(unittest.TestCase):
 
     def add_game(self, game_id, *, time_text="8:30 AM", date_iso=None,
                  status="scheduled", has_scoresheet=0, home_goals=None,
-                 away_goals=None, scoresheet_at=None, scorecard_at=None):
+                 away_goals=None, scoresheet_at=None, scorecard_at=None,
+                 away_name="Visitors", home_name="Home"):
         db.upsert(self.conn, "games", {
             "game_id": game_id, "season_id": self.SEASON, "league_id": self.LEAGUE,
             "date_iso": date_iso or self.TODAY, "time_text": time_text,
             "status": status, "has_scoresheet": has_scoresheet,
             "home_goals": home_goals, "away_goals": away_goals,
+            "away_name": away_name, "home_name": home_name,
             "scoresheet_at": scoresheet_at, "scorecard_at": scorecard_at,
             "schedule_hash": "seed",
         }, keys=["game_id"])
@@ -117,6 +119,15 @@ class TestDueGames(SweepTestCase):
     def test_missing_time_is_skipped(self):
         self.add_game(20, time_text="")
         self.assertEqual(self.pipe(_StubFetcher()).due_games(self.NOW), [])
+
+    def test_blank_side_stub_is_excluded(self):
+        # A tournament bracket slot with no opponent can never go final; a real
+        # game right beside it still sweeps.
+        self.add_game(40, time_text="9:00 AM", away_name="", away_goals=None)
+        self.add_game(41, time_text="9:00 AM", home_name=None)
+        self.add_game(42, time_text="9:00 AM")
+        due = {r["game_id"] for r in self.pipe(_StubFetcher()).due_games(self.NOW)}
+        self.assertEqual(due, {42})
 
 
 class TestApplyResult(SweepTestCase):

@@ -816,6 +816,14 @@ class Pipeline:
                    scoresheet_at, scorecard_at
               FROM games
              WHERE date_iso = ?
+               -- A blank side is a schedule stub (an unassigned tournament
+               -- bracket slot) that can never go final; sweeping it just
+               -- re-fetches the day-window every cycle until give-up for
+               -- nothing. A real game always prints both team names, so this
+               -- excludes only the stubs, not games whose side id is merely
+               -- unresolved. Left for the nightly audit to surface.
+               AND away_name IS NOT NULL AND away_name <> ''
+               AND home_name IS NOT NULL AND home_name <> ''
                AND (
                      status != 'final'
                   OR (has_scoresheet = 1 AND scoresheet_at IS NULL)
