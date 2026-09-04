@@ -63,13 +63,15 @@ class TestViewerVersion(unittest.TestCase):
 
 
 class TestTheDivisionCollapse(unittest.TestCase):
-    """The schedule filter treats a division's flights and conferences as one.
+    """coreDivision folds a division's flights and conferences into one.
 
-    Getting this wrong in the generous direction is the dangerous half: merging
-    "10U B" with "10U BB" would silently mix two tiers, and a filter that
-    answers with the wrong games is worse than one that answers with too few.
-    The rule lives in the viewer, so it is read back out of the file rather
-    than restated here, which is what makes this a test of the shipped rule.
+    The schedule now lists divisions granularly (East and West are separate, to
+    match Time to Score's per-flight standings); this fold's remaining job is
+    matching the same team across seasons, where a squad can be "14U AA East"
+    one year and "14U AA" the next. Getting it wrong in the generous direction is
+    the dangerous half: merging "10U B" with "10U BB" would fuse two tiers. The
+    rule lives in the viewer, so it is read back out of the file rather than
+    restated here, which is what makes this a test of the shipped rule.
     """
 
     def collapse(self):

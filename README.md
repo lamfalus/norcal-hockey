@@ -33,16 +33,19 @@ reads the dataset from `data`, and neither needs a hand.
 Counts are a snapshot taken 2026-08-28; the collector adds to them nightly.
 
 The viewer opens on the **schedule**: what is on next and what just happened,
-across every league and division at once. A search bar, always on the header,
+across every league and division at once, with a **Season** control in the header
+that follows you into every view. Pick a league and a division and the schedule
+grows a **standings** table above the games. A search bar, always on the header,
 finds a player, a club or a division and jumps to it. Behind the schedule are
 the **Stats** leaderboards — narrow them to one division and its team breakdown
 appears beneath: special-teams leaders, how top-heavy each team's scoring is,
-home-ice records, and the pairs who most score together. **Club** pages carry
-season-by-season teams, retention, and a player-flow chart; **player** pages
-carry per-game logs, linemates, and a development curve; **team** pages carry a
-schedule, standings, scoring by period, and their own flow chart. It works on a
-phone — that took measuring rather than guessing, and the notes are in
-[The viewer](#the-viewer).
+home-ice records, and the pairs who most score together; narrow to one team and
+it hands off to that team's page. **Club** pages carry season-by-season teams,
+retention, and a player-flow chart; **player** pages carry per-game logs,
+linemates, and a development curve; **team** pages — the one place a single team
+is shown — carry a record, the schedule, a sortable roster, scoring by period,
+that same breakdown, and their own flow chart. It works on a phone — that took
+measuring rather than guessing, and the notes are in [The viewer](#the-viewer).
 
 **What is left**, in the order it is worth doing:
 
@@ -967,27 +970,37 @@ Three things about it are decisions rather than defaults:
   The games that genuinely have no `team_id` are the `ambiguous_team` ones
   above, which are worth keeping, so filtering on the missing id would have
   dropped exactly the wrong 92 games and kept all 238 of these.
-- **Both bands are cut from one season**, chosen at the top of the page beside
-  League. "Recent" has to mean recent, and reading back across every season put
-  an August day next to a game from 2021 and called both results — a fixture
-  archive rather than an answer to *what happened lately*. At the start of a
-  season that is thirty games against thirteen thousand older ones, and it is
+- **Both bands are cut from one season**, chosen with the global Season control
+  in the header. "Recent" has to mean recent, and reading back across every
+  season put an August day next to a game from 2021 and called both results — a
+  fixture archive rather than an answer to *what happened lately*. At the start of
+  a season that is thirty games against thirteen thousand older ones, and it is
   the older ones a reader wades through.
 
-  The picker opens on **the season of the newest game that has actually been
-  played**, not the highest season id in the file. It rolls over on its own
-  that way: through the summer it is the season just finished, and the first
-  preseason weekend moves it forward. Taking the highest id would empty the
-  view the moment a league published next year's fixtures.
+  Season opens on **the newest game that has actually been played**, not the
+  highest season id in the file. It rolls over on its own that way: through the
+  summer it is the season just finished, and the first preseason weekend moves it
+  forward. Taking the highest id would empty the view the moment a league
+  published next year's fixtures.
+
+- **Pick a league and a division and it becomes a standings page.** Above the
+  games sits that division's table — rank, GP, W-L-T, points, goals for and
+  against and difference, each team linking to its page, with a Regular /
+  All-games toggle. It is computed from the results (see the [team
+  page](#the-views)), so it works for the current season the moment games are
+  played and for divisions the league never published a table for; when regular
+  games are scheduled but none played yet it says the table is coming. Narrow
+  further to one **club** and the games' heading also carries that team's
+  record — W-L-T and goals for/against — with a link out to its page.
 
 - **A finished season has results, not recent results.** Where nothing is left
   to play there is no "next", so both the Next up band and the word *recent* go
   and the heading reads plainly **Results**. Neither word survives sitting over
   a band whose newest game is two years old.
-- **It has its own Game Type boxes, and the global set is hidden while it is
-  showing.** A fixture list is not a stat total, and the two want the class
-  separately — but they want it in the same words, so both controls carry the
-  same name and the same box per class.
+- **It has its own Game Type boxes.** A fixture list is not a stat total, so the
+  schedule's Game Type asks what kind of fixture to *list* while the stats, club
+  and player views ask what a total should *count* — a separate control, but in
+  the same words and the same box per class.
 
 - **Both bands page rather than render.** 8,130 played games is more than any
   list wants to hold, and a phone least of all, so each band shows 60 and says
@@ -1011,6 +1024,13 @@ league — `14U AA · CAHA` — where it recurs across leagues, so a shared name
 never merged into a single fake division; a chip above the roster jumps down to
 the breakdown.
 
+Stats is a tool for reading a whole division at once, not a second team page: the
+moment its filters resolve to **one team**, it opens that team's own page rather
+than draw a lesser copy of it. Multi-team browsing — a division, or a club with
+several squads — stays here. Where it does hold more than one team, the club name
+in the heading links to the club, and every division badge links to that
+division's schedule.
+
 **Club page** — reached from the search bar or by clicking a club, not from a
 tab. A club's teams season by season, with rosters grouped by identity, never by
 name: in the older seasons the site gives every one of a club's teams the same
@@ -1023,20 +1043,19 @@ at the top links back to the all-seasons overview, where a search for the club
 also lands.
 
 Each team card carries its **record** beside the player count, counted under
-whatever the filters above are set to. Not the league's standings row — that is
-what the team page shows, and it counts the regular season and nothing else, so
-it cannot answer a question asked with preseason ticked, or only playoffs, or
-with one league picked out of a club that plays in two. It is counted off the
-games themselves, and only off games that were given a result: 5,375 past
-fixtures never were, and a team is not owed a loss for them.
+whatever the filters above are set to — off the games themselves, not any
+published table, so it answers a question asked with preseason ticked, or only
+playoffs, or with one league picked out of a club that plays in two. Only games
+that were given a result count: 5,375 past fixtures never were, and a team is not
+owed a loss for them.
 
-Set **Game Type** to Regular alone and the two agree, which is the check that
-says the arithmetic is right — seven of Cupertino's eight teams in `'24-'25`
-match their published row exactly. The eighth is the interesting one, and the
-games are the ones telling the truth: `Cupertino Cougars 14A` played ten
-regular CAHA games with results, while its standings row covers three. That is
-[the CAHA rounds rolling up](#one-source-the-leagues-that-matter) — the row
-belongs to one round, the games span several.
+Set **Game Type** to Regular alone and it agrees with the league's own published
+regular-season row, which is the check that says the arithmetic is right — seven
+of Cupertino's eight teams in `'24-'25` match exactly. The eighth is the
+interesting one, and the games are the ones telling the truth: `Cupertino Cougars
+14A` played ten regular CAHA games with results, while its published row covers
+three. That is [the CAHA rounds rolling up](#one-source-the-leagues-that-matter)
+— the row belongs to one round, the games span several.
 
 **Player page** — a career, **newest season first**, reached from the search bar
 or by clicking a name, not from a tab. Each section has a collapsible **game
@@ -1064,20 +1083,39 @@ season. No longer a tab of its own: it is drawn on a **club** page focused on
 that club, and on a **team** page focused on that exact roster — where its
 players came from the season before and left for the season after.
 
-**Team page** — reached by clicking a team anywhere, not from the tab bar,
-since it only means anything once you have picked one. The league's standings
-row, every game played or still to come, the roster, **scoring by period** as
-goal difference per period, and the roster's player-flow chart. The standings
-are labelled regular season on purpose: the league's table counts that alone
-while the schedule counts every class, so the two game totals differ and one of
-them has to say which it is. On the schedule the **result** opens the box score
-and the **opponent** links to its team; the row itself is not a click target,
-and a scheduled game does not pretend to have a box score. The club name in the
-title links back to the club.
+**Team page** — the one place a single team is shown, reached by clicking a team
+anywhere (a schedule row, a stats table, a club's squads, the search bar), never
+from a tab. It carries the team's **record** with a Regular / All-games toggle,
+every game played or still to come, the **roster** as sortable skater and goalie
+tables, **scoring by period** as goal difference per period, the same **advanced
+breakdown** the stats view shows a division — special-teams leaders, scoring
+balance, home ice, and the pairs who score together — scoped to this team, and
+the roster's **player-flow** chart. On the schedule the **result** opens the box
+score and the **opponent** links to its team; the row itself is not a click
+target, and a scheduled game does not pretend to have a box score. The club name
+in the title links back to the club. A team whose games are all still to come has
+no roster yet, so the roster panel says so and the breakdown and flow are dropped
+rather than showing the whole club's by mistake.
+
+The **record** and the **division standings** on the schedule are computed from
+the game results, not the league's published table — nothing is published for the
+current season in preseason, SCAHA has no history here, and a club's CAHA-round
+games span several rows the published one covers only one of. Only regular-season
+games between two teams of the same division count, which makes a division's
+standings a closed round-robin whose wins, losses and goals balance across the
+table — the check that says the arithmetic is right. The toggle widens the
+record, and the standings, to every game type. Where a game had no result it is
+not counted: 5,375 past fixtures never got one, and a team is not owed a loss for
+them.
 
 **Box score** — opens over whatever you were reading, because you always arrive
 from a schedule or a game log and want to go back to it. Line score by period,
-each goal with its time, scorer, assists and strength, and the penalties.
+each goal with its time, scorer and assists (each labelled) and strength, and the
+penalties. A played game also links its **Scoresheet PDF** — Time to Score's
+`generate-scorecard.php`, the same sheet a scorekeeper files. It downloads named
+for the game (`Away vs Home YYYY-MM-DD.pdf`) rather than opening a tab: the site
+allows the cross-origin fetch, so the file is pulled as a blob and saved under
+that name, falling back to opening it if the fetch is ever blocked.
 
 **Linemates** — on a player page, in both directions: goals somebody set up for
 them, and goals they set up for somebody else. Assists are recorded on about
@@ -1120,27 +1158,40 @@ none.
 
 ### Filters
 
-**One row, directly under the tabs, holding every filter any view uses.** It
-had grown into two tiers and three shapes — season, league and game type above
-the tabs; each view's own below, in a collapsible panel on two views, a bare
-row on a third and nowhere at all on the fourth; and no two views agreeing on
-what order to ask in. A reader who learns where a filter lives on one page
-should not have to learn it again on the next.
+**Season lives in the header, on every view; everything else is one row under
+the tabs.** The filters had grown into two tiers and three shapes — season,
+league and game type above the tabs; each view's own below, in a collapsible
+panel on two views, a bare row on a third and nowhere at all on the fourth; and
+no two views agreeing on what order to ask in. A reader who learns where a
+filter lives on one page should not have to learn it again on the next.
 
-The order is fixed, and each control names the views it belongs to:
+**Season is one global control in the header**, present on every view including
+a team or a player page, and it drives whatever is on screen — the schedule, the
+stats, a club's season, or the *same team a season earlier or later*. A player
+page, which spans every season, scrolls to the one picked; arriving at a team or
+a club season points the control at that season so it always reads right.
 
-| View | |
+The rest sit in the one row under the tabs, in a fixed order, each naming the
+views it belongs to:
+
+| View | Row under the tabs |
 |---|---|
-| **Schedule** | Season · League · Division · Club · Game Type |
-| **Stats** | Season · League · Division · Club · Position · Min GP · Game Type |
-| **Club** | Season · League · Club · Game Type |
+| **Schedule** | League · Division · Club · Game Type |
+| **Stats** | League · Division · Club · Position · Min GP · Game Type |
+| **Club** | League · Club · Game Type — its season is navigated on the page (the season badges and a "back to all seasons" link), since a club is inherently multi-season |
 | **Player** | Game Type |
+| **Team** | none — a team page is one fixed team, so the shared filters would only mislead |
 
 Division sits before Club so both views ask in the same order, and Game Type
-sits last, in the one slot every view shares. Season is three different pickers
-sharing one slot, because the three views mean different things by it: a
-schedule season, a stats season, and a club season that also accepts *all
-seasons*. League and Game Type are one control each, shown wherever they apply.
+sits last, in the one slot every view shares. League and Game Type are one
+control each, shown wherever they apply.
+
+**The schedule's League, Division and Club cascade.** Pick Norcal and the
+Division list drops to Norcal's (no AAA) and the Club list to Norcal clubs (no
+Jr. Kings); pick a division and the clubs narrow to the ones with a team in it. A
+selection that still fits is kept; one that no longer does resets. The stats view
+cascades the same way for free, since its lists are built from a player set that
+is already league-filtered.
 
 `Position` was called `Type`, one slot away from a `Game Type` meaning
 something else entirely. It selects skaters or goalies.
@@ -1208,9 +1259,9 @@ straight at the boxes to tick. Only the class filter is explained there: a
 season the **League** picker removed is left out rather than blamed on the
 wrong control.
 
-The Schedule adds **Division** and **Club** after the shared three, and keeps a
-**Game Type** of its own in the shared slot — it asks the neighbouring
-question, what kind of fixture to list rather than what a total should count.
+The Schedule's row adds **Division** and **Club**, and its **Game Type** asks the
+neighbouring question — what kind of fixture to list rather than what a total
+should count.
 
 **Division** filters on the divisions the two *teams* are in, not on the game's
 own level. Those are different questions and the answer differs for 2,868 of
@@ -1221,13 +1272,21 @@ from either side, so it appears under `13U AAA` and under `14U AA` and not under
 words for two different things is the point.
 
 Divisions are listed by name, because an id means nothing outside its own season
-and the list spans six of them. A trailing flight, conference, pool or roman
-numeral is folded into the division it belongs to — `10U B`, `10U B East`,
-`10U B West` and `10U B II` are one entry, which takes the picker from 62 to 43.
-Keeping them apart meant choosing `10U B` silently missed 383 games, and a short
-list says nothing about being short. Only those markers are stripped and only
-from the end: a tier is part of the name, so `10U BB` is not `10U B`, and
-`tests/test_viewer.py` reads the rule back out of the shipped file to say so.
+and the list spans six of them, and they are listed **granularly** — `10U B
+East` and `10U B West` are separate entries, not folded into one `10U B`. That is
+so the schedule's standings match Time to Score's own tables, which are one per
+flight; East and West are different round-robins and a merged table would mix
+teams that never played. The sub-section folding still exists — `coreDivision`,
+with the `DIVISION_SUBSECTION` regex `tests/test_viewer.py` reads back out of the
+shipped file — but its one remaining use is matching *the same team across
+seasons* (a squad can be `14U AA East` one year and `14U AA` the next), where the
+merge is what keeps them the same team; a tier is never stripped, so `10U BB` is
+not `10U B`.
+
+**A division in the stats view is a link to its schedule.** Each division badge
+in the player tables, and the division in a leaderboard heading, opens the
+schedule filtered to that division — carrying the league and season — so a
+division's standings and games are one click from its players.
 
 ### Where the numbers came from
 
@@ -1330,6 +1389,7 @@ norcalstats/            the collector
   sources/timetoscore.py  page parsers
 deploy/                 systemd units and installer
 tests/                  test suite and HTML fixtures
+.githooks/pre-commit    date-stamps VIEWER_VERSION on commit
 norcal_hockey_viewer.html
 ```
 
