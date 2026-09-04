@@ -1317,10 +1317,11 @@ function showView(v, btn) {
 // 14,196 of them. Events stay behind the click: opening a box score still
 // fetches the season shard.
 
-//: The viewer's own version, as a calendar date. The version *is* the release
-//: date, so there is one thing to change when this file changes rather than two
-//: that can quietly disagree. There is no build step to derive it from -- that
-//: is a deliberate property of this file, not an oversight.
+//: The viewer's own version, as a calendar date -- the day this file was last
+//: updated. Stamped automatically on commit by .githooks/pre-commit whenever this
+//: file changes, so it never has to be remembered; the line below is only the
+//: last stamp. (Runtime file dates were rejected: served from a CDN they report
+//: the cache time, not the update.)
 var VIEWER_VERSION = '2026.09.03';
 
 var SCHEDULE = { rows: null, loading: null, partial: null };

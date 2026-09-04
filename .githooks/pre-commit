@@ -1,0 +1,21 @@
+#!/bin/sh
+# Stamp today's date into the viewer's VIEWER_VERSION whenever the viewer file is
+# committed, so the "Viewer" date in its footer is the day the web app was last
+# updated -- automatically, rather than a value someone has to remember to bump.
+#
+# Enabled per-clone with:  git config core.hooksPath .githooks
+
+file="norcal_hockey_viewer.html"
+
+# Nothing to do unless the viewer itself is part of this commit.
+git diff --cached --name-only | grep -qx "$file" || exit 0
+
+today=$(date +%Y.%m.%d)
+
+# Already stamped today? Leave it, to avoid needless churn.
+grep -q "var VIEWER_VERSION = '$today';" "$file" && exit 0
+
+# Replace the dated version string, then re-stage so the commit carries it.
+sed -i "s/var VIEWER_VERSION = '[0-9][0-9][0-9][0-9]\.[0-9][0-9]\.[0-9][0-9]';/var VIEWER_VERSION = '$today';/" "$file"
+git add "$file"
+exit 0
