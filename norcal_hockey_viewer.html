@@ -4275,6 +4275,42 @@ document.addEventListener('keydown', function(e) {
 // column on Time to Score, not the HTML oss-scoresheet page.
 var TTS_HOST = 'https://stats.caha.timetoscore.com';
 
+// The scoresheet the box score currently offers -- its game id and the filename
+// to save it under. Only one box score is open at a time.
+var CURRENT_SCORESHEET = null;
+
+// "Away vs Home YYYY-MM-DD.pdf", stripped of characters a filesystem rejects.
+function scoresheetFilename(away, home, date) {
+  var base = (away || 'Away') + ' vs ' + (home || 'Home') + (date ? ' ' + date : '');
+  return base.replace(/[\/\\:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim() + '.pdf';
+}
+
+// Fetch the PDF and save it under the game's name rather than open a tab named
+// generate-scorecard.php. Time to Score allows the cross-origin fetch; if that
+// ever fails, fall back to opening it (the anchor's href) so the link still works.
+function downloadScoresheet(ev) {
+  if (ev && ev.preventDefault) ev.preventDefault();
+  var info = CURRENT_SCORESHEET;
+  if (!info) return false;
+  var url = TTS_HOST + '/generate-scorecard.php?game_id=' + encodeURIComponent(info.gameId);
+  fetch(url).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.blob();
+  }).then(function(blob) {
+    var obj = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = obj;
+    a.download = info.filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function() { URL.revokeObjectURL(obj); }, 2000);
+  }).catch(function() {
+    window.open(url, '_blank', 'noopener');
+  });
+  return false;
+}
+
 function renderBoxScore(season, g, gameId) {
   var home = APP.teamByKey[teamKey(season, g.home)];
   var away = APP.teamByKey[teamKey(season, g.away)];
@@ -4302,12 +4338,17 @@ function renderBoxScore(season, g, gameId) {
     .filter(Boolean).map(escHtml).join(' · ');
 
   // The scoresheet PDF is filed once a game is played; a scheduled game has
-  // none to link to yet.
-  var scoresheet = (played && gameId != null)
-    ? '<div class="box-links"><a class="scoresheet-link" target="_blank" rel="noopener noreferrer" href="'
+  // none to link to yet. Clicking downloads it named for the game (away, home
+  // and date) rather than opening a generate-scorecard.php tab; the href is the
+  // fallback if the fetch is ever blocked. The name is stashed for the handler
+  // since only one box score is open at a time.
+  var scoresheet = '';
+  if (played && gameId != null) {
+    CURRENT_SCORESHEET = { gameId: gameId, filename: scoresheetFilename(awayName, homeName, g.date) };
+    scoresheet = '<div class="box-links"><a class="scoresheet-link" href="'
       + TTS_HOST + '/generate-scorecard.php?game_id=' + encodeURIComponent(gameId)
-      + '">Scoresheet PDF <span aria-hidden="true">↗</span></a></div>'
-    : '';
+      + '" onclick="return downloadScoresheet(event)">Scoresheet PDF <span aria-hidden="true">↓</span></a></div>';
+  }
 
   return '<div class="box-head">'
     + '<div class="box-score-line">' + escHtml(awayName) + ' '
