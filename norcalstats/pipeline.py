@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 import re
 import sqlite3
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Iterable, Optional
@@ -148,6 +148,18 @@ class Pipeline:
                  "teams": len(teams), "discovered_at": now()},
                 keys=["league_id", "season_id"],
             )
+            # Record which team entered under which name here, even for the
+            # tournament leagues a normal scan skips. A team plays a weekend
+            # event under its bare club name ("Aliso Viejo Avalanche"), not the
+            # name its own league registers it under ("Aliso Viejo Avalanche
+            # 16AA"); that event game still surfaces on the team's season-long
+            # page, where neither side can be identified from the bare name. The
+            # appearance row is what lets derive resolve it later, so it is
+            # stored now while the index is in hand -- identity off, so a
+            # visitor that only ever plays tournaments does not become a team.
+            self._store_teams(season_id, league_id,
+                              _default_priority(league_id), teams, {},
+                              identity=False)
             found.append(league_id)
             if not already:
                 log.info("  S%d league %-3d %-24s %d teams",
@@ -506,7 +518,19 @@ class Pipeline:
         priority: int,
         teams: list[tts.TeamRef],
         division_ids: dict[str, int],
+        *,
+        identity: bool = True,
     ) -> None:
+        """Record a league's teams.
+
+        ``identity`` off records only the ``team_leagues`` appearance rows and
+        writes no ``teams`` identity: used for leagues that are discovered but
+        not scanned (weekend tournaments), so the name each one enters a team
+        under is captured -- a tournament prints the bare club name a team's own
+        league never uses -- without turning a passing visitor into a team of
+        its own. ``resolve_sides_by_registration`` reads those names back to
+        identify a side the fetch could not.
+        """
         # Two teams from one club can share a division; number them so they can
         # be told apart in exports.
         seen_clubs: dict[tuple[str, Optional[int]], int] = {}
@@ -529,7 +553,7 @@ class Pipeline:
                 keys=["team_id", "season_id", "league_id"],
             )
 
-            if not self._owns_team(team.team_id, season_id, priority):
+            if not identity or not self._owns_team(team.team_id, season_id, priority):
                 continue
 
             upsert(
@@ -1335,6 +1359,9 @@ class Pipeline:
         resolved = resolve_ambiguous_sides(self.conn)
         if resolved:
             log.info("resolved %d ambiguous team side(s) by roster match", resolved)
+        by_name = resolve_sides_by_registration(self.conn)
+        if by_name:
+            log.info("resolved %d team side(s) by tournament registration", by_name)
         clubs_built = rebuild_clubs(self.conn)
         log.info("  %d club(s) from team names", clubs_built)
         log.info("resolving player identities")
@@ -1521,6 +1548,83 @@ def resolve_ambiguous_sides(conn: sqlite3.Connection) -> int:
 
     conn.commit()
     return resolved
+
+
+def resolve_sides_by_registration(conn: sqlite3.Connection) -> int:
+    """Identify a game side from the name a team entered a tournament under.
+
+    A tournament league is not collected in its own right, but its games appear
+    on the season-long pages of the teams that played them, and are recorded
+    from there. The tournament prints the bare club name ("Aliso Viejo
+    Avalanche"), while the team is registered in its own league under a suffixed
+    one ("Aliso Viejo Avalanche 16AA"), so ``_store_game``'s exact match leaves
+    the side unresolved -- and the roster match in ``resolve_ambiguous_sides``
+    cannot help, because it too looks the name up against the suffixed team.
+
+    But the tournament *did* register the team under that bare name, and
+    ``discover_leagues`` now keeps every league's spelling in ``team_leagues``.
+    So a side is filled when its printed name maps, in that season, to exactly
+    one team we actually hold. Only a unique match is taken -- two teams sharing
+    a bare name is left alone rather than guessed -- and the join to ``teams``
+    means a name that belongs only to a genuine visitor resolves to nothing, as
+    it should. Runs in ``derive`` after the roster match and re-runs each time,
+    so it needs no scoresheet and heals the whole history once the names are in.
+    """
+    registry: dict[tuple[int, str], set[int]] = defaultdict(set)
+    for row in conn.execute("""
+        SELECT tl.season_id, tl.name, tl.team_id
+          FROM team_leagues tl
+          JOIN teams t ON t.team_id = tl.team_id AND t.season_id = tl.season_id
+         WHERE COALESCE(tl.name, '') <> ''
+    """):
+        registry[(row["season_id"], _norm_team_name(row["name"]))].add(row["team_id"])
+
+    candidates = conn.execute("""
+        SELECT game_id, season_id, home_name, away_name, home_team_id, away_team_id
+          FROM games
+         WHERE (home_team_id IS NULL OR away_team_id IS NULL)
+           AND COALESCE(home_name, '') <> '' AND COALESCE(away_name, '') <> ''
+    """).fetchall()
+
+    resolved = 0
+    for game in candidates:
+        assigned = {"home": game["home_team_id"], "away": game["away_team_id"]}
+        for side in ("home", "away"):
+            if assigned[side] is not None:
+                continue
+            ids = set(registry.get(
+                (game["season_id"], _norm_team_name(game[f"{side}_name"])), ()))
+            ids -= {v for v in assigned.values() if v is not None}
+            if len(ids) == 1:
+                assigned[side] = ids.pop()
+
+        updates = {
+            side: assigned[side] for side in ("home", "away")
+            if assigned[side] != game[f"{side}_team_id"]
+        }
+        if updates:
+            sets = ", ".join(f"{side}_team_id = ?" for side in updates)
+            conn.execute(
+                f"UPDATE games SET {sets}, needs_review = ?, updated_at = ? WHERE game_id = ?",
+                [*updates.values(),
+                 int(assigned["home"] is None or assigned["away"] is None),
+                 now(), game["game_id"]],
+            )
+            resolved += len(updates)
+
+    conn.commit()
+    return resolved
+
+
+def _norm_team_name(name: str) -> str:
+    """Collapse the whitespace a team name is spelled with.
+
+    The same team is printed "San Diego  Jr Gulls" in one place and with single
+    spaces in another; matching on the raw string would miss it. Case is left
+    alone -- the site is consistent about it, and folding it risks merging two
+    genuinely different names.
+    """
+    return re.sub(r"\s+", " ", (name or "").strip())
 
 
 def raise_team_questions(conn: sqlite3.Connection) -> None:

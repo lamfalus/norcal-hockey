@@ -338,6 +338,121 @@ class TestAmbiguousSideResolution(PipelineTestCase):
         self.assertEqual(pipeline.resolve_ambiguous_sides(self.conn), 0)
 
 
+class TestSidesByRegistration(PipelineTestCase):
+    """The opponent in a cross-listed tournament game, filled from the bare name
+    the tournament entered a team under.
+
+    ``resolve_ambiguous_sides`` needs a roster and matches the suffixed name;
+    the own-side-by-club fix only reaches the crawled team. Neither identifies
+    the *opponent* of a festival game that surfaced on a season-long page under
+    a bare name. ``discover_leagues`` keeps that bare name in ``team_leagues``,
+    and this resolver reads it back.
+    """
+
+    def setUp(self):
+        super().setUp()
+        for league_id, name in ((5, "CAHA"), (41, "Festival")):
+            self.conn.execute(
+                "INSERT OR IGNORE INTO leagues(league_id, name, priority, kind) "
+                "VALUES (?,?,?,?)",
+                (league_id, name, league_id, "season" if league_id == 5 else "event"))
+        # Two real teams, registered in their own league under suffixed names.
+        for team_id, name in ((4575, "Aliso Viejo Avalanche 16AA"),
+                              (4580, "Tri Valley Bulls 16AA-2")):
+            self.conn.execute(
+                "INSERT INTO teams(team_id, season_id, name, club, league_id) "
+                "VALUES (?, 31, ?, ?, 5)",
+                (team_id, name, name.rsplit(" ", 1)[0]))
+            self.conn.execute(
+                "INSERT INTO team_leagues(team_id, season_id, league_id, name) "
+                "VALUES (?, 31, 5, ?)", (team_id, name))
+        self.conn.commit()
+
+    def _register(self, team_id, bare_name, league_id=41):
+        """A tournament appearance under a bare name."""
+        self.conn.execute(
+            "INSERT INTO team_leagues(team_id, season_id, league_id, name) "
+            "VALUES (?, 31, ?, ?)", (team_id, league_id, bare_name))
+        self.conn.commit()
+
+    def _game(self, *, away, home, away_id=None, home_id=None, game_id=59095):
+        self.conn.execute(
+            "INSERT INTO games(game_id, season_id, league_id, away_name, home_name, "
+            "away_team_id, home_team_id, status, needs_review) "
+            "VALUES (?, 31, 16, ?, ?, ?, ?, 'scheduled', 1)",
+            (game_id, away, home, away_id, home_id))
+        self.conn.commit()
+
+    def _row(self, game_id=59095):
+        return self.conn.execute(
+            "SELECT away_team_id, home_team_id, needs_review FROM games "
+            "WHERE game_id = ?", (game_id,)).fetchone()
+
+    def test_the_opponent_is_filled_from_its_bare_registration(self):
+        self._register(4575, "Aliso Viejo Avalanche")
+        # Home already resolved by the own-side-by-club step; away is the gap.
+        self._game(away="Aliso Viejo Avalanche", home="Tri Valley Bulls 2", home_id=4580)
+        self.assertEqual(pipeline.resolve_sides_by_registration(self.conn), 1)
+        row = self._row()
+        self.assertEqual(row["away_team_id"], 4575)
+        self.assertEqual(row["home_team_id"], 4580)
+        self.assertEqual(row["needs_review"], 0, "both sides known now")
+
+    def test_both_null_sides_resolve(self):
+        self._register(4575, "Aliso Viejo Avalanche")
+        self._register(4580, "Tri Valley Bulls 2")
+        self._game(away="Aliso Viejo Avalanche", home="Tri Valley Bulls 2")
+        self.assertEqual(pipeline.resolve_sides_by_registration(self.conn), 2)
+        row = self._row()
+        self.assertEqual((row["away_team_id"], row["home_team_id"]), (4575, 4580))
+
+    def test_whitespace_differences_still_match(self):
+        # The registry collapses runs of spaces, so a double-spaced spelling in
+        # one place matches a single-spaced one in the other.
+        self._register(4575, "Aliso  Viejo   Avalanche")
+        self._game(away="Aliso Viejo Avalanche", home="Tri Valley Bulls 2", home_id=4580)
+        self.assertEqual(pipeline.resolve_sides_by_registration(self.conn), 1)
+        self.assertEqual(self._row()["away_team_id"], 4575)
+
+    def test_a_bare_name_two_teams_share_is_left_alone(self):
+        # Two different teams entered under the identical bare name: the name no
+        # longer identifies one team, so neither is guessed.
+        self.conn.execute(
+            "INSERT INTO teams(team_id, season_id, name, club, league_id) "
+            "VALUES (7001, 31, 'Junior Reign 16AA', 'Junior Reign', 5)")
+        self.conn.execute(
+            "INSERT INTO teams(team_id, season_id, name, club, league_id) "
+            "VALUES (7002, 31, 'Junior Reign 14AA', 'Junior Reign', 5)")
+        self._register(7001, "Junior Reign")
+        self._register(7002, "Junior Reign")
+        self._game(away="Junior Reign", home="Tri Valley Bulls 2", home_id=4580)
+        self.assertEqual(pipeline.resolve_sides_by_registration(self.conn), 0)
+        self.assertIsNone(self._row()["away_team_id"])
+
+    def test_a_visitor_we_do_not_hold_resolves_to_nothing(self):
+        # A team that only ever plays tournaments has a team_leagues row but no
+        # teams row (identity was off), so its name maps to no team we can link.
+        self.conn.execute(
+            "INSERT INTO team_leagues(team_id, season_id, league_id, name) "
+            "VALUES (9999, 31, 41, 'Team Wyoming Wild')")
+        self._game(away="Team Wyoming Wild", home="Tri Valley Bulls 2", home_id=4580)
+        self.assertEqual(pipeline.resolve_sides_by_registration(self.conn), 0)
+        self.assertIsNone(self._row()["away_team_id"])
+
+    def test_discovery_stores_appearances_without_identity(self):
+        # identity=False records the bare-name appearance but creates no team.
+        from norcalstats.sources import timetoscore as tts
+        teams = [tts.TeamRef(team_id=8001, name="Somewhere Else",
+                             division=tts.DivisionRef(name="16U AA"))]
+        self.pipeline._store_teams(31, 41, 141, teams, {}, identity=False)
+        self.conn.commit()
+        self.assertEqual(
+            db.scalar(self.conn, "SELECT COUNT(*) FROM teams WHERE team_id = 8001"), 0)
+        self.assertEqual(
+            db.scalar(self.conn,
+                      "SELECT COUNT(*) FROM team_leagues WHERE team_id = 8001"), 1)
+
+
 class TestExport(PipelineTestCase):
     def setUp(self) -> None:
         super().setUp()
