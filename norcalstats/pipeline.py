@@ -634,6 +634,20 @@ class Pipeline:
             home_id = team.team_id
         elif team.name == game.away_name:
             away_id = team.team_id
+        else:
+            # Neither side's printed name equals the team we are reading. Time
+            # to Score sometimes spells a team differently from row to row --
+            # a festival game cross-listed onto a team's preseason page prints
+            # "Tri Valley Bulls 2", while the team is registered as "Tri Valley
+            # Bulls 16AA2". But this is *this team's own* schedule page, so the
+            # team is certainly one of the two sides; assign it to whichever
+            # side is unmistakably its club (both sides being its club is the
+            # same-name case above, left to the roster resolver).
+            side = self._own_side_by_club(team, game)
+            if side == "home":
+                home_id = team.team_id
+            elif side == "away":
+                away_id = team.team_id
         needs_review = int(home_id is None or away_id is None)
 
         division_id = division_ids.get(game.level, team_division_id)
@@ -666,6 +680,33 @@ class Pipeline:
             self.conn, "games", row, keys=["game_id"],
             update=[c for c in row if c != "game_id"],
         )
+
+    def _own_side_by_club(
+        self, team: tts.TeamRef, game: tts.ScheduleGame
+    ) -> Optional[str]:
+        """Which side of ``game`` the crawled ``team`` is, by club name.
+
+        Used only when the printed names match the team textually on neither
+        side -- Time to Score's spellings drift, but the club is stable, so the
+        canonical club settles it. Returns ``"home"``/``"away"`` when exactly one
+        side is the team's club, and ``None`` when both are (a same-club meeting,
+        for the roster resolver) or neither is (a name too far off to trust).
+        """
+        team_club = clubs_mod.canonical_name(
+            team.name,
+            N.division_gender(team.division.name if team.division else "", team.name),
+        )
+        if not team_club:
+            return None
+        home_match = (game.home_name or "") and clubs_mod.canonical_name(
+            game.home_name, N.division_gender(game.level, game.home_name)) == team_club
+        away_match = (game.away_name or "") and clubs_mod.canonical_name(
+            game.away_name, N.division_gender(game.level, game.away_name)) == team_club
+        if home_match and not away_match:
+            return "home"
+        if away_match and not home_match:
+            return "away"
+        return None
 
     # -------------------------------------------------------- scoresheets
     def pending_scoresheets(self, seasons: Iterable[int], *, force: bool = False) -> list[int]:

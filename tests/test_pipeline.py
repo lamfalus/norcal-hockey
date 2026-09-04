@@ -105,6 +105,75 @@ class TestStorage(PipelineTestCase):
             self.assertEqual(game["needs_review"], 1)
 
 
+class TestOwnSideByClub(PipelineTestCase):
+    """A team's schedule page only lists its own games, so the crawled team is
+    certainly one side -- even when Time to Score prints it under a shorter
+    spelling than the one it is registered with (a festival game cross-listed
+    onto a team's preseason page shows "Tri Valley Bulls 2", not the registered
+    "Tri Valley Bulls 16AA2"). The exact-name match misses that; the club does.
+    """
+
+    def _game(self, *, away, home, level="16U AA", game_id=900001):
+        from norcalstats.sources import timetoscore as tts
+        return tts.ScheduleGame(
+            game_id=game_id, date_text="Fri Sep 4", time_text="11:15 AM",
+            rink="Riverside A", league="California Dreamin` Labor Day Festival",
+            level=level, away_name=away, home_name=home,
+            away_goals=None, home_goals=None, game_type="Round Robin",
+            has_scoresheet=True,
+        )
+
+    def _team(self, team_id, name, division="16U AA"):
+        from norcalstats.sources import timetoscore as tts
+        return tts.TeamRef(team_id=team_id, name=name,
+                           division=tts.DivisionRef(name=division))
+
+    def _store(self, team, game):
+        self.pipeline._store_game(31, self.LEAGUE, game, team, 2025, None, {})
+        self.conn.commit()
+        return self.conn.execute(
+            "SELECT home_team_id, away_team_id, needs_review FROM games "
+            "WHERE game_id = ?", (game.game_id,)).fetchone()
+
+    def test_shorter_spelling_still_assigns_the_teams_own_side(self):
+        team = self._team(4580, "Tri Valley Bulls 16AA2")
+        row = self._store(team, self._game(
+            away="Aliso Viejo Avalanche", home="Tri Valley Bulls 2"))
+        self.assertEqual(row["home_team_id"], 4580, "home is the team's own club")
+        self.assertIsNone(row["away_team_id"], "the opponent is not this page's team")
+
+    def test_it_reads_the_away_side_too(self):
+        team = self._team(4580, "Tri Valley Bulls 16AA2")
+        row = self._store(team, self._game(
+            away="Tri Valley Bulls 2", home="Aliso Viejo Avalanche"))
+        self.assertEqual(row["away_team_id"], 4580)
+        self.assertIsNone(row["home_team_id"])
+
+    def test_two_squads_of_one_club_stay_ambiguous(self):
+        # Both sides are the team's own club: the page cannot say which squad we
+        # are, so neither side is assigned -- left for the roster resolver.
+        team = self._team(4580, "Tri Valley Bulls 16AA2")
+        row = self._store(team, self._game(
+            away="Tri Valley Bulls 1", home="Tri Valley Bulls 2"))
+        self.assertIsNone(row["home_team_id"])
+        self.assertIsNone(row["away_team_id"])
+
+    def test_a_name_from_a_different_club_is_never_forced(self):
+        # If neither side is the team's club (a data error), guess nothing.
+        team = self._team(4580, "Tri Valley Bulls 16AA2")
+        row = self._store(team, self._game(
+            away="Aliso Viejo Avalanche", home="Junior Reign 16AA-1"))
+        self.assertIsNone(row["home_team_id"])
+        self.assertIsNone(row["away_team_id"])
+
+    def test_exact_name_match_is_unchanged(self):
+        # The ordinary case still resolves by exact name, not the club fallback.
+        team = self._team(58, "San Jose Jr Sharks 16AA")
+        row = self._store(team, self._game(
+            away="Foo Bar 16AA", home="San Jose Jr Sharks 16AA"))
+        self.assertEqual(row["home_team_id"], 58)
+
+
 class TestSeasonTargeting(unittest.TestCase):
     """An offline rebuild starts from an empty database and must still work."""
 
