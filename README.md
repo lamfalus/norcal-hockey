@@ -903,6 +903,15 @@ requests.
 
 ## Development
 
+After cloning, enable the commit hook that date-stamps the viewer's version (see
+[Where the numbers came from](#where-the-numbers-came-from)):
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Then run the tests:
+
 ```bash
 python3 -m unittest discover -s tests -t .
 ```
@@ -1236,10 +1245,20 @@ the line turns amber and says so. Nothing else on the page would show it.
 
 **Viewer** is this file's own version, and it is a calendar date on purpose:
 the version *is* the release date, so there is one fact to keep true rather
-than two that can disagree. It is hand-maintained, because there is no build
-step to stamp it — that is a property of a single self-contained file, not an
-oversight. `tests/test_viewer.py` compares it against the file's last commit
-date and fails when an edit lands without a bump.
+than two that can disagree. A `git` pre-commit hook stamps it —
+`.githooks/pre-commit` writes today's date into `VIEWER_VERSION` whenever the
+viewer file is part of a commit, so the release date is always the day it was
+last updated without anyone remembering to bump it. Enable it once per clone
+(it is a repo file, but `core.hooksPath` is a local setting git does not carry):
+
+```bash
+git config core.hooksPath .githooks
+```
+
+A runtime file date was rejected: served from a CDN it reports the cache time,
+not the update, so a stamped-at-commit date is the reliable one.
+`tests/test_viewer.py` still checks the version against the file's last commit
+date — a backstop for a commit made without the hook enabled.
 
 The viewer version still shows when the dataset cannot be loaded at all, which
 is exactly the moment somebody needs to quote it.

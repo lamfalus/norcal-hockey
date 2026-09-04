@@ -12,12 +12,13 @@ VIEWER = REPO / "norcal_hockey_viewer.html"
 
 
 class TestViewerVersion(unittest.TestCase):
-    """The version is hand-maintained, which is the only thing it can be.
+    """The version must equal the day the viewer was last committed.
 
-    There is no build step to stamp it -- that is a deliberate property of a
-    single self-contained file, not an oversight -- so nothing stops an edit
-    landing without a bump, and a version that lies is worse than no version at
-    all. This is what stops it.
+    A pre-commit hook (.githooks/pre-commit) stamps it automatically, but that
+    only runs where the hook is enabled (git config core.hooksPath .githooks).
+    A version that lies is worse than no version at all, so this is the backstop
+    that catches a commit made without it -- there is no build step to lean on,
+    that being a deliberate property of a single self-contained file.
     """
 
     def version(self) -> str:
