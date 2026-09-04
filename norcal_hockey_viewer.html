@@ -152,6 +152,8 @@
             margin:18px 0 8px;}
   .box-side{font-weight:600;}
   .goal-assists{color:var(--muted);font-size:.85rem;}
+  /* Small caps label marking the goal scorer vs the assists in the box score. */
+  .goal-lbl{display:inline-block;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);min-width:44px;margin-right:2px;}
   /* Linemates */
   .mate-row{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:.88rem;}
   .mate-bar{height:7px;background:var(--accent);border-radius:3px;min-width:2px;}
@@ -4367,8 +4369,10 @@ function renderGoalList(season, g, homeName, awayName) {
       + '<td class="log-class">' + escHtml(periodLabel(goal.per)) + '</td>'
       + '<td class="log-date">' + escHtml(goal.time || '') + '</td>'
       + '<td class="box-side">' + escHtml(goal.side === 'home' ? homeName : awayName) + '</td>'
-      + '<td>' + playerLink(goal.by, goal.byNo ? '#' + goal.byNo : null) + strengthTag(goal.str)
-      + (assists.length ? '<div class="goal-assists">' + assists.join(', ') + '</div>' : '')
+      + '<td><span class="goal-lbl">Goal</span> '
+      + playerLink(goal.by, goal.byNo ? '#' + goal.byNo : null) + strengthTag(goal.str)
+      + (assists.length ? '<div class="goal-assists"><span class="goal-lbl">'
+          + (assists.length === 1 ? 'Assist' : 'Assists') + '</span> ' + assists.join(', ') + '</div>' : '')
       + '</td></tr>';
   }).join('');
   return '<div class="box-sect">Scoring</div>'
