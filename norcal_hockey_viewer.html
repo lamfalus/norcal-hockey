@@ -3966,8 +3966,8 @@ function renderTeam(key) {
     + '</div>'
     + '<div id="team-record"><div class="log-loading">Loading record…</div></div>'
     + '<div id="team-schedule"><div class="log-loading">Loading games…</div></div>'
-    + '<div id="team-periods"></div>'
     + '<div id="team-roster"></div>'
+    + '<div id="team-periods"></div>'
     + (team.club ? '<div class="panel dr-panel">'
         + '<div class="dr-h">Player movement</div>'
         + '<p class="dr-lede">Tracing this exact roster &mdash; the clubs these players were with the season before, and the season after. Hover a block to follow one club.</p>'
@@ -4161,14 +4161,14 @@ function renderTeamRoster(roster) {
   var goalies = roster.filter(function(e) { return e.type === 'goalie'; })
     .sort(function(a, b) { return entryGAA(a) - entryGAA(b); });
   if (!skaters.length && !goalies.length) {
-    host.innerHTML = '<div class="panel"><div class="panel-title">Roster</div>'
+    host.innerHTML = '<div class="panel"><h2 style="font-size:1rem;margin-bottom:12px">Roster</h2>'
       + '<p style="color:var(--muted);padding:4px 2px">No roster recorded — the games'
       + ' counted filter may be excluding them.</p></div>';
     return;
   }
   browseSort = { col: 'PTS', dir: -1 };
   browseGoalieSort = { col: 'GAA', dir: 1 };
-  host.innerHTML = '<div class="panel"><div class="panel-title">Roster</div>'
+  host.innerHTML = '<div class="panel"><h2 style="font-size:1rem;margin-bottom:12px">Roster</h2>'
     + (skaters.length ? renderSkaterTable(skaters, false, 'team-roster-skaters') : '')
     + (goalies.length ? '<div class="panel-title" style="margin-top:18px">Goaltending</div>'
         + renderGoalieTable(goalies, false, 'team-roster-goalies') : '')
