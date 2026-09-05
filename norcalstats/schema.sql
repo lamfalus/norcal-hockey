@@ -125,7 +125,16 @@ INSERT OR IGNORE INTO leagues (league_id, name, priority, kind, note) VALUES
     -- Mid-season MLK holiday weekend (Sat-Mon), with an out-of-area field.
     -- Its "Championship" and "Consolation" games are the tournament's own
     -- bracket, not a league playoff.
-    (40, 'MLK Weekend Tournament', 223, 'event', 'mid-season holiday tournament');
+    (40, 'MLK Weekend Tournament', 223, 'event', 'mid-season holiday tournament'),
+    -- The California Dreamin' Labor Day Festival: a SoCal preseason tournament,
+    -- so the automatic classifier reads it as an 'event' and would skip it. Its
+    -- field is almost entirely California clubs already tracked in SCAHA and
+    -- CAHA, so it is collected by hand. Priority 230 keeps it below every season
+    -- league -- it never owns a team's name or division -- and it is left out of
+    -- clubs.HOME_LEAGUES on purpose, so an out-of-state entrant that plays
+    -- nowhere else stays a visitor rather than becoming a browsable club. Only
+    -- S33 carries games under this id; earlier seasons are empty.
+    (41, 'California Dreamin Labor Day Festival', 230, 'season', 'SoCal Labor Day tournament, collected by hand');
 -- The CAHA family is four ids for one competition, and the rounds point at the
 -- main league. That is applied in db.py rather than here: parent_id and stage
 -- arrive through ADDED_COLUMNS, which runs *after* this script, so a database

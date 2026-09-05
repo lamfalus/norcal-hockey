@@ -5,8 +5,10 @@ The site names *teams*, not clubs, and it names them inconsistently. Reducing
 kinds of mess:
 
 * **Squad designators** tacked onto the club name -- ``10A``, ``G14AA``,
-  ``10G2``, ``16aa-2``, ``2017 Teal``, a bare ``-2``. One club can pick up a
-  dozen apparent identities this way; "San Jose Jr Sharks" had twelve.
+  ``10G2``, ``16aa-2``, ``2017 Teal``, a bare ``-2``, or a bare tier with no
+  age at all (``BB``, ``AA2``), which is how a preseason tournament enters its
+  teams. One club can pick up a dozen apparent identities this way; "San Jose
+  Jr Sharks" had twelve.
 * **Spelling drift** between seasons and between the people typing them:
   ``Tri-Valley`` and ``Tri Valley``, ``Jr.`` and ``Junior``, ``Los Angles``,
   ``Onterio``, ``Blackstars``. Rules handle the punctuation; the typos need
@@ -52,6 +54,7 @@ _DESIGNATOR = re.compile(
         | \d{1,2}\s*G-?[A-Za-z]?           # 12G-A
         | \d{1,2}\s*G\s*\d*                # 10G2
         | \d{1,3}\s*[A-Za-z]{1,3}-?\d*     # 16aa-2, 12uAA, 100A, 12x, 10B
+        | (?:[Aa]{1,3}|[Bb]{1,3})-?\d*    # a tier with no age: BB, B, AA, A, AA2, B2
         | \d{1,2}-\d{1,2}                  # 10-5
         | (19|20)\d{2}([ ].*)?             # 2017, 2017 Teal, 2015 10-2(4)
         | \(\d+\)                          # (5)

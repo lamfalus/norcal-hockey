@@ -80,10 +80,14 @@ class TestLeagueSeeding(LeagueDbTestCase):
 
     def test_a_discovered_league_never_outranks_a_collected_one(self):
         # A new league must not take ownership of a team away from Norcal/CAHA.
+        # The Labor Day festival (41) is excluded: it is collected but sits at
+        # priority 230 on purpose, below even a discovered league, so that it
+        # never owns a team -- a discovered league outranking it is intended.
         self.assertGreater(
             pipeline._default_priority(19),
             db.scalar(self.conn,
-                      "SELECT MAX(priority) FROM leagues WHERE kind = 'season'"))
+                      "SELECT MAX(priority) FROM leagues "
+                      "WHERE kind = 'season' AND league_id <> 41"))
 
     def test_default_league_id_resolves(self):
         # divisions.league_id defaults to 3, which must satisfy the foreign key.
@@ -515,6 +519,77 @@ class TestDroppingTheChampionships(LeagueDbTestCase):
             "Weekends")
         self.assertEqual(
             db.scalar(self.conn, "SELECT parent_id FROM leagues WHERE league_id = 24"), 5)
+
+
+class TestCollectingTheFestival(LeagueDbTestCase):
+    """League 41, the California Dreamin' Labor Day Festival.
+
+    A SoCal preseason tournament the automatic classifier would skip as an
+    'event'. Its field is almost all California clubs already tracked in SCAHA
+    and CAHA, so it is collected by hand -- but at a priority that never lets it
+    own a team's name, and deliberately outside ``clubs.HOME_LEAGUES`` so an
+    out-of-state entrant that plays nowhere else stays a visitor.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.config.leagues = []   # exercise the policy, not a fixed list
+        self.conn.execute(
+            "INSERT INTO seasons(season_id,label,start_year,first_seen_at) "
+            "VALUES (33,'Fall 2026',2026,'x')")
+        self.conn.commit()
+
+    def test_the_festival_is_seeded_as_a_collected_season(self):
+        row = self.conn.execute(
+            "SELECT kind, priority FROM leagues WHERE league_id = 41").fetchone()
+        self.assertEqual(row["kind"], "season")
+        self.assertEqual(row["priority"], 230)
+
+    def test_the_festival_is_collected_where_it_carries_teams(self):
+        self.conn.execute(
+            "INSERT INTO league_seasons(league_id,season_id,teams) VALUES (41,33,59)")
+        self.conn.commit()
+        self.assertIn(41, self.pipeline.leagues_for(33))
+
+    def test_the_festival_never_owns_a_team(self):
+        # Priority 230 sits below every season-long league, so a team that also
+        # plays SCAHA or CAHA keeps the name that league gives it.
+        top = db.scalar(
+            self.conn, "SELECT MAX(priority) FROM leagues WHERE kind = 'season'"
+                       " AND league_id <> 41")
+        self.assertLess(top, 230)
+
+    def test_the_festival_is_not_a_home_league(self):
+        # This is what keeps an out-of-state entrant a visitor: it plays only in
+        # 41, and 41 is not one of ours, so classify() never calls it a club.
+        from norcalstats import clubs
+        self.assertNotIn(41, clubs.HOME_LEAGUES)
+        self.assertEqual(clubs.classify("SnoKing Jr Thunderbirds", {41}), "visitor")
+        # A festival team that also plays a home league is still a club.
+        self.assertEqual(clubs.classify("California Surf", {4, 41}), "club")
+
+    def test_the_migration_collects_it_on_an_existing_database(self):
+        # A database that met league 41 before this shipped classified it as an
+        # 'event'; INSERT OR IGNORE cannot change that row, so the migration must.
+        self.conn.execute(
+            "UPDATE leagues SET kind='event', priority=141 WHERE league_id=41")
+        db.set_meta(self.conn, "schema_version", "8")
+        self.conn.commit()
+        db.init(self.conn)
+        row = self.conn.execute(
+            "SELECT kind, priority FROM leagues WHERE league_id = 41").fetchone()
+        self.assertEqual(row["kind"], "season")
+        self.assertEqual(row["priority"], 230)
+
+    def test_the_migration_leaves_a_hand_excluded_league_alone(self):
+        # If someone has since said 'no', re-collecting it would override them.
+        self.conn.execute("UPDATE leagues SET kind='excluded' WHERE league_id=41")
+        db.set_meta(self.conn, "schema_version", "8")
+        self.conn.commit()
+        db.init(self.conn)
+        self.assertEqual(
+            db.scalar(self.conn, "SELECT kind FROM leagues WHERE league_id = 41"),
+            "excluded")
 
 
 class TestLeagueClassification(LeagueDbTestCase):

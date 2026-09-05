@@ -27,6 +27,31 @@ class TestDesignators(unittest.TestCase):
                      "San Jose Jr Sharks 10-6 2017 10-3(6)"):
             self.assertEqual(clubs.canonical_name(team), "San Jose Jr Sharks")
 
+    def test_a_bare_tier_with_no_age_comes_off(self):
+        # A preseason tournament enters its teams with a tier and no age --
+        # "California Surf BB", "Junior Reign AA2" -- where the season leagues
+        # write "California Surf 14BB". Without stripping the bare tier, every
+        # one of these would split off into a club of its own ("California Surf
+        # BB") instead of joining the club it plainly belongs to.
+        for team, club in (
+            ("California Surf BB", "California Surf"),
+            ("California Surf B", "California Surf"),
+            ("California Surf AA", "California Surf"),
+            ("Empire Hockey Club BB", "Empire Hockey Club"),
+            ("Junior Reign AA2", "Junior Reign"),
+            ("Aliso Viejo Avalanche B2", "Aliso Viejo Avalanche"),
+            ("Santa Barbara Ice Hawks A", "Santa Barbara Ice Hawks"),
+            ("Mammoth Stars B", "Mammoth Stars"),
+        ):
+            self.assertEqual(clubs.canonical_name(team), club)
+
+    def test_a_bare_tier_does_not_eat_a_real_name(self):
+        # The rule only strips a trailing run of A/B (with an optional squad
+        # number), so a name that merely ends in one of those words is left
+        # whole -- it must not turn "Oakland Bears" into "Oakland".
+        for name in ("Oakland Bears", "California Golden Bears", "Vacaville Jets"):
+            self.assertEqual(clubs.canonical_name(name), name)
+
     def test_a_girls_marker_survives_the_strip(self):
         # The designator sits *before* the marker here, and taking it with the
         # designator would file a girls team under the co-ed club.

@@ -12,7 +12,7 @@ from . import names as N
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 
@@ -152,6 +152,8 @@ def _migrate(conn: sqlite3.Connection, from_version: int) -> None:
     # there is nothing to do here beyond record the version.
     if from_version < 8:
         _migrate_v8_rekey_goalie_records(conn)
+    if from_version < 9:
+        _migrate_v9_collect_festival(conn)
 
 
 #: Leagues dropped in v6, and why. Both are end-of-season championships drawn
@@ -355,6 +357,32 @@ def _migrate_v8_rekey_goalie_records(conn: sqlite3.Connection) -> None:
     """)
     conn.execute(
         "UPDATE games SET scorecard_parse_version = NULL WHERE scorecard_at IS NOT NULL")
+    conn.commit()
+
+
+def _migrate_v9_collect_festival(conn: sqlite3.Connection) -> None:
+    """v8 -> v9: collect the California Dreamin' Labor Day Festival (league 41).
+
+    A SoCal preseason tournament whose field is almost all California clubs
+    already tracked in SCAHA and CAHA. The automatic classifier reads a
+    tournament as an 'event' and skips it, and the ``INSERT OR IGNORE`` seed in
+    schema.sql cannot change a row an existing database already discovered -- so
+    the decision is applied here for a database that met the league before this
+    shipped. Priority 230 keeps it below every season league, so it never owns a
+    team's name or division, and it is left out of ``clubs.HOME_LEAGUES`` so an
+    out-of-state entrant stays a visitor. A row somebody has since excluded by
+    hand is left excluded.
+    """
+    changed = conn.execute(
+        "UPDATE leagues SET kind = 'season', priority = 230 "
+        "WHERE league_id = 41 AND kind <> 'excluded'").rowcount
+    if not changed:
+        # Not discovered yet (or its row is missing): seed it so the next crawl
+        # collects it. An existing 'excluded' row is left untouched.
+        conn.execute(
+            "INSERT OR IGNORE INTO leagues(league_id, name, priority, kind, note) "
+            "VALUES (41, 'California Dreamin Labor Day Festival', 230, 'season', "
+            "'SoCal Labor Day tournament, collected by hand')")
     conn.commit()
 
 
