@@ -1324,7 +1324,7 @@ function showView(v, btn) {
 //: file changes, so it never has to be remembered; the line below is only the
 //: last stamp. (Runtime file dates were rejected: served from a CDN they report
 //: the cache time, not the update.)
-var VIEWER_VERSION = '2026.09.03';
+var VIEWER_VERSION = '2026.09.05';
 
 var SCHEDULE = { rows: null, loading: null, partial: null };
 
@@ -3813,11 +3813,27 @@ function bornLabel(playerId) {
 }
 
 // ── Filters ───────────────────────────────────────────────────────────────
+// A one-off tournament (the Labor Day festival, and any like it that gets
+// collected) is a real league in the data but not a competition anyone browses
+// by name. In the picker it reads as a generic "Tournaments" rather than its
+// own long title. Honour an explicit flag from the dataset if one is ever
+// added; otherwise recognise the tournament by its name, which is enough for
+// the ones collected today.
+var TOURNAMENT_NAME_RE =
+  /\b(tournament|festival|cup|classic|invitational|showcase|face[-\s]?off)\b/i;
+function isTournamentLeague(l) {
+  return !!l && (l.tournament === true || TOURNAMENT_NAME_RE.test(l.name || ''));
+}
+function leagueLabel(l) {
+  if (!l) return '';
+  return isTournamentLeague(l) ? 'Tournaments' : l.name;
+}
+
 function initFilters() {
   var leagueSel = document.getElementById('sel-league');
   APP.leagues.forEach(function(l) {
     var o = document.createElement('option');
-    o.value = l.id; o.textContent = l.name;
+    o.value = l.id; o.textContent = leagueLabel(l);
     leagueSel.appendChild(o);
   });
   // Everything ticked to start with. A total that quietly leaves a third of
