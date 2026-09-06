@@ -38,7 +38,8 @@ class NotifyTestCase(unittest.TestCase):
         row = {"game_id": game_id, "season_id": 33, "league_id": 3,
                "level": "12U AA", "status": "final", "has_scoresheet": 1,
                "home_goals": 5, "away_goals": 2, "away_name": "Away",
-               "home_name": "Home", "date_iso": "2026-09-04", "notified_at": None}
+               "home_name": "Home", "date_iso": "2026-09-04",
+               "scorecard_at": "2026-09-05T00:00:00+00:00", "notified_at": None}
         row.update(kw)
         db.upsert(self.conn, "games", row, keys=["game_id"])
         self.conn.commit()
@@ -52,7 +53,7 @@ class TestSelection(NotifyTestCase):
         self.add(1)                                   # eligible
         self.add(2, level="14U A")                    # not 12U
         self.add(3, league_id=5)                      # not Norcal
-        self.add(4, has_scoresheet=0)                 # no scoresheet to link
+        self.add(4, scorecard_at=None)                # PDF not fetched yet
         self.add(5, status="scheduled",
                  home_goals=None, away_goals=None)    # not final
         self.add(6, notified_at="2026-09-04T00:00:00+00:00")  # already announced
@@ -70,7 +71,7 @@ class TestSelection(NotifyTestCase):
         self.pipe().notify_ready_games()
         _, chat_id, text = self.sent[0]
         self.assertEqual(chat_id, "-100999")
-        self.assertIn("oss-scoresheet?game_id=58961", text)
+        self.assertIn("generate-scorecard.php?game_id=58961", text)
         self.assertIn("Cupertino Cougars 12-1 [3–4] Santa Clara Blackhawks 12-1", text)
         self.assertTrue(text.startswith("<a href="))
 

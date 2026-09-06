@@ -1005,8 +1005,11 @@ class Pipeline:
              WHERE league_id = ?
                AND level LIKE ?
                AND status = 'final'
-               AND has_scoresheet = 1
                AND home_goals IS NOT NULL AND away_goals IS NOT NULL
+               -- Link to the PDF scorecard, so only announce once we have
+               -- actually fetched it (scorecard_at is set on any fetch, even one
+               -- that reconciled nothing) -- never a dead link.
+               AND scorecard_at IS NOT NULL
                AND notified_at IS NULL
              ORDER BY date_iso, game_id
             """,
@@ -1015,7 +1018,7 @@ class Pipeline:
 
         sent = 0
         for row in rows:
-            url = self.config.base_url + tts.scoresheet_path(row["game_id"])
+            url = self.config.base_url + tts.scorecard_path(row["game_id"])
             # Bracket the score so it reads clearly against team names that
             # themselves end in a number (e.g. "... 12-3 [2-5] ... 12-2").
             text = notify_mod.link(
