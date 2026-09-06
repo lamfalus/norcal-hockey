@@ -1016,9 +1016,11 @@ class Pipeline:
         sent = 0
         for row in rows:
             url = self.config.base_url + tts.scoresheet_path(row["game_id"])
+            # Bracket the score so it reads clearly against team names that
+            # themselves end in a number (e.g. "... 12-3 [2-5] ... 12-2").
             text = notify_mod.link(
-                f"{row['away_name']} {row['away_goals']}–"
-                f"{row['home_goals']} {row['home_name']}",
+                f"{row['away_name']} [{row['away_goals']}–{row['home_goals']}] "
+                f"{row['home_name']}",
                 url,
             )
             if notify_mod.send_message(token, chat_id, text):

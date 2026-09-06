@@ -71,7 +71,7 @@ class TestSelection(NotifyTestCase):
         _, chat_id, text = self.sent[0]
         self.assertEqual(chat_id, "-100999")
         self.assertIn("oss-scoresheet?game_id=58961", text)
-        self.assertIn("Cupertino Cougars 12-1 3–4 Santa Clara Blackhawks 12-1", text)
+        self.assertIn("Cupertino Cougars 12-1 [3–4] Santa Clara Blackhawks 12-1", text)
         self.assertTrue(text.startswith("<a href="))
 
     def test_never_announces_the_same_game_twice(self):
