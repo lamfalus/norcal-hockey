@@ -117,6 +117,13 @@ class Config:
     publish_app: bool = False
     app_branch: str = "data"
 
+    # -- telegram notifications ----------------------------------------
+    #: Announce completed 12U Norcal games to a Telegram channel as their
+    #: results land. Both must be set for anything to send; they hold a secret,
+    #: so they live only in the (gitignored) config on the Pi, never the repo.
+    telegram_bot_token: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
+
     # -- logging --------------------------------------------------------
     log_level: str = "INFO"
     log_file: Optional[Path] = None

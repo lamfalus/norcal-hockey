@@ -2,6 +2,7 @@
 
     norcalstats update              nightly incremental run (the cron job)
     norcalstats sweep               same-day result check for due games only
+    norcalstats notify              announce pending 12U Norcal results to Telegram
     norcalstats backfill            one-time historical crawl
     norcalstats reparse             re-parse archived pages, no network
     norcalstats derive              rebuild identities and stats only
@@ -120,6 +121,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_publish.add_argument("--force", action="store_true",
                            help="publish even if the export lost most of its players")
 
+    sub.add_parser("notify", help="announce any pending 12U Norcal results to Telegram")
+
     sub.add_parser("status", help="summarize the database")
     sub.add_parser("seasons", help="list the seasons the site currently offers")
 
@@ -231,6 +234,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return _cmd_export(conn, config, game_logs=args.game_logs)
         if command == "publish":
             return _cmd_publish(conn, config, args)
+        if command == "notify":
+            pipe = pipeline.Pipeline(conn, config, _fetcher(config))
+            if not (config.telegram_bot_token and config.telegram_chat_id):
+                print("telegram not configured (set telegram_bot_token and "
+                      "telegram_chat_id in the config)", file=sys.stderr)
+                return 1
+            sent = pipe.notify_ready_games()
+            print(f"announced {sent} game(s)")
+            return 0
         if command == "status":
             return _cmd_status(conn, config)
         if command == "audit":
@@ -388,7 +400,8 @@ def _cmd_sweep(conn, config: Config, args) -> int:
           f"{info['changed']} result(s) changed, {info['scoresheets']} sheet(s), "
           f"{info['scorecards']} scorecard(s)"
           + (f", {info['probed']} via scoresheet" if info["probed"] else "")
-          + (f", {info['unblanked']} opponent(s) assigned" if info["unblanked"] else ""))
+          + (f", {info['unblanked']} opponent(s) assigned" if info["unblanked"] else "")
+          + (f", {info['notified']} announced" if info["notified"] else ""))
     if not changed:
         return 0
 

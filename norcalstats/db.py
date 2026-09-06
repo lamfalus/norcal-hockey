@@ -12,7 +12,7 @@ from . import names as N
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 
@@ -69,6 +69,9 @@ ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("games", "scorecard_parse_version", "INTEGER"),
     ("player_game_stats", "shots_faced", "INTEGER"),
     ("player_game_stats", "saves", "INTEGER"),
+    # When a completed game was announced to the Telegram channel, so it is
+    # announced exactly once.
+    ("games", "notified_at", "TEXT"),
 ]
 
 
@@ -154,6 +157,8 @@ def _migrate(conn: sqlite3.Connection, from_version: int) -> None:
         _migrate_v8_rekey_goalie_records(conn)
     if from_version < 9:
         _migrate_v9_collect_festival(conn)
+    if from_version < 10:
+        _migrate_v10_mark_existing_notified(conn)
 
 
 #: Leagues dropped in v6, and why. Both are end-of-season championships drawn
@@ -383,6 +388,23 @@ def _migrate_v9_collect_festival(conn: sqlite3.Connection) -> None:
             "INSERT OR IGNORE INTO leagues(league_id, name, priority, kind, note) "
             "VALUES (41, 'California Dreamin Labor Day Festival', 230, 'season', "
             "'SoCal Labor Day tournament, collected by hand')")
+    conn.commit()
+
+
+def _migrate_v10_mark_existing_notified(conn: sqlite3.Connection) -> None:
+    """v9 -> v10: stamp every already-final game as already announced.
+
+    The Telegram notifier fires for completed games whose ``notified_at`` is
+    still NULL. Without this, the first run after the feature ships would replay
+    the entire back catalogue of finished games to the channel. Marking the
+    existing finals here means only games that reach 'final' from now on are
+    announced. The column itself is added by ADDED_COLUMNS, before this runs.
+    """
+    conn.execute(
+        "UPDATE games SET notified_at = ? "
+        "WHERE status = 'final' AND notified_at IS NULL",
+        (now(),),
+    )
     conn.commit()
 
 

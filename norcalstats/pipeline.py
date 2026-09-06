@@ -27,13 +27,18 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Iterable, Optional
 
-from . import clubs as clubs_mod, identity, names as N, review
+from . import clubs as clubs_mod, identity, names as N, notify as notify_mod, review
 from .config import Config
 from .db import Run, get_meta, now, set_meta, upsert
 from .fetch import Fetcher, FetchError, RateLimited, RequestCeilingReached
 from .sources import timetoscore as tts
 
 log = logging.getLogger(__name__)
+
+#: Which games are announced to the Telegram channel: Norcal (league 3), at any
+#: 12U division (levels read "12U A", "12U AA", "12U B", "12U BB").
+_NOTIFY_LEAGUE = 3
+_NOTIFY_LEVEL_PREFIX = "12U"
 
 
 @dataclass
@@ -978,6 +983,58 @@ class Pipeline:
         )
         return True
 
+    def notify_ready_games(self) -> int:
+        """Announce newly completed 12U Norcal games to the Telegram channel.
+
+        Scope, per the channel: a Norcal game (league 3) at any 12U division
+        that is final, has a scoresheet to link to, and has a score -- and has
+        not been announced before. Each posts as "away A-B home" hyperlinked to
+        its scoresheet, then is stamped ``notified_at`` so it is never repeated;
+        a send that fails leaves the game unstamped to retry next run. A no-op
+        unless both Telegram settings are configured, so it is silent on any
+        machine without the credentials (every dev box, and the repo).
+        """
+        token = self.config.telegram_bot_token
+        chat_id = self.config.telegram_chat_id
+        if not token or not chat_id:
+            return 0
+        rows = self.conn.execute(
+            """
+            SELECT game_id, away_name, home_name, away_goals, home_goals
+              FROM games
+             WHERE league_id = ?
+               AND level LIKE ?
+               AND status = 'final'
+               AND has_scoresheet = 1
+               AND home_goals IS NOT NULL AND away_goals IS NOT NULL
+               AND notified_at IS NULL
+             ORDER BY date_iso, game_id
+            """,
+            (_NOTIFY_LEAGUE, _NOTIFY_LEVEL_PREFIX + "%"),
+        ).fetchall()
+
+        sent = 0
+        for row in rows:
+            url = self.config.base_url + tts.scoresheet_path(row["game_id"])
+            text = notify_mod.link(
+                f"{row['away_name']} {row['away_goals']}–"
+                f"{row['home_goals']} {row['home_name']}",
+                url,
+            )
+            if notify_mod.send_message(token, chat_id, text):
+                self.conn.execute(
+                    "UPDATE games SET notified_at = ? WHERE game_id = ?",
+                    (now(), row["game_id"]),
+                )
+                self.conn.commit()
+                sent += 1
+            else:
+                log.warning("could not announce game %d to Telegram; "
+                            "will retry next run", row["game_id"])
+        if sent:
+            log.info("announced %d completed 12U Norcal game(s) to Telegram", sent)
+        return sent
+
     def probe_scoresheet(self, game_id: int) -> bool:
         """Collect a due game straight from its scoresheet, bypassing the
         day-window.
@@ -1037,7 +1094,8 @@ class Pipeline:
         zero requests when nothing is due.
         """
         info = {"due": 0, "leagues": 0, "changed": 0, "unblanked": 0,
-                "probed": 0, "scoresheets": 0, "scorecards": 0, "new_cards": 0}
+                "probed": 0, "scoresheets": 0, "scorecards": 0, "new_cards": 0,
+                "notified": 0}
         due = self.due_games(now_local)
         info["due"] = len(due)
         if not due:
@@ -1142,6 +1200,9 @@ class Pipeline:
                      "yes" if state["scoresheet_at"] else "no",
                      "yes" if state["scorecard_at"] else "no",
                      "(complete)" if complete else "(pending)")
+
+        # Announce any 12U Norcal game whose result is now ready.
+        info["notified"] = self.notify_ready_games()
         return info
 
     def fetch_scoresheets(
@@ -2400,6 +2461,12 @@ def run(
             pipeline.fetch_scorecards(card_fetch, use_cache=use_cache or offline, limit=limit)
 
         pipeline.derive()
+
+        # Backstop the sweep: announce any 12U Norcal result the nightly
+        # collected (the notified_at gate keeps it from repeating one already
+        # sent). Never in an offline reparse, which has no live results.
+        if not offline:
+            pipeline.notify_ready_games()
 
         record.pages = fetcher.requests_made
         record.games_seen = pipeline.stats.games_seen
