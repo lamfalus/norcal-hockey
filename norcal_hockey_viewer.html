@@ -192,6 +192,7 @@
   .type-list{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;
              background:var(--surface);border:1px solid var(--border);
              border-radius:6px;padding:5px;z-index:200;white-space:nowrap;
+             max-height:min(60vh,360px);overflow-y:auto;
              box-shadow:0 8px 24px rgba(0,0,0,.35);}
   .type-opt{flex-direction:row;align-items:center;gap:9px;padding:7px 10px;
             border-radius:4px;cursor:pointer;user-select:none;font-size:.88rem;
@@ -583,11 +584,12 @@
          things and the column still shows the other one: a 13U AAA team can
          play a 14U AA team in a game the league files under 14U AAA, and
          picking a division should find that game from either side. -->
-    <label data-views="schedule">Division
-      <select id="sel-sched-div" onchange="onSchedDivChange()">
-        <option value="">&mdash; all &mdash;</option>
-      </select>
-    </label>
+    <div class="filter-group" data-views="schedule">Division
+      <details class="type-menu" id="sched-div-menu">
+        <summary id="sched-div-summary">All divisions</summary>
+        <div class="type-list" id="sched-div-boxes"></div>
+      </details>
+    </div>
     <label data-views="schedule">Club
       <select id="sel-sched-club" onchange="renderSchedule()">
         <option value="">&mdash; all &mdash;</option>
@@ -1009,7 +1011,9 @@ document.addEventListener('change', function(e) {
   var list = box.closest('.type-list');
   if (!list) return;
   list.querySelectorAll('input').forEach(function(input) { input.checked = box.checked; });
-  if (list.id === 'sched-type-boxes') onSchedTypeChange(); else onFilterChange();
+  if (list.id === 'sched-type-boxes') onSchedTypeChange();
+  else if (list.id === 'sched-div-boxes') onSchedDivChange();
+  else onFilterChange();
 });
 
 // A details element opens on its summary and stays open; nothing about it
@@ -1196,7 +1200,7 @@ function captureAppState(viewOverride) {
   var v = viewOverride || views.find(function(v){ return document.getElementById('view-'+v).classList.contains('active'); }) || 'schedule';
   var s = {view: v};
   if (v === 'schedule') {
-    s.div   = SCHED.div;
+    s.divs  = SCHED.divAll ? null : Object.keys(SCHED.divs || {});
     s.club  = SCHED.club;
     s.season = SCHED.season;
     s.cls   = Object.keys(SCHED.classes || {}).sort().join(',');
@@ -1239,10 +1243,17 @@ function applyAppState(s) {
       var seasonSel = document.getElementById('sel-season');
       if (seasonSel) seasonSel.value = String(s.season);
     }
-    // Rebuild the cascading dropdowns for this season/league first, then set the
-    // saved division and club into the options that now exist.
+    // Rebuild the cascading filters for this season/league first, then set the
+    // saved divisions and club into the controls that now exist.
     rebuildSchedDivisions();
-    if (s.div != null) document.getElementById('sel-sched-div').value = s.div;
+    if (s.divs) {
+      var wantDiv = {};
+      s.divs.forEach(function(d) { wantDiv[d] = true; });
+      document.querySelectorAll('#sched-div-boxes input').forEach(function(box) {
+        if (!box.closest('.type-all')) box.checked = !!wantDiv[box.value];
+      });
+      readSchedDivs();
+    }
     rebuildSchedClubs();
     if (s.club != null) document.getElementById('sel-sched-club').value = s.club;
     // An empty list is a state that renders nothing. It is reachable -- untick
@@ -1324,14 +1335,17 @@ function showView(v, btn) {
 //: file changes, so it never has to be remembered; the line below is only the
 //: last stamp. (Runtime file dates were rejected: served from a CDN they report
 //: the cache time, not the update.)
-var VIEWER_VERSION = '2026.09.05';
+var VIEWER_VERSION = '2026.09.06';
 
 var SCHEDULE = { rows: null, loading: null, partial: null };
 
 // How many games a band shows before asking. 8,463 played games is more than
 // any list wants to hold, and a phone least of all.
 var SCHED_PAGE = 60;
-var SCHED = { season: null, div: '', club: '', classes: null,
+// divs is the set of ticked divisions (like classes); divAll is true when every
+// division in scope is ticked, i.e. the filter is off. _divSig is that set's
+// signature, used only to tell when the reader has changed it.
+var SCHED = { season: null, divs: {}, divAll: true, _divSig: '', club: '', classes: null,
               upcoming: SCHED_PAGE, recent: SCHED_PAGE };
 
 // ── Provenance ────────────────────────────────────────────────────────────
@@ -1566,10 +1580,14 @@ function schedFilterScope(g) {
   return !isEmptyBracket(g);
 }
 
+// The Division control is a checkbox set, so more than one division can show at
+// once. It is rebuilt for the current season and league; a division the reader
+// had ticked stays ticked if it is still on offer, and a fresh list (the first
+// build, or none of the old ticks surviving a league change) starts all on --
+// "all ticked" is the same as no filter.
 function rebuildSchedDivisions() {
-  var divSel = document.getElementById('sel-sched-div');
-  if (!divSel || !SCHEDULE.rows) return;
-  var prev = divSel.value;
+  var list = document.getElementById('sched-div-boxes');
+  if (!list || !SCHEDULE.rows) return;
   var divisions = {};
   SCHEDULE.rows.forEach(function(g) {
     if (!schedFilterScope(g)) return;
@@ -1579,23 +1597,102 @@ function rebuildSchedDivisions() {
     var x = schedAgeOrder(a), y = schedAgeOrder(b);
     return x[0] - y[0] || x[1].localeCompare(y[1]);
   });
-  divSel.innerHTML = '<option value="">&mdash; all &mdash;</option>'
-    + names.map(function(n) { return '<option value="' + escAttr(n) + '">' + escHtml(n) + '</option>'; }).join('');
-  divSel.value = (prev && divisions[prev]) ? prev : '';
+  var hadPrev = SCHED.divs && Object.keys(SCHED.divs).length;
+  var keep = {};
+  names.forEach(function(n) { if (!hadPrev || SCHED.divs[n]) keep[n] = true; });
+  if (!Object.keys(keep).length) names.forEach(function(n) { keep[n] = true; });
+
+  list.innerHTML = names.map(function(n) {
+    return '<label class="type-opt"><input type="checkbox" value="' + escAttr(n) + '"'
+      + (keep[n] ? ' checked' : '') + ' onchange="onSchedDivChange()"><span>'
+      + escHtml(n) + '</span></label>';
+  }).join('')
+    + '<label class="type-opt type-all"><input type="checkbox"'
+    + (names.length && names.every(function(n){ return keep[n]; }) ? ' checked' : '')
+    + '><span>All divisions</span></label>';
+  readSchedDivs();
+}
+
+// Which division boxes are ticked, and whether that is all of them. Kept on
+// SCHED so the filter can be read without touching the DOM on every game row.
+function readSchedDivs() {
+  var list = document.getElementById('sched-div-boxes');
+  if (!list) return;
+  var boxes = [].slice.call(list.querySelectorAll('input')).filter(function(b) {
+    return !b.closest('.type-all');
+  });
+  var ticked = {};
+  boxes.forEach(function(b) { if (b.checked) ticked[b.value] = true; });
+  SCHED.divs = ticked;
+  // No division boxes at all (list not built yet) is not a filter -- show
+  // everything -- rather than an empty schedule.
+  SCHED.divAll = boxes.length === 0 || Object.keys(ticked).length === boxes.length;
+  paintSchedDivMenu(boxes);
+}
+
+// Open the schedule on one division alone -- used by the division badges in the
+// stats view and by global search. Falls back to all-on if that division is not
+// on offer, so a stale link never lands on an empty schedule.
+function schedSelectOnlyDiv(name) {
+  var list = document.getElementById('sched-div-boxes');
+  if (!list) return;
+  var boxes = [].slice.call(list.querySelectorAll('input')).filter(function(b) {
+    return !b.closest('.type-all');
+  });
+  var found = boxes.some(function(b) { return b.value === name; });
+  boxes.forEach(function(b) { b.checked = found ? (b.value === name) : true; });
+  readSchedDivs();
+}
+
+function paintSchedDivMenu(boxes) {
+  var list = document.getElementById('sched-div-boxes');
+  if (!list) return;
+  boxes = boxes || [].slice.call(list.querySelectorAll('input')).filter(function(b) {
+    return !b.closest('.type-all');
+  });
+  var names = boxes.filter(function(b){ return b.checked; }).map(function(b){ return b.value; });
+  var summary = document.getElementById('sched-div-summary');
+  if (summary) summary.textContent = schedDivSummary(names, boxes.length);
+  var all = list.querySelector('.type-all input');
+  if (all) {
+    all.checked = boxes.length > 0 && names.length === boxes.length;
+    all.indeterminate = names.length > 0 && names.length < boxes.length;
+  }
+}
+
+function schedDivSummary(names, total) {
+  if (!total || names.length === total) return 'All divisions';
+  if (!names.length) return 'No divisions';
+  if (names.length <= 2) return names.join(', ');
+  return names.length + ' of ' + total + ' divisions';
+}
+
+// The one division on show, when exactly one is ticked -- the standings table,
+// the team record and the team-page link all need a single division to mean
+// anything, and say nothing when the reader is looking at several at once.
+function schedSoleDiv() {
+  var keys = Object.keys(SCHED.divs || {});
+  return keys.length === 1 ? keys[0] : '';
+}
+
+// Division narrows the club list, then the schedule redraws.
+function onSchedDivChange() {
+  readSchedDivs();
+  rebuildSchedClubs();
+  renderSchedule();
 }
 
 function rebuildSchedClubs() {
   var clubSel = document.getElementById('sel-sched-club');
   if (!clubSel || !SCHEDULE.rows) return;
-  var div = document.getElementById('sel-sched-div').value;
   var prev = clubSel.value;
   var clubs = {};
   SCHEDULE.rows.forEach(function(g) {
     if (!schedFilterScope(g)) return;
     ['home', 'away'].forEach(function(side) {
-      // With a division chosen, only the side actually in it counts -- not its
-      // cross-division opponent, the same rule the filter itself now uses.
-      if (div && schedSideDivision(g, side) !== div) return;
+      // With divisions chosen, only a side actually in one of them counts -- not
+      // its cross-division opponent, the same rule the filter itself now uses.
+      if (!schedDivChosen(schedSideDivision(g, side))) return;
       var id = side === 'home' ? g.home : g.away;
       if (id == null) return;
       var team = APP.teamByKey[teamKey(g.season, id)];
@@ -1608,10 +1705,10 @@ function rebuildSchedClubs() {
   clubSel.value = (prev && clubs[prev]) ? prev : '';
 }
 
-// Division narrows the club list, then the schedule redraws.
-function onSchedDivChange() {
-  rebuildSchedClubs();
-  renderSchedule();
+// True when a side's division is one the reader is showing -- everything, when
+// the filter is off (all ticked), or a ticked one otherwise.
+function schedDivChosen(name) {
+  return SCHED.divAll || !!(SCHED.divs && SCHED.divs[name]);
 }
 
 // ── Filtering ─────────────────────────────────────────────────────────────
@@ -1642,18 +1739,19 @@ function schedulePasses(g, classes) {
   if (isEmptyBracket(g)) return false;
   if (FILTERS.league && g.league !== parseInt(FILTERS.league)) return false;
   if (classes && !classes[g.cls]) return false;
-  // With both a division and a club, the same team has to answer both -- a
-  // Sharks 14AAA filter means the Sharks' 14AAA side, not their 14AA side in a
+  // With both a division filter and a club, the same team has to answer both --
+  // a Sharks 14AAA filter means the Sharks' 14AAA side, not their 14AA side in a
   // game whose other team happens to be a 14AAA club. With only one set, either
-  // side is enough: that is how somebody following just a division, or just a
-  // club, thinks about it.
-  if (SCHED.div && SCHED.club) {
+  // side is enough: that is how somebody following just divisions, or just a
+  // club, thinks about it. "All divisions" ticked is no division filter at all.
+  var divFiltering = !SCHED.divAll;
+  if (divFiltering && SCHED.club) {
     var matched = ['home', 'away'].some(function(side) {
-      return schedClubOf(g, side) === SCHED.club && schedSideDivision(g, side) === SCHED.div;
+      return schedClubOf(g, side) === SCHED.club && !!SCHED.divs[schedSideDivision(g, side)];
     });
     if (!matched) return false;
   } else {
-    if (SCHED.div && schedDivisionsOf(g).indexOf(SCHED.div) < 0) return false;
+    if (divFiltering && !schedDivisionsOf(g).some(function(d) { return SCHED.divs[d]; })) return false;
     if (SCHED.club && schedClubOf(g, 'home') !== SCHED.club
                    && schedClubOf(g, 'away') !== SCHED.club) return false;
   }
@@ -1683,12 +1781,13 @@ function schedTeamRecord(games, club) {
 // when the filter still spans more than one team (a club with two squads in the
 // division), where a single link would be a guess.
 function schedFilteredTeamKey(season) {
-  if (!(SCHED.div && SCHED.club)) return null;
+  var sole = schedSoleDiv();
+  if (!(sole && SCHED.club)) return null;
   var keys = {};
   SCHEDULE.rows.forEach(function(g) {
     if (g.season !== season) return;
     ['home', 'away'].forEach(function(side) {
-      if (schedClubOf(g, side) === SCHED.club && schedSideDivision(g, side) === SCHED.div) {
+      if (schedClubOf(g, side) === SCHED.club && schedSideDivision(g, side) === sole) {
         var id = side === 'home' ? g.home : g.away;
         if (id != null) keys[teamKey(season, id)] = true;
       }
@@ -1761,11 +1860,12 @@ function setResultsScope(scope) {
 // says so rather than leaving a silent gap.
 function schedStandingsPanel(season) {
   var league = parseInt(FILTERS.league);
-  if (!league || !SCHED.div) return '';
+  var sole = schedSoleDiv();
+  if (!league || !sole) return '';
   var scope = RESULTS_SCOPE || 'regular';
   var scopeWord = scope === 'all' ? 'all games' : 'regular season';
   var head = '<div class="section-heading" style="margin-bottom:8px"><h2>Standings</h2>'
-    + '<span class="badge">' + escHtml(SCHED.div) + ' · ' + scopeWord + '</span></div>'
+    + '<span class="badge">' + escHtml(sole) + ' · ' + scopeWord + '</span></div>'
     + '<div class="rec-head" style="margin-bottom:12px"><div class="rec-toggle">'
     + '<button type="button" class="rec-btn' + (scope === 'regular' ? ' active' : '')
     + '" onclick="setResultsScope(\'regular\')">Regular</button>'
@@ -1773,7 +1873,7 @@ function schedStandingsPanel(season) {
     + '" onclick="setResultsScope(\'all\')">All games</button>'
     + '</div></div>';
 
-  var rows = schedStandings(season, league, SCHED.div, scope);
+  var rows = schedStandings(season, league, sole, scope);
   if (!rows.length) {
     // Nothing played in scope yet. If games are on the schedule, say the table
     // is coming rather than leave a gap that reads as missing.
@@ -1781,8 +1881,8 @@ function schedStandingsPanel(season) {
       return g.season === season && g.league === league
         && (scope === 'all' || g.cls === 'regular')
         && (g.hg == null || g.ag == null)
-        && schedSideDivision(g, 'home') === SCHED.div
-        && schedSideDivision(g, 'away') === SCHED.div;
+        && schedSideDivision(g, 'home') === sole
+        && schedSideDivision(g, 'away') === sole;
     });
     if (!scheduled) return '';
     return head
@@ -1925,7 +2025,11 @@ function updateFilterSummary() {
   if (view === 'schedule') {
     if (SCHED.season != null) parts.push(SEASON_LABELS[SCHED.season] || ('Season ' + SCHED.season));
     parts.push(typeSummaryFor(SCHED.classes));
-    parts.push(SCHED.div || 'all divisions');
+    var divNames = Object.keys(SCHED.divs || {});
+    parts.push(SCHED.divAll ? 'all divisions'
+      : !divNames.length ? 'no divisions'
+      : divNames.length <= 2 ? divNames.join(', ')
+      : divNames.length + ' divisions');
     if (SCHED.club) parts.push(clubDisplayName(SCHED.club));
   } else if (view === 'browse') {
     var season = value('sel-season');
@@ -2054,14 +2158,15 @@ function renderSchedule() {
   var content = document.getElementById('schedule-content');
   if (!SCHEDULE.rows) return;
 
-  var div = document.getElementById('sel-sched-div').value;
   var club = document.getElementById('sel-sched-club').value;
   // Any change to what is being asked for starts the bands over. Keeping a
-  // reader 300 rows deep after they narrow to one club shows them nothing.
-  if (div !== SCHED.div || club !== SCHED.club) {
+  // reader 300 rows deep after they narrow shows them nothing. The divisions
+  // are read into SCHED.divs before this runs; their signature spots a change.
+  var divSig = Object.keys(SCHED.divs || {}).sort().join('|');
+  if (divSig !== SCHED._divSig || club !== SCHED.club) {
     SCHED.upcoming = SCHED.recent = SCHED_PAGE;
   }
-  SCHED.div = div; SCHED.club = club;
+  SCHED._divSig = divSig; SCHED.club = club;
   updateFilterSummary();
 
   var classes = schedClassFilter();
@@ -2111,7 +2216,7 @@ function renderSchedule() {
   // played count. Without both, the band spans several teams and a record would
   // be meaningless.
   var recordBadge = '';
-  if (SCHED.div && SCHED.club) {
+  if (schedSoleDiv() && SCHED.club) {
     var rec = schedTeamRecord(recent, SCHED.club);
     if (rec.n) {
       recordBadge = '<span class="badge sched-record" title="Wins–losses–ties · goals for–against">'
@@ -2234,7 +2339,7 @@ function goToScheduleDivision(div){
   if(!isNaN(master)) SCHED.season = master;
   SCHED.upcoming = SCHED.recent = SCHED_PAGE;
   rebuildSchedDivisions();
-  document.getElementById('sel-sched-div').value = div;
+  schedSelectOnlyDiv(div);
   rebuildSchedClubs();
   document.getElementById('sel-sched-club').value = '';
   renderSchedule();
@@ -2857,8 +2962,11 @@ var TYPE_CAP   = { division: 6, club: 6, player: 20 };
 // a value that filter recognises. Divisions arrive once the schedule has
 // loaded, so the index is only cached as complete after they are present.
 function globalSearchIndex() {
-  var divSel = document.getElementById('sel-sched-div');
-  var divReady = !!(divSel && divSel.options.length > 1);
+  var divBoxes = [].slice.call(
+    document.querySelectorAll('#sched-div-boxes input')).filter(function(b) {
+      return !b.closest('.type-all');
+    });
+  var divReady = divBoxes.length > 0;
   if (APP._globalIdx && APP._globalDivReady) return APP._globalIdx;
   var items = [];
   playerSearchIndex().forEach(function(p) {
@@ -2870,10 +2978,9 @@ function globalSearchIndex() {
                  hay: (disp + ' ' + name).toLowerCase() });
   });
   if (divReady) {
-    Array.prototype.forEach.call(divSel.options, function(o) {
-      if (!o.value) return;
-      items.push({ type: 'division', id: o.value, name: o.value,
-                   hay: o.value.toLowerCase() });
+    divBoxes.forEach(function(b) {
+      items.push({ type: 'division', id: b.value, name: b.value,
+                   hay: b.value.toLowerCase() });
     });
   }
   APP._globalIdx = items;
@@ -2978,12 +3085,13 @@ function goToScheduleDivision(divName) {
   markTab('schedule');
   document.getElementById('view-schedule').classList.add('active');
   markActiveView('schedule');
-  var divSel = document.getElementById('sel-sched-div');
-  if (divSel) divSel.value = divName;
+  rebuildSchedDivisions();
+  schedSelectOnlyDiv(divName);
   // Clear the club filter so the division is not silently narrowed to whatever
   // club happened to be set.
   var clubSel = document.getElementById('sel-sched-club');
   if (clubSel) clubSel.value = '';
+  rebuildSchedClubs();
   renderSchedule();
   history.pushState(captureAppState('schedule'), '');
   window.scrollTo({ top: 0, behavior: 'smooth' });
