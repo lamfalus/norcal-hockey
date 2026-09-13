@@ -1544,7 +1544,7 @@ class Pipeline:
         refine_season_years(self.conn)
         resolved = resolve_ambiguous_sides(self.conn)
         if resolved:
-            log.info("resolved %d ambiguous team side(s) by roster match", resolved)
+            log.info("resolved %d ambiguous team side(s)", resolved)
         by_name = resolve_sides_by_registration(self.conn)
         if by_name:
             log.info("resolved %d team side(s) by tournament registration", by_name)
@@ -1653,9 +1653,13 @@ def resolve_ambiguous_sides(conn: sqlite3.Connection) -> int:
     identified from it.
 
     The scoresheet can tell them apart: each side's roster is compared against
-    the rosters the site publishes per team, and a side is assigned only on a
-    clear win. Ambiguous games are left unresolved and flagged rather than
-    guessed at.
+    the rosters the site publishes per team, and a clear win assigns the side.
+    When two squads of one club meet under the same name and the rosters give no
+    clear winner, the side is still filled with the best-scoring candidate: which
+    squad is 'home' barely matters (same club, same division), and counting the
+    game beats dropping it from both and asking about it forever. Only same-name
+    games are guessed at this way; a differently-named unresolved side (e.g. a
+    missing opponent) is still left alone and flagged.
     """
     candidates = conn.execute("""
         SELECT g.game_id, g.season_id, g.division_id, g.home_name, g.away_name,
@@ -1716,6 +1720,14 @@ def resolve_ambiguous_sides(conn: sqlite3.Connection) -> int:
             best, best_id = scores[0]
             runner_up = scores[1][0] if len(scores) > 1 else 0
             if best >= _MATCH_MIN and best - runner_up >= _MATCH_MARGIN:
+                assigned[side] = best_id
+            elif game["home_name"] == game["away_name"]:
+                # Same club's two squads entered under one name: the roster gave
+                # no clear winner, but which squad counts as 'home' barely matters
+                # (same club, same division) and dropping the game from both is
+                # worse than a coin-flip. Take the best-scoring candidate -- ties
+                # broken deterministically by the sort -- so the game still counts
+                # and it is not asked about forever.
                 assigned[side] = best_id
 
         updates = {

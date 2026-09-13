@@ -89,7 +89,10 @@ class TestStorage(PipelineTestCase):
         )
         self.assertEqual(count, 15, "team 58 plays a 15-game regular season")
 
-    def test_same_named_opponents_are_flagged_not_guessed(self):
+    def test_same_named_opponents_are_unset_at_store_time(self):
+        # The schedule row alone cannot say which squad is which, so _store_game
+        # leaves both sides unset. The resolver fills them later (by roster, or
+        # a deterministic pick for a same-name matchup); this checks the store.
         self.seed_season_and_team()
         rows = self.conn.execute(
             "SELECT game_id FROM games WHERE home_name = away_name"
@@ -322,20 +325,38 @@ class TestAmbiguousSideResolution(PipelineTestCase):
         self.assertEqual(row["away_team_id"], 58)
         self.assertIsNone(row["home_team_id"], "the other side stays unknown")
 
-    def test_weak_evidence_does_not_resolve(self):
+    def test_weak_evidence_still_fills_a_same_named_matchup(self):
+        # Two squads of one club under one name: even with no usable roster
+        # evidence, both sides are filled (which squad is 'home' does not matter)
+        # rather than dropped from both totals and asked about forever.
         self.seed_season_and_team()
-        game_id = db.scalar(
-            self.conn, "SELECT game_id FROM games WHERE home_name = away_name LIMIT 1"
-        )
+        game = self.conn.execute(
+            "SELECT game_id, home_name FROM games WHERE home_name = away_name LIMIT 1"
+        ).fetchone()
+        game_id = game["game_id"]
+        candidates = {r["team_id"] for r in self.conn.execute(
+            "SELECT team_id FROM teams WHERE season_id = 31 AND name = ?",
+            (game["home_name"],))}
+        self.assertGreaterEqual(len(candidates), 2, "fixture has two same-named squads")
         self.conn.execute(
             "UPDATE games SET scoresheet_at = '2026-01-01' WHERE game_id = ?", (game_id,)
         )
-        self.conn.execute(
-            "INSERT INTO game_rosters(game_id, side, slot, jersey, position, name, role) "
-            "VALUES (?, 'away', 0, '', '', 'Nobody Known', 'player')", (game_id,)
-        )
+        for side in ("home", "away"):
+            self.conn.execute(
+                "INSERT INTO game_rosters(game_id, side, slot, jersey, position, name, role) "
+                "VALUES (?, ?, 0, '', '', 'Nobody Known', 'player')", (game_id, side)
+            )
         self.conn.commit()
-        self.assertEqual(pipeline.resolve_ambiguous_sides(self.conn), 0)
+
+        self.assertEqual(pipeline.resolve_ambiguous_sides(self.conn), 2, "both sides filled")
+        row = self.conn.execute(
+            "SELECT home_team_id, away_team_id, needs_review FROM games WHERE game_id = ?",
+            (game_id,),
+        ).fetchone()
+        self.assertIn(row["home_team_id"], candidates)
+        self.assertIn(row["away_team_id"], candidates)
+        self.assertNotEqual(row["home_team_id"], row["away_team_id"], "two distinct squads")
+        self.assertEqual(row["needs_review"], 0)
 
 
 class TestSidesByRegistration(PipelineTestCase):
