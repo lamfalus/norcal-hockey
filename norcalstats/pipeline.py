@@ -40,6 +40,10 @@ log = logging.getLogger(__name__)
 _NOTIFY_LEAGUE = 3
 _NOTIFY_LEVEL_PREFIX = "12U"
 
+#: Most review items to list in one log-channel digest; the rest are counted and
+#: left to `review list`, so a big scan cannot post a wall of text.
+_LOG_MAX_ITEMS = 15
+
 
 @dataclass
 class Stats:
@@ -1039,6 +1043,58 @@ class Pipeline:
         if sent:
             log.info("announced %d completed 12U Norcal game(s) to Telegram", sent)
         return sent
+
+    def notify_review_log(self, *, context: str, errors: int = 0,
+                          stopped_early: bool = False) -> int:
+        """Push new review questions and run health to the Telegram log channel.
+
+        One digest of the review items raised since the last push (open, with
+        ``notified_at`` still NULL) -- new leagues/tournaments, team and player
+        ambiguities, oversized rosters -- plus a footer when the run hit errors
+        or stopped early. Silent when there is nothing to report, so the channel
+        stays a true alert feed. Each listed item is stamped notified so it never
+        repeats; a failed send stamps nothing and is retried. No-op unless the
+        bot token and the *log* chat id are both set.
+        """
+        token = self.config.telegram_bot_token
+        chat_id = self.config.telegram_log_chat_id
+        if not token or not chat_id:
+            return 0
+        rows = self.conn.execute(
+            "SELECT item_id, kind, subject FROM review_items "
+            "WHERE status = 'open' AND notified_at IS NULL "
+            "ORDER BY (confidence IS NULL), confidence ASC, item_id ASC"
+        ).fetchall()
+
+        if not rows and errors == 0 and not stopped_early:
+            return 0  # nothing to report -- stay quiet
+
+        esc = notify_mod.escape
+        lines = [f"⚠️ {esc(context)} scrape — {len(rows)} new issue(s)"
+                 if rows else f"⚠️ {esc(context)} scrape"]
+        for row in rows[:_LOG_MAX_ITEMS]:
+            lines.append(f"• <b>{esc(row['kind'])}</b>: {esc(row['subject'])}")
+        if len(rows) > _LOG_MAX_ITEMS:
+            lines.append(f"…+{len(rows) - _LOG_MAX_ITEMS} more — run "
+                         f"<code>norcalstats review list</code>")
+        if stopped_early:
+            lines.append("⏸ stopped early (rate limit or request ceiling)")
+        if errors:
+            lines.append(f"❗ {errors} error(s) this run — check the journal")
+
+        if not notify_mod.send_message(token, chat_id, "\n".join(lines)):
+            log.warning("could not push the review digest to Telegram; "
+                        "will retry next run")
+            return 0
+        if rows:
+            self.conn.executemany(
+                "UPDATE review_items SET notified_at = ? WHERE item_id = ?",
+                [(now(), r["item_id"]) for r in rows],
+            )
+            self.conn.commit()
+            log.info("pushed %d review item(s) to the Telegram log channel",
+                     len(rows))
+        return len(rows)
 
     def probe_scoresheet(self, game_id: int) -> bool:
         """Collect a due game straight from its scoresheet, bypassing the
@@ -2472,6 +2528,11 @@ def run(
         # sent). Never in an offline reparse, which has no live results.
         if not offline:
             pipeline.notify_ready_games()
+            pipeline.notify_review_log(
+                context="backfill" if mode == "backfill" else "nightly",
+                errors=pipeline.stats.errors,
+                stopped_early=pipeline.stats.stopped_early,
+            )
 
         record.pages = fetcher.requests_made
         record.games_seen = pipeline.stats.games_seen

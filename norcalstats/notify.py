@@ -24,6 +24,11 @@ log = logging.getLogger(__name__)
 _API = "https://api.telegram.org/bot{token}/sendMessage"
 
 
+def escape(text: str) -> str:
+    """HTML-escape a fragment for a message built with parse_mode=HTML."""
+    return html.escape(text)
+
+
 def link(text: str, url: str) -> str:
     """An HTML anchor with the visible text safely escaped."""
     return f'<a href="{html.escape(url, quote=True)}">{html.escape(text)}</a>'

@@ -121,7 +121,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_publish.add_argument("--force", action="store_true",
                            help="publish even if the export lost most of its players")
 
-    sub.add_parser("notify", help="announce any pending 12U Norcal results to Telegram")
+    p_notify = sub.add_parser("notify", help="announce any pending 12U Norcal results to Telegram")
+    p_notify.add_argument("--log", action="store_true",
+                          help="instead push the review/health digest to the log channel")
 
     sub.add_parser("status", help="summarize the database")
     sub.add_parser("seasons", help="list the seasons the site currently offers")
@@ -236,10 +238,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return _cmd_publish(conn, config, args)
         if command == "notify":
             pipe = pipeline.Pipeline(conn, config, _fetcher(config))
-            if not (config.telegram_bot_token and config.telegram_chat_id):
-                print("telegram not configured (set telegram_bot_token and "
-                      "telegram_chat_id in the config)", file=sys.stderr)
+            if not config.telegram_bot_token:
+                print("telegram not configured (set telegram_bot_token)",
+                      file=sys.stderr)
                 return 1
+            if getattr(args, "log", False):
+                n = pipe.notify_review_log(context="manual")
+                print(f"pushed {n} review item(s) to the log channel")
+                return 0
             sent = pipe.notify_ready_games()
             print(f"announced {sent} game(s)")
             return 0
@@ -255,9 +261,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return _cmd_double_rostered(conn, args)
         if command == "reassign-game":
             return _cmd_reassign_game(conn, config, args)
+    except Exception as exc:
+        # An unattended run that crashes should page the log channel, not just
+        # die in the journal on a headless Pi. Best-effort; then re-raise.
+        _alert_crash(config, command, exc)
+        raise
     finally:
         conn.close()
     return 1
+
+
+def _alert_crash(config: Config, command: str, exc: BaseException) -> None:
+    """Best-effort crash alert to the Telegram log channel for a run command."""
+    if command not in ("update", "backfill", "sweep", "scorecards"):
+        return
+    if not (config.telegram_bot_token and config.telegram_log_chat_id):
+        return
+    from . import notify as notify_mod
+    text = (f"❌ <b>{notify_mod.escape(command)}</b> run failed: "
+            f"{notify_mod.escape(type(exc).__name__)}: "
+            f"{notify_mod.escape(str(exc)[:300])}")
+    try:
+        notify_mod.send_message(config.telegram_bot_token,
+                                config.telegram_log_chat_id, text)
+    except Exception:
+        pass  # never let the alert mask the real failure
 
 
 def _cmd_scorecards(conn, config: Config, args) -> int:
@@ -406,6 +434,10 @@ def _cmd_sweep(conn, config: Config, args) -> int:
         return 0
 
     pipe.derive()
+    # Push any new review questions the derive raised (new player/team
+    # ambiguities from the games just collected). Soft errors are left to the
+    # nightly digest and the crash alert, so a 10-minute cadence never spams.
+    pipe.notify_review_log(context="sweep")
     if not args.no_export:
         _cmd_export(conn, config)
     wants_publish = config.publish or config.publish_app

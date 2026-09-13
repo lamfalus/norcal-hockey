@@ -15,9 +15,10 @@
   "git_remote": "origin",
   "git_branch": "main",
 
-  "_telegram": "Set both to announce completed 12U Norcal games to a channel. Secret -- keep it only here (this file's real copy is gitignored), never in the repo.",
+  "_telegram": "Set the token + chat_id to announce completed 12U Norcal games to a channel; add log_chat_id for a second channel that gets new review questions and run errors. Secret -- keep it only here (this file's real copy is gitignored), never in the repo.",
   "telegram_bot_token": "",
   "telegram_chat_id": "",
+  "telegram_log_chat_id": "",
 
   "log_level": "INFO",
   "log_file": "data/norcalstats.log"

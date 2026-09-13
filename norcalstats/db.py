@@ -12,7 +12,7 @@ from . import names as N
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 
@@ -72,6 +72,9 @@ ADDED_COLUMNS: list[tuple[str, str, str]] = [
     # When a completed game was announced to the Telegram channel, so it is
     # announced exactly once.
     ("games", "notified_at", "TEXT"),
+    # When a review question was pushed to the Telegram log channel, so each is
+    # pushed exactly once.
+    ("review_items", "notified_at", "TEXT"),
 ]
 
 
@@ -159,6 +162,8 @@ def _migrate(conn: sqlite3.Connection, from_version: int) -> None:
         _migrate_v9_collect_festival(conn)
     if from_version < 10:
         _migrate_v10_mark_existing_notified(conn)
+    if from_version < 11:
+        _migrate_v11_mark_existing_reviewed(conn)
 
 
 #: Leagues dropped in v6, and why. Both are end-of-season championships drawn
@@ -403,6 +408,22 @@ def _migrate_v10_mark_existing_notified(conn: sqlite3.Connection) -> None:
     conn.execute(
         "UPDATE games SET notified_at = ? "
         "WHERE status = 'final' AND notified_at IS NULL",
+        (now(),),
+    )
+    conn.commit()
+
+
+def _migrate_v11_mark_existing_reviewed(conn: sqlite3.Connection) -> None:
+    """v10 -> v11: stamp every existing review item as already pushed.
+
+    The log-channel notifier pushes open review questions whose ``notified_at``
+    is NULL. Without this, the first run after the feature ships would fire the
+    entire standing queue (~125 open questions) at the channel at once. Stamping
+    them here means only questions raised from now on are pushed. The column is
+    added by ADDED_COLUMNS, before this runs.
+    """
+    conn.execute(
+        "UPDATE review_items SET notified_at = ? WHERE notified_at IS NULL",
         (now(),),
     )
     conn.commit()

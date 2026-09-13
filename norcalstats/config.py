@@ -123,6 +123,10 @@ class Config:
     #: so they live only in the (gitignored) config on the Pi, never the repo.
     telegram_bot_token: Optional[str] = None
     telegram_chat_id: Optional[str] = None
+    #: A second channel for scraper health: new review questions (leagues,
+    #: tournaments, un-disambiguated players) and run errors/failures. Uses the
+    #: same bot token; set this to turn the alert feed on. Left unset elsewhere.
+    telegram_log_chat_id: Optional[str] = None
 
     # -- logging --------------------------------------------------------
     log_level: str = "INFO"
