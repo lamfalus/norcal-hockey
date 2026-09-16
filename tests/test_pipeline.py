@@ -325,6 +325,50 @@ class TestAmbiguousSideResolution(PipelineTestCase):
         self.assertEqual(row["away_team_id"], 58)
         self.assertIsNone(row["home_team_id"], "the other side stays unknown")
 
+    def test_game_derived_rosters_resolve_across_divisions(self):
+        # Two same-named squads in DIFFERENT divisions, with NO published stat
+        # rows. Each is fingerprinted only by the players in a game where it is
+        # already the identified side; their head-to-head is then resolved from
+        # those fingerprints -- correctly, and across the division boundary.
+        c = self.conn
+        for div in (501, 502):
+            c.execute("INSERT INTO divisions(division_id, season_id, league_id, name) "
+                      "VALUES (?, 31, 3, ?)", (div, f"div{div}"))
+        for tid, div in ((1001, 501), (1002, 502), (2001, 501), (2002, 502)):
+            name = "Sharks" if tid < 2000 else f"Other{tid}"
+            c.execute("INSERT INTO teams(team_id, season_id, name, division_id) "
+                      "VALUES (?, 31, ?, ?)", (tid, name, div))
+
+        def game(gid, div, hn, an, hid, aid):
+            c.execute("INSERT INTO games(game_id, season_id, home_name, away_name, "
+                      "home_team_id, away_team_id, division_id, status, scoresheet_at) "
+                      "VALUES (?, 31, ?, ?, ?, ?, ?, 'final', '2026-01-01')",
+                      (gid, hn, an, hid, aid, div))
+
+        def roster(gid, side, names):
+            for i, n in enumerate(names):
+                c.execute("INSERT INTO game_rosters(game_id, side, slot, jersey, "
+                          "position, name, role) VALUES (?, ?, ?, '', '', ?, 'player')",
+                          (gid, side, i, n))
+
+        squad_a = ["Ada Lovelace", "Grace Hopper", "Edsger Dijkstra", "Alan Kay"]
+        squad_b = ["Ken Thompson", "Dennis Ritchie", "Barbara Liskov", "Guido Rossum"]
+        # Two fully-identified games that fingerprint each squad.
+        game(9001, 501, "Sharks", "Other2001", 1001, 2001); roster(9001, "home", squad_a)
+        game(9002, 502, "Other2002", "Sharks", 2002, 1002); roster(9002, "away", squad_b)
+        # The ambiguous head-to-head (division 501), both sides unidentified.
+        game(9003, 501, "Sharks", "Sharks", None, None)
+        roster(9003, "home", squad_a); roster(9003, "away", squad_b)
+        c.commit()
+
+        pipeline.resolve_ambiguous_sides(self.conn)
+        row = c.execute("SELECT home_team_id, away_team_id, needs_review "
+                        "FROM games WHERE game_id = 9003").fetchone()
+        self.assertEqual(row["home_team_id"], 1001, "home matches squad A's fingerprint")
+        self.assertEqual(row["away_team_id"], 1002,
+                         "away matches squad B -- resolved across divisions")
+        self.assertEqual(row["needs_review"], 0)
+
     def test_weak_evidence_still_fills_a_same_named_matchup(self):
         # Two squads of one club under one name: even with no usable roster
         # evidence, both sides are filled (which squad is 'home' does not matter)

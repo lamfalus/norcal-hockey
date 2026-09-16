@@ -1642,46 +1642,67 @@ def rebuild_clubs(conn) -> int:
 #: the runner-up, before it is trusted to identify a team.
 _MATCH_MIN = 3
 _MATCH_MARGIN = 2
+#: How many evidence passes to attempt. Each pass may identify a squad, which
+#: enriches the fingerprints and can unlock the next; a handful reaches a fixpoint
+#: (two squads that only ever played each other can never be told apart).
+_RESOLVE_PASSES = 5
 
 
-def resolve_ambiguous_sides(conn: sqlite3.Connection) -> int:
-    """Identify teams for games the schedule pages could not resolve.
+def _team_rosters(conn: sqlite3.Connection) -> dict[tuple[int, int], set[str]]:
+    """Each team's roster fingerprint, used to tell same-named squads apart.
 
-    A club often enters several teams in one division, all printed with the
-    same name ("San Jose Jr Sharks" twice in 10U A). When such teams meet, the
-    schedule row is identical on both teams' pages and neither side can be
-    identified from it.
-
-    The scoresheet can tell them apart: each side's roster is compared against
-    the rosters the site publishes per team, and a clear win assigns the side.
-    When two squads of one club meet under the same name and the rosters give no
-    clear winner, the side is still filled with the best-scoring candidate: which
-    squad is 'home' barely matters (same club, same division), and counting the
-    game beats dropping it from both and asking about it forever. Only same-name
-    games are guessed at this way; a differently-named unresolved side (e.g. a
-    missing opponent) is still left alone and flagged.
+    Two sources, unioned. The site's published per-team stat table is one, but it
+    is thin in old seasons; far richer is the union of the players seen in every
+    game where the team is *already* the identified side (its games against
+    differently-named opponents, pinned by name in ``_store_game``). The second
+    source needs no published stats and, being built from games, grows as more
+    sides are identified -- which is what lets a cascade unlock the harder ones.
     """
-    candidates = conn.execute("""
+    ref: dict[tuple[int, int], set[str]] = {}
+    for row in conn.execute(
+        "SELECT season_id, team_id, name FROM team_stat_rows WHERE name <> ''"
+    ):
+        ref.setdefault((row["season_id"], row["team_id"]), set()).add(
+            N.clean_name(row["name"])
+        )
+    for row in conn.execute("""
+        SELECT g.season_id, r.name,
+               CASE r.side WHEN 'home' THEN g.home_team_id ELSE g.away_team_id END AS team_id
+          FROM game_rosters r
+          JOIN games g ON g.game_id = r.game_id
+         WHERE r.role = 'player' AND r.name <> ''
+           AND ((r.side = 'home' AND g.home_team_id IS NOT NULL)
+                OR (r.side = 'away' AND g.away_team_id IS NOT NULL))
+    """):
+        ref.setdefault((row["season_id"], row["team_id"]), set()).add(row["name"])
+    return ref
+
+
+def _resolve_ambiguous_pass(
+    conn: sqlite3.Connection,
+    ref: dict[tuple[int, int], set[str]],
+    *,
+    arbitrary: bool,
+) -> int:
+    """One pass over games with an unidentified side, matching each side's
+    scoresheet roster against the candidate teams' fingerprints.
+
+    A side is assigned on a clear overlap win. With ``arbitrary`` set, a same-name
+    side that the overlap could not decide is filled with the best-scoring
+    candidate anyway (a deterministic tie-break) -- run only as a last pass, so a
+    guess never pollutes the fingerprints the evidence passes rely on.
+    """
+    games = conn.execute("""
         SELECT g.game_id, g.season_id, g.division_id, g.home_name, g.away_name,
                g.home_team_id, g.away_team_id
           FROM games g
          WHERE (g.home_team_id IS NULL OR g.away_team_id IS NULL)
            AND g.scoresheet_at IS NOT NULL
     """).fetchall()
-    if not candidates:
-        return 0
-
-    # Published roster per team, used as the reference to match against.
-    known: dict[tuple[int, int], set[str]] = {}
-    for row in conn.execute(
-        "SELECT season_id, team_id, name FROM team_stat_rows WHERE name <> ''"
-    ):
-        known.setdefault((row["season_id"], row["team_id"]), set()).add(
-            N.clean_name(row["name"])
-        )
 
     resolved = 0
-    for game in candidates:
+    for game in games:
+        same_name = game["home_name"] == game["away_name"]
         rosters: dict[str, set[str]] = {}
         for row in conn.execute(
             "SELECT side, name FROM game_rosters WHERE game_id = ? AND role = 'player'",
@@ -1689,29 +1710,27 @@ def resolve_ambiguous_sides(conn: sqlite3.Connection) -> int:
         ):
             rosters.setdefault(row["side"], set()).add(row["name"])
 
-        assigned = {
-            "home": game["home_team_id"],
-            "away": game["away_team_id"],
-        }
+        assigned = {"home": game["home_team_id"], "away": game["away_team_id"]}
         for side in ("home", "away"):
             if assigned[side] is not None or side not in rosters:
                 continue
-            name = game[f"{side}_name"]
             taken = {v for v in assigned.values() if v is not None}
 
             scores: list[tuple[int, int]] = []
             for row in conn.execute(
-                "SELECT team_id, division_id FROM teams "
-                "WHERE season_id = ? AND name = ?",
-                (game["season_id"], name),
+                "SELECT team_id, division_id FROM teams WHERE season_id = ? AND name = ?",
+                (game["season_id"], game[f"{side}_name"]),
             ):
                 team_id = row["team_id"]
                 if team_id in taken:
                     continue
-                if (game["division_id"] and row["division_id"]
+                # Same-named squads span divisions, so a same-name game's opponent
+                # may sit in another division -- match across all of them. A
+                # differently-named unresolved side stays confined to its division.
+                if (not same_name and game["division_id"] and row["division_id"]
                         and row["division_id"] != game["division_id"]):
                     continue
-                overlap = len(rosters[side] & known.get((game["season_id"], team_id), set()))
+                overlap = len(rosters[side] & ref.get((game["season_id"], team_id), set()))
                 scores.append((overlap, team_id))
 
             if not scores:
@@ -1721,13 +1740,11 @@ def resolve_ambiguous_sides(conn: sqlite3.Connection) -> int:
             runner_up = scores[1][0] if len(scores) > 1 else 0
             if best >= _MATCH_MIN and best - runner_up >= _MATCH_MARGIN:
                 assigned[side] = best_id
-            elif game["home_name"] == game["away_name"]:
-                # Same club's two squads entered under one name: the roster gave
-                # no clear winner, but which squad counts as 'home' barely matters
-                # (same club, same division) and dropping the game from both is
-                # worse than a coin-flip. Take the best-scoring candidate -- ties
-                # broken deterministically by the sort -- so the game still counts
-                # and it is not asked about forever.
+            elif arbitrary and same_name:
+                # Evidence could not decide between two squads of one club. Which
+                # is 'home' barely matters; take the best-scoring candidate (ties
+                # broken deterministically) so the game counts instead of being
+                # dropped from both and asked about forever.
                 assigned[side] = best_id
 
         updates = {
@@ -1743,7 +1760,40 @@ def resolve_ambiguous_sides(conn: sqlite3.Connection) -> int:
                  now(), game["game_id"]],
             )
             resolved += len(updates)
+    return resolved
 
+
+def resolve_ambiguous_sides(conn: sqlite3.Connection) -> int:
+    """Identify teams for games the schedule pages could not resolve.
+
+    A club often enters several squads under one printed name ("San Jose Jr
+    Sharks", once per division in old seasons). When two of them meet, the
+    schedule row is identical on both pages and neither side can be named from it.
+
+    The scoresheets tell them apart: each side's roster is matched against every
+    candidate squad's fingerprint (``_team_rosters``), and a clear overlap win
+    assigns the side -- across divisions, since same-named squads span them. This
+    runs in passes, because identifying one squad enriches the fingerprints and
+    can unlock the next. A final pass fills any same-name side the evidence still
+    could not decide with the best-scoring candidate (which squad is 'home' barely
+    matters), so the game counts rather than being dropped and asked about
+    forever. A differently-named unresolved side -- a genuinely missing opponent
+    -- is left alone and flagged.
+    """
+    if not conn.execute(
+        "SELECT 1 FROM games WHERE (home_team_id IS NULL OR away_team_id IS NULL) "
+        "AND scoresheet_at IS NOT NULL LIMIT 1"
+    ).fetchone():
+        return 0
+
+    resolved = 0
+    for _ in range(_RESOLVE_PASSES):
+        changed = _resolve_ambiguous_pass(conn, _team_rosters(conn), arbitrary=False)
+        resolved += changed
+        if not changed:
+            break
+    # Last resort, once the evidence has cascaded as far as it can.
+    resolved += _resolve_ambiguous_pass(conn, _team_rosters(conn), arbitrary=True)
     conn.commit()
     return resolved
 
