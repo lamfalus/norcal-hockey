@@ -1763,7 +1763,7 @@ def _resolve_ambiguous_pass(
                 continue
             taken = {v for v in assigned.values() if v is not None}
 
-            scores: list[tuple[int, int]] = []
+            scores: list[tuple[int, int, int]] = []
             for row in conn.execute(
                 "SELECT team_id, division_id FROM teams WHERE season_id = ? AND name = ?",
                 (game["season_id"], game[f"{side}_name"]),
@@ -1774,23 +1774,27 @@ def _resolve_ambiguous_pass(
                 # Candidates are matched across all divisions: a bare club name
                 # can belong to a squad in any division (a co-ed team playing a
                 # girls-division game, or two same-named squads a division apart),
-                # and the roster overlap below -- with its clear-win margin -- is
-                # a far stronger discriminator than the division ever was.
+                # and the roster overlap is a far stronger discriminator than the
+                # division. Division is kept only as a tie-break: when overlap
+                # cannot decide, prefer the squad in the game's own division so a
+                # blind pick never lands on a wrong-age team elsewhere.
                 overlap = len(rosters[side] & ref.get((game["season_id"], team_id), set()))
-                scores.append((overlap, team_id))
+                same_div = int(bool(game["division_id"])
+                               and row["division_id"] == game["division_id"])
+                scores.append((overlap, same_div, team_id))
 
             if not scores:
                 continue
             scores.sort(reverse=True)
-            best, best_id = scores[0]
+            best, _, best_id = scores[0]
             runner_up = scores[1][0] if len(scores) > 1 else 0
             if best >= _MATCH_MIN and best - runner_up >= _MATCH_MARGIN:
                 assigned[side] = best_id
             elif arbitrary and same_name:
                 # Evidence could not decide between two squads of one club. Which
-                # is 'home' barely matters; take the best-scoring candidate (ties
-                # broken deterministically) so the game counts instead of being
-                # dropped from both and asked about forever.
+                # is 'home' barely matters; take the best-scoring candidate --
+                # same division preferred, then deterministic -- so the game
+                # counts instead of being dropped and asked about forever.
                 assigned[side] = best_id
 
         updates = {
