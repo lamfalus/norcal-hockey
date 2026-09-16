@@ -424,6 +424,29 @@ class TestAmbiguousSideResolution(PipelineTestCase):
             "SELECT away_team_id FROM games WHERE game_id = 702").fetchone()["away_team_id"],
             3001, "co-ed side resolved by roster across the division boundary")
 
+    def test_arbitrary_pick_never_reaches_a_wrong_division_team(self):
+        # A same-name 16U game with no roster evidence: the one same-division
+        # squad fills one side; the other side must be LEFT unresolved rather
+        # than grabbing a wrong-age (12U) squad of the same club name.
+        c = self.conn
+        for div in (601, 602):
+            c.execute("INSERT INTO divisions(division_id, season_id, league_id, name) "
+                      "VALUES (?, 31, 3, ?)", (div, f"div{div}"))
+        c.execute("INSERT INTO teams(team_id, season_id, name, division_id) VALUES (8001, 31, 'Sharks', 601)")
+        c.execute("INSERT INTO teams(team_id, season_id, name, division_id) VALUES (8002, 31, 'Sharks', 602)")
+        c.execute("INSERT INTO games(game_id, season_id, home_name, away_name, "
+                  "home_team_id, away_team_id, division_id, status, scoresheet_at) "
+                  "VALUES (800, 31, 'Sharks', 'Sharks', NULL, NULL, 601, 'final', 't')")
+        for side, nm in (("home", "Nobody A"), ("away", "Nobody B")):
+            c.execute("INSERT INTO game_rosters(game_id, side, slot, jersey, position, name, role) "
+                      "VALUES (800, ?, 0, '', '', ?, 'player')", (side, nm))
+        c.commit()
+
+        pipeline.resolve_ambiguous_sides(self.conn)
+        row = c.execute("SELECT home_team_id, away_team_id FROM games WHERE game_id = 800").fetchone()
+        self.assertEqual(row["home_team_id"], 8001, "the one same-division squad fills a side")
+        self.assertIsNone(row["away_team_id"], "no wrong-division squad is guessed for the other")
+
     def test_weak_evidence_still_fills_a_same_named_matchup(self):
         # Two squads of one club under one name: even with no usable roster
         # evidence, both sides are filled (which squad is 'home' does not matter)

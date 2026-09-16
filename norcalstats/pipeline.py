@@ -1791,11 +1791,15 @@ def _resolve_ambiguous_pass(
             if best >= _MATCH_MIN and best - runner_up >= _MATCH_MARGIN:
                 assigned[side] = best_id
             elif arbitrary and same_name:
-                # Evidence could not decide between two squads of one club. Which
-                # is 'home' barely matters; take the best-scoring candidate --
-                # same division preferred, then deterministic -- so the game
-                # counts instead of being dropped and asked about forever.
-                assigned[side] = best_id
+                # Evidence could not decide between two squads of one club. Guess
+                # only within the game's own division, where the squads are
+                # interchangeable and which is 'home' barely matters -- never
+                # across to a wrong-age team elsewhere. If no same-division
+                # candidate remains, leave the side unresolved (its players then
+                # assert no division) rather than mis-assign it.
+                in_division = [s for s in scores if s[1]]
+                if in_division:
+                    assigned[side] = in_division[0][2]
 
         updates = {
             side: assigned[side] for side in ("home", "away")
