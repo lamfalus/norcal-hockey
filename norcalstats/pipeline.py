@@ -1542,6 +1542,9 @@ class Pipeline:
     def derive(self) -> dict[str, int]:
         """Rebuild identities and per-game stat lines. No network access."""
         refine_season_years(self.conn)
+        staff = reclassify_staff_as_coach(self.conn)
+        if staff:
+            log.info("reclassified %d coach appearance(s) mis-recorded as players", staff)
         resolved = resolve_ambiguous_sides(self.conn)
         if resolved:
             log.info("resolved %d ambiguous team side(s)", resolved)
@@ -1646,6 +1649,50 @@ _MATCH_MARGIN = 2
 #: enriches the fingerprints and can unlock the next; a handful reaches a fixpoint
 #: (two squads that only ever played each other can never be told apart).
 _RESOLVE_PASSES = 5
+
+
+def reclassify_staff_as_coach(conn: sqlite3.Connection) -> int:
+    """Rescue coaches mis-recorded as players.
+
+    The scoresheet marks a coach with ``HC``/``AC`` in the number column, which
+    the parser reads as ``role='coach'``. But some sheets leave that cell blank,
+    so the coach falls through to ``role='player'`` -- a phantom player who
+    inflates the roster (an ``oversized_roster`` flag) and, staffing both a
+    co-ed and a girls squad, is flagged ``double_roster`` for "playing" both.
+
+    Reclassify a blank-jersey player row to coach when that name is a *known
+    coach in the same season* and *never wears a numeric jersey that season* --
+    so a real player who merely lost a number on one sheet, or who shares a name
+    with a coach, is never touched. Runs at the top of derive, before identities
+    and roster fingerprints are built, and re-applies after every re-parse.
+    """
+    coach: set[tuple[int, str]] = set()
+    for r in conn.execute("""
+        SELECT DISTINCT g.season_id AS s, r.name AS n
+          FROM game_rosters r JOIN games g ON g.game_id = r.game_id
+         WHERE r.role = 'coach' AND r.name <> ''"""):
+        coach.add((r["s"], r["n"]))
+    if not coach:
+        return 0
+    numbered: set[tuple[int, str]] = set()
+    for r in conn.execute("""
+        SELECT DISTINCT g.season_id AS s, r.name AS n
+          FROM game_rosters r JOIN games g ON g.game_id = r.game_id
+         WHERE r.role = 'player' AND r.name <> '' AND r.jersey GLOB '*[0-9]*'"""):
+        numbered.add((r["s"], r["n"]))
+
+    to_fix = [
+        (r["rid"],) for r in conn.execute("""
+            SELECT r.rowid AS rid, g.season_id AS s, r.name AS n
+              FROM game_rosters r JOIN games g ON g.game_id = r.game_id
+             WHERE r.role = 'player' AND r.name <> ''
+               AND (r.jersey IS NULL OR r.jersey = '')""")
+        if (r["s"], r["n"]) in coach and (r["s"], r["n"]) not in numbered
+    ]
+    if to_fix:
+        conn.executemany("UPDATE game_rosters SET role = 'coach' WHERE rowid = ?", to_fix)
+        conn.commit()
+    return len(to_fix)
 
 
 def _team_rosters(conn: sqlite3.Connection) -> dict[tuple[int, int], set[str]]:

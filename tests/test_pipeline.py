@@ -403,6 +403,53 @@ class TestAmbiguousSideResolution(PipelineTestCase):
         self.assertEqual(row["needs_review"], 0)
 
 
+class TestStaffReclassification(PipelineTestCase):
+    """A coach whose HC/AC marker is blank on a sheet must not become a player."""
+
+    def _game(self, gid, season=31):
+        self.conn.execute(
+            "INSERT INTO games(game_id, season_id, home_name, away_name, status) "
+            "VALUES (?, ?, 'A', 'B', 'final')", (gid, season))
+
+    def _roster(self, gid, name, *, jersey, role="player", side="home", slot=0):
+        self.conn.execute(
+            "INSERT INTO game_rosters(game_id, side, slot, jersey, position, name, role) "
+            "VALUES (?, ?, ?, ?, '', ?, ?)", (gid, side, slot, jersey, name, role))
+
+    def test_blank_jersey_coach_is_reclassified_but_real_players_are_not(self):
+        for gid in range(1, 8):
+            self._game(gid)
+        # A coach: marked HC in one game, blank (mis-tagged player) in another.
+        self._roster(1, "Jorge Murillo", jersey="HC", role="coach")
+        self._roster(2, "Jorge Murillo", jersey="")            # -> should become coach
+        # A real player who simply lost a number on one sheet.
+        self._roster(3, "Numbered Ned", jersey="7")
+        self._roster(4, "Numbered Ned", jersey="")             # -> stays player (numbered elsewhere)
+        # A player-coach (aged-out): numbered AND a coach; blank row stays a player.
+        self._roster(5, "Player Pat", jersey="12")
+        self._roster(6, "Player Pat", jersey="AC", role="coach")
+        self._roster(7, "Player Pat", jersey="")               # -> stays player (numbered elsewhere)
+        self.conn.commit()
+
+        fixed = pipeline.reclassify_staff_as_coach(self.conn)
+        self.assertEqual(fixed, 1)
+
+        def role(gid):
+            return self.conn.execute(
+                "SELECT role FROM game_rosters WHERE game_id = ?", (gid,)).fetchone()["role"]
+        self.assertEqual(role(2), "coach", "blank-jersey coach rescued")
+        self.assertEqual(role(4), "player", "real player who lost a number is untouched")
+        self.assertEqual(role(7), "player", "player-coach's blank row stays a player")
+
+    def test_blank_only_name_never_a_coach_is_left_alone(self):
+        self._game(1)
+        self._roster(1, "Mystery Player", jersey="")           # never a coach anywhere
+        self.conn.commit()
+        self.assertEqual(pipeline.reclassify_staff_as_coach(self.conn), 0)
+        self.assertEqual(self.conn.execute(
+            "SELECT role FROM game_rosters WHERE game_id = 1").fetchone()["role"], "player")
+
+
 class TestSidesByRegistration(PipelineTestCase):
     """The opponent in a cross-listed tournament game, filled from the bare name
     the tournament entered a team under.
