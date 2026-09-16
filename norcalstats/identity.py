@@ -149,8 +149,15 @@ def collect_observations(conn: sqlite3.Connection) -> list[Observation]:
                g.season_id   AS season_id,
                CASE r.side WHEN 'home' THEN g.home_team_id ELSE g.away_team_id END AS team_id,
                COALESCE(r.jersey, '') AS jersey,
-               -- A team's own division where known; the printed level otherwise.
-               COALESCE(td.name, d.name, g.level, '') AS division,
+               -- A player's division comes from their own team. When the side is
+               -- unresolved (a bare ambiguous name), do NOT fall back to the
+               -- game's division: a co-ed team playing in a girls-division game
+               -- would otherwise tag its players 'girls'. Leave it blank -- an
+               -- appearance whose team we cannot name asserts no division.
+               CASE WHEN (CASE r.side WHEN 'home' THEN g.home_team_id
+                                      ELSE g.away_team_id END) IS NULL
+                    THEN ''
+                    ELSE COALESCE(td.name, d.name, g.level, '') END AS division,
                CASE WHEN UPPER(COALESCE(r.position,'')) = 'G' THEN 1 ELSE 0 END AS is_goalie,
                COALESCE(t.name, CASE r.side WHEN 'home' THEN g.home_name
                                             ELSE g.away_name END, '') AS team_name

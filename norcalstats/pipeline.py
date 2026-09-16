@@ -1771,12 +1771,11 @@ def _resolve_ambiguous_pass(
                 team_id = row["team_id"]
                 if team_id in taken:
                     continue
-                # Same-named squads span divisions, so a same-name game's opponent
-                # may sit in another division -- match across all of them. A
-                # differently-named unresolved side stays confined to its division.
-                if (not same_name and game["division_id"] and row["division_id"]
-                        and row["division_id"] != game["division_id"]):
-                    continue
+                # Candidates are matched across all divisions: a bare club name
+                # can belong to a squad in any division (a co-ed team playing a
+                # girls-division game, or two same-named squads a division apart),
+                # and the roster overlap below -- with its clear-win margin -- is
+                # a far stronger discriminator than the division ever was.
                 overlap = len(rosters[side] & ref.get((game["season_id"], team_id), set()))
                 scores.append((overlap, team_id))
 

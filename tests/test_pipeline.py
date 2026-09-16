@@ -369,6 +369,61 @@ class TestAmbiguousSideResolution(PipelineTestCase):
                          "away matches squad B -- resolved across divisions")
         self.assertEqual(row["needs_review"], 0)
 
+    def test_unresolved_side_borrows_no_division_from_the_game(self):
+        # A co-ed team (away, unresolved bare name) plays a girls-division game.
+        # Its players must NOT inherit the girls division from the game, or they
+        # get flagged as playing a girls team.
+        from norcalstats import identity
+        c = self.conn
+        c.execute("INSERT INTO divisions(division_id, season_id, league_id, name) "
+                  "VALUES (901, 31, 3, 'Girls 19AA')")
+        c.execute("INSERT INTO games(game_id, season_id, home_name, away_name, "
+                  "home_team_id, away_team_id, division_id, status, scoresheet_at) "
+                  "VALUES (700, 31, 'Sharks Girls 19AAA', 'Sharks', 40, NULL, 901, 'final', 't')")
+        c.execute("INSERT INTO game_rosters(game_id, side, slot, jersey, position, name, role) "
+                  "VALUES (700, 'away', 0, '7', '', 'Owen Andrews', 'player')")
+        c.commit()
+        obs = [o for o in identity.collect_observations(c) if o.name == "Owen Andrews"]
+        self.assertEqual(len(obs), 1)
+        self.assertEqual(obs[0].division, "", "no division from an unresolved side")
+        self.assertEqual(obs[0].gender, "coed", "not tagged girls by the game's division")
+
+    def test_non_same_name_side_resolves_across_divisions_by_roster(self):
+        # g31088-shaped: co-ed "Sharks" (away, unresolved) vs "Sharks Girls" in a
+        # girls-division game. The co-ed side is filled from its roster fingerprint
+        # even though the game sits in another division and the names differ.
+        c = self.conn
+        for div in (601, 602):
+            c.execute("INSERT INTO divisions(division_id, season_id, league_id, name) "
+                      "VALUES (?, 31, 3, ?)", (div, f"div{div}"))
+        c.execute("INSERT INTO teams(team_id, season_id, name, division_id) "
+                  "VALUES (3001, 31, 'Sharks', 601)")            # co-ed squad
+        c.execute("INSERT INTO teams(team_id, season_id, name, division_id) "
+                  "VALUES (3002, 31, 'Foes', 602)")
+        squad = ["Ada Lovelace", "Grace Hopper", "Edsger Dijkstra", "Alan Kay"]
+
+        def game(gid, div, hn, an, hid, aid):
+            c.execute("INSERT INTO games(game_id, season_id, home_name, away_name, "
+                      "home_team_id, away_team_id, division_id, status, scoresheet_at) "
+                      "VALUES (?, 31, ?, ?, ?, ?, ?, 'final', 't')",
+                      (gid, hn, an, hid, aid, div))
+
+        def roster(gid, side, names):
+            for i, n in enumerate(names):
+                c.execute("INSERT INTO game_rosters(game_id, side, slot, jersey, "
+                          "position, name, role) VALUES (?, ?, ?, '9', '', ?, 'player')",
+                          (gid, side, i, n))
+        # Fingerprint the co-ed squad from a normal game it is identified in.
+        game(701, 601, "Sharks", "Foes", 3001, 3002); roster(701, "home", squad)
+        # The cross-division, differently-named game with the co-ed side unresolved.
+        game(702, 602, "Sharks Girls 19AAA", "Sharks", 40, None); roster(702, "away", squad)
+        c.commit()
+
+        pipeline.resolve_ambiguous_sides(self.conn)
+        self.assertEqual(c.execute(
+            "SELECT away_team_id FROM games WHERE game_id = 702").fetchone()["away_team_id"],
+            3001, "co-ed side resolved by roster across the division boundary")
+
     def test_weak_evidence_still_fills_a_same_named_matchup(self):
         # Two squads of one club under one name: even with no usable roster
         # evidence, both sides are filled (which squad is 'home' does not matter)
