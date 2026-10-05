@@ -489,8 +489,21 @@ def _cmd_probe_orphans(conn, config: Config, args) -> int:
         "SELECT MAX(game_id) FROM games WHERE season_id = ? AND game_id < 1000000",
         (season,),
     ).fetchone()[0] or 0
-    start_id = args.from_id if args.from_id is not None else max(1, max_id - 150)
-    end_id = args.to_id if args.to_id is not None else max_id + 200
+
+    # A persistent high-water mark makes the probe cover every id exactly once
+    # (plus a recent re-probe tail), rather than only a fixed window behind the
+    # frontier -- which permanently skipped any orphan that fell off its back
+    # edge as the frontier advanced. --from/--to override it for a manual sweep
+    # and do not disturb the mark.
+    mark_key = f"orphan_probed_to:{season}"
+    mark = int(db.get_meta(conn, mark_key) or 0)
+    if args.from_id is not None:
+        start_id = args.from_id
+    elif mark > 0:
+        start_id = max(1, min(mark + 1, max_id - config.orphan_recent_tail))
+    else:
+        start_id = max(1, max_id - 150)  # no mark yet: fall back to the frontier
+    end_id = args.to_id if args.to_id is not None else max_id + config.orphan_frontier_ahead
 
     pipe = pipeline.Pipeline(conn, config, _fetcher(config))
     with db.Run(conn, "probe-orphans") as record:
@@ -500,8 +513,15 @@ def _cmd_probe_orphans(conn, config: Config, args) -> int:
         record.games_parsed = res["found"]
         record.errors = pipe.stats.errors
         record.note = f"probed {res['fetched']}, ingested {res['found']}"
+
+    # Advance the mark to the highest id covered this run (monotonic). Only on a
+    # default run -- a manual --from/--to sweep leaves the mark alone.
+    if args.from_id is None and args.to_id is None:
+        db.set_meta(conn, mark_key, str(max(mark, res["last_id"])))
+        conn.commit()
     print(f"probe-orphans: S{season} ids [{start_id},{end_id}] -- "
-          f"probed {res['fetched']}, ingested {res['found']} orphan game(s)")
+          f"probed {res['fetched']}, ingested {res['found']} orphan game(s); "
+          f"mark now {db.get_meta(conn, mark_key)}")
     return 0
 
 

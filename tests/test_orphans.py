@@ -78,6 +78,67 @@ class ProbeOrphansTest(unittest.TestCase):
         again = self.pipe.probe_orphan_scoresheets(33, start_id=62137, end_id=62137, cap=10)
         self.assertEqual(again["found"], 0, "a game already in the DB must not be re-ingested")
 
+    def test_last_id_reaches_end_when_range_completes(self):
+        res = self.pipe.probe_orphan_scoresheets(33, start_id=62135, end_id=62139, cap=50)
+        self.assertEqual(res["last_id"], 62139, "covered the whole range")
+
+    def test_last_id_stops_where_cap_bit(self):
+        # Every id but 62137 raises FetchError (still 'covered'); cap counts
+        # fetches, so cap=2 stops after covering 62135 and 62136.
+        res = self.pipe.probe_orphan_scoresheets(33, start_id=62135, end_id=62139, cap=2)
+        self.assertEqual(res["fetched"], 2)
+        self.assertEqual(res["last_id"], 62136, "resume point is the last covered id")
+
+
+class HighWaterMarkTest(unittest.TestCase):
+    """The CLI advances a persistent mark so no id is ever permanently skipped."""
+
+    def setUp(self):
+        from norcalstats import cli
+        from norcalstats.fetch import FetchError
+        self.cli = cli
+        self.tmp = tempfile.TemporaryDirectory()
+        base = pathlib.Path(self.tmp.name)
+        self.config = Config(data_dir=base, export_dir=base, keep_raw=False,
+                             orphan_recent_tail=50, orphan_frontier_ahead=10)
+        self.conn = db.connect(self.config.db_path)
+        self.conn.execute("INSERT INTO seasons(season_id,label,start_year,first_seen_at) "
+                          "VALUES (33,'x',2026,'t')")
+        # a single known game sets the frontier at 5000
+        self.conn.execute("INSERT INTO games(game_id,season_id,status) VALUES (5000,33,'final')")
+        self.conn.commit()
+
+        class Stub:
+            requests_made = 0
+            offline = False
+            def get(self, *a, **k):
+                raise FetchError("no fixture")
+        self._orig = cli._fetcher
+        cli._fetcher = lambda config, **kw: Stub()
+
+    def tearDown(self):
+        self.cli._fetcher = self._orig
+        self.conn.close(); self.tmp.cleanup()
+
+    def _args(self, **kw):
+        base = dict(season=33, from_id=None, to_id=None, cap=10000)
+        base.update(kw)
+        return types.SimpleNamespace(**base)
+
+    def test_default_run_sets_and_advances_the_mark(self):
+        self.cli._cmd_probe_orphans(self.conn, self.config, self._args())
+        mark = int(db.get_meta(self.conn, "orphan_probed_to:33"))
+        self.assertEqual(mark, 5010, "advanced to the frontier + ahead")
+        # a second run now starts at the tail (max_id - recent_tail), not from 1
+        self.cli._cmd_probe_orphans(self.conn, self.config, self._args())
+        self.assertGreaterEqual(int(db.get_meta(self.conn, "orphan_probed_to:33")), 5010)
+
+    def test_manual_range_leaves_the_mark_untouched(self):
+        db.set_meta(self.conn, "orphan_probed_to:33", "4000"); self.conn.commit()
+        self.cli._cmd_probe_orphans(self.conn, self.config, self._args(from_id=100, to_id=120))
+        self.assertEqual(db.get_meta(self.conn, "orphan_probed_to:33"), "4000",
+                         "a manual sweep must not move the mark")
+
 
 if __name__ == "__main__":
     unittest.main()

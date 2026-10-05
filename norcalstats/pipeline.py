@@ -1167,17 +1167,21 @@ class Pipeline:
         so if the game later does turn up on a schedule the normal scan simply
         enriches the same row (real team ids, exact league/division).
 
-        Returns ``{"fetched", "found"}``. Stops at ``cap`` fetches or the first
-        rate-limit, so it never hammers the site.
+        Returns ``{"fetched", "found", "last_id"}`` where ``last_id`` is the
+        highest id fully covered before stopping -- the caller advances its
+        high-water mark to it. Stops at ``cap`` fetches or the first rate-limit,
+        so it never hammers the site.
         """
         found = 0
         fetched = 0
+        last_id = start_id - 1  # highest id fully covered (known-skip or fetched)
         for gid in range(start_id, end_id + 1):
             if fetched >= cap:
                 break
             if self.conn.execute(
                 "SELECT 1 FROM games WHERE game_id = ?", (gid,)
             ).fetchone():
+                last_id = gid
                 continue  # already known: scheduled, or probed on an earlier run
             fetched += 1
             try:
@@ -1189,11 +1193,13 @@ class Pipeline:
             except (RequestCeilingReached, RateLimited) as exc:
                 log.warning("probe-orphans: %s -- stopping", exc)
                 self.stats.stopped_early = True
-                break
+                break  # do not advance past gid: resume here next run
             except FetchError as exc:
                 log.error("probe-orphans: game %s: %s", gid, exc)
                 self.stats.errors += 1
+                last_id = gid  # covered (tried); do not re-fetch next run
                 continue
+            last_id = gid
 
             sheet = tts.parse_scoresheet(page.html, gid)
             if not sheet.is_usable or sheet.home.final is None or sheet.away.final is None:
@@ -1237,7 +1243,7 @@ class Pipeline:
                      sheet.home.team_name, sheet.home.final, sheet.level)
             self.conn.commit()
 
-        return {"fetched": fetched, "found": found}
+        return {"fetched": fetched, "found": found, "last_id": last_id}
 
     def sweep(self, now_local: datetime) -> dict:
         """One targeted results pass. Returns a summary dict.

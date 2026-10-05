@@ -94,6 +94,17 @@ class Config:
     #: database is unavailable (which on the Pi is already this zone).
     sweep_timezone: str = "America/Los_Angeles"
 
+    # -- orphan probe --------------------------------------------------
+    #: The nightly orphan probe advances a high-water mark (``orphan_probed_to``
+    #: in ``meta``) so no id is ever skipped, and re-probes this many ids behind
+    #: the frontier each run -- enough to catch a game that is live-scored and
+    #: then buried behind a busy weekend's worth of new ids before the next run,
+    #: or one whose roster is entered after it was first seen.
+    orphan_recent_tail: int = 1000
+    #: How far past the current id frontier to probe, for ids created since the
+    #: last run.
+    orphan_frontier_ahead: int = 200
+
     # -- export / publish ----------------------------------------------
     export_dir: Path = Path(".")
     legacy_json: str = "norcal_hockey_players_s27-s31.json"
