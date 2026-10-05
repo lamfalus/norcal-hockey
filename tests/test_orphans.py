@@ -133,6 +133,15 @@ class HighWaterMarkTest(unittest.TestCase):
         self.cli._cmd_probe_orphans(self.conn, self.config, self._args())
         self.assertGreaterEqual(int(db.get_meta(self.conn, "orphan_probed_to:33")), 5010)
 
+    def test_frontier_advances_even_when_the_cap_is_tiny(self):
+        # Guard the bug this fixed: a dense tail (mostly other-league ids) must
+        # not consume the whole cap and stall the mark. Frontier-first means new
+        # ids are always covered first, so the mark advances every run.
+        db.set_meta(self.conn, "orphan_probed_to:33", "4800"); self.conn.commit()
+        self.cli._cmd_probe_orphans(self.conn, self.config, self._args(cap=5))
+        mark = int(db.get_meta(self.conn, "orphan_probed_to:33"))
+        self.assertGreater(mark, 4800, "the mark advanced despite the tiny cap")
+
     def test_manual_range_leaves_the_mark_untouched(self):
         db.set_meta(self.conn, "orphan_probed_to:33", "4000"); self.conn.commit()
         self.cli._cmd_probe_orphans(self.conn, self.config, self._args(from_id=100, to_id=120))

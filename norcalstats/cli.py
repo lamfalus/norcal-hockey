@@ -90,8 +90,8 @@ def build_parser() -> argparse.ArgumentParser:
                            help="first game id (default: recent frontier)")
     p_orphans.add_argument("--to", dest="to_id", type=int,
                            help="last game id (default: frontier + headroom)")
-    p_orphans.add_argument("--cap", type=int, default=300,
-                           help="max scoresheet fetches this run (default 300)")
+    p_orphans.add_argument("--cap", type=int, default=500,
+                           help="max scoresheet fetches this run (default 500)")
 
     p_backfill = sub.add_parser("backfill", help="one-time historical crawl")
     add_crawl_args(p_backfill)
@@ -490,38 +490,56 @@ def _cmd_probe_orphans(conn, config: Config, args) -> int:
         (season,),
     ).fetchone()[0] or 0
 
-    # A persistent high-water mark makes the probe cover every id exactly once
-    # (plus a recent re-probe tail), rather than only a fixed window behind the
-    # frontier -- which permanently skipped any orphan that fell off its back
-    # edge as the frontier advanced. --from/--to override it for a manual sweep
-    # and do not disturb the mark.
+    pipe = pipeline.Pipeline(conn, config, _fetcher(config))
+
+    # A manual --from/--to is a one-off sweep: single pass, mark untouched.
+    if args.from_id is not None or args.to_id is not None:
+        start_id = args.from_id if args.from_id is not None else max(1, max_id - 150)
+        end_id = args.to_id if args.to_id is not None else max_id + config.orphan_frontier_ahead
+        with db.Run(conn, "probe-orphans") as record:
+            res = pipe.probe_orphan_scoresheets(season, start_id=start_id, end_id=end_id, cap=args.cap)
+            record.pages = pipe.fetcher.requests_made
+            record.games_parsed = res["found"]
+            record.note = f"manual [{start_id},{end_id}]: probed {res['fetched']}, found {res['found']}"
+        print(f"probe-orphans: S{season} manual [{start_id},{end_id}] -- "
+              f"probed {res['fetched']}, ingested {res['found']} orphan game(s)")
+        return 0
+
+    # A persistent high-water mark makes the probe cover every id exactly once,
+    # rather than only a fixed window behind the frontier -- which permanently
+    # skipped any orphan that fell off its back edge as the frontier advanced.
+    # Most ids on the shared counter are other-league games (fetched then
+    # skipped), so the probe runs frontier-first: pass 1 always covers the NEW
+    # ids up to the frontier and advances the mark, and only pass 2 spends the
+    # leftover budget re-probing the recent tail (for a game live-scored or
+    # rostered after the mark passed it). This keeps the dense tail from ever
+    # starving the frontier and stalling the mark.
     mark_key = f"orphan_probed_to:{season}"
     mark = int(db.get_meta(conn, mark_key) or 0)
-    if args.from_id is not None:
-        start_id = args.from_id
-    elif mark > 0:
-        start_id = max(1, min(mark + 1, max_id - config.orphan_recent_tail))
-    else:
-        start_id = max(1, max_id - 150)  # no mark yet: fall back to the frontier
-    end_id = args.to_id if args.to_id is not None else max_id + config.orphan_frontier_ahead
+    front_start = (mark + 1) if mark > 0 else max(1, max_id - 150)
+    front_end = max_id + config.orphan_frontier_ahead
 
-    pipe = pipeline.Pipeline(conn, config, _fetcher(config))
     with db.Run(conn, "probe-orphans") as record:
-        res = pipe.probe_orphan_scoresheets(
-            season, start_id=start_id, end_id=end_id, cap=args.cap)
+        front = pipe.probe_orphan_scoresheets(season, start_id=front_start, end_id=front_end, cap=args.cap)
+        new_mark = max(mark, front["last_id"])
+        remaining = args.cap - front["fetched"]
+        tail = {"fetched": 0, "found": 0}
+        if remaining > 0 and mark > 0 and not pipe.stats.stopped_early:
+            tail_start = max(1, max_id - config.orphan_recent_tail)
+            tail = pipe.probe_orphan_scoresheets(
+                season, start_id=tail_start, end_id=mark, cap=remaining)
+        found = front["found"] + tail["found"]
         record.pages = pipe.fetcher.requests_made
-        record.games_parsed = res["found"]
+        record.games_parsed = found
         record.errors = pipe.stats.errors
-        record.note = f"probed {res['fetched']}, ingested {res['found']}"
+        record.note = (f"frontier[{front_start},{front_end}]+tail: "
+                       f"probed {front['fetched'] + tail['fetched']}, found {found}, mark {new_mark}")
 
-    # Advance the mark to the highest id covered this run (monotonic). Only on a
-    # default run -- a manual --from/--to sweep leaves the mark alone.
-    if args.from_id is None and args.to_id is None:
-        db.set_meta(conn, mark_key, str(max(mark, res["last_id"])))
-        conn.commit()
-    print(f"probe-orphans: S{season} ids [{start_id},{end_id}] -- "
-          f"probed {res['fetched']}, ingested {res['found']} orphan game(s); "
-          f"mark now {db.get_meta(conn, mark_key)}")
+    db.set_meta(conn, mark_key, str(new_mark))
+    conn.commit()
+    print(f"probe-orphans: S{season} frontier [{front_start},{front_end}] "
+          f"(+{tail['fetched']} tail) -- probed {front['fetched'] + tail['fetched']}, "
+          f"ingested {found} orphan game(s); mark now {new_mark}")
     return 0
 
 
