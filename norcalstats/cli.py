@@ -482,7 +482,13 @@ def _cmd_probe_orphans(conn, config: Config, args) -> int:
     if season is None:
         print("no seasons known yet; run 'update' first", file=sys.stderr)
         return 1
-    max_id = conn.execute("SELECT MAX(game_id) FROM games").fetchone()[0] or 0
+    # Frontier of real ids for this season. The < 1e6 guard skips the handful of
+    # bogus outlier game_ids in the data, which would otherwise blow the window
+    # out to hundreds of millions.
+    max_id = conn.execute(
+        "SELECT MAX(game_id) FROM games WHERE season_id = ? AND game_id < 1000000",
+        (season,),
+    ).fetchone()[0] or 0
     start_id = args.from_id if args.from_id is not None else max(1, max_id - 150)
     end_id = args.to_id if args.to_id is not None else max_id + 200
 
