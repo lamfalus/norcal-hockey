@@ -1,4 +1,4 @@
-# NorCal Youth Hockey Stats
+# NorCal Youth Hockey Stats 
 
 A game-level statistics archive for NorCal youth hockey, collected automatically
 from [stats.caha.timetoscore.com](https://stats.caha.timetoscore.com).
@@ -9,57 +9,6 @@ Two pieces:
 |---|---|
 | **`norcalstats/`** | A dependency-free Python collector that runs unattended on a Raspberry Pi, parses every scoresheet, and maintains a SQLite database |
 | **`norcal_hockey_viewer.html`** | The single-file web viewer, hosted at [lamfalus.github.io/norcal-hockey](https://lamfalus.github.io/norcal-hockey/norcal_hockey_viewer.html) |
-
----
-
-## Where it stands
-
-Running unattended and publishing itself. A Raspberry Pi collects every night at
-03:30, writes the app dataset, and force-pushes it to the `data` branch with a
-repo-scoped deploy key. GitHub Pages serves the viewer from `main`, the viewer
-reads the dataset from `data`, and neither needs a hand.
-
-| | |
-|---|---|
-| Seasons | Fall 2021 – Fall 2026 (S27–S31, S33 — the site has no S32) |
-| Leagues | 4 — Norcal, CAHA, SCAHA, PGHL |
-| Games | 14,064, of which 8,130 have a result |
-| Stat lines | 240,901 across 63,631 goals and 49,193 penalties |
-| Teams / clubs | 2,363 team-seasons resolving to 66 clubs |
-| Players | 10,351 in the published dataset |
-| Open review questions | 172 (four of them oversized rosters) |
-| Schema | v8 |
-
-Counts are a snapshot taken 2026-08-28; the collector adds to them nightly.
-
-The viewer opens on the **schedule**: what is on next and what just happened,
-across every league and division at once, with a **Season** control in the header
-that follows you into every view. Pick a league and a division and the schedule
-grows a **standings** table above the games. A search bar, always on the header,
-finds a player, a club or a division and jumps to it. Behind the schedule are
-the **Stats** leaderboards — narrow them to one division and its team breakdown
-appears beneath: special-teams leaders, how top-heavy each team's scoring is,
-home-ice records, and the pairs who most score together; narrow to one team and
-it hands off to that team's page. **Club** pages carry season-by-season teams,
-retention, and a player-flow chart; **player** pages carry per-game logs,
-linemates, and a development curve; **team** pages — the one place a single team
-is shown — carry a record, the schedule, a sortable roster, scoring by period,
-that same breakdown, and their own flow chart. It works on a phone — that took
-measuring rather than guessing, and the notes are in [The viewer](#the-viewer).
-
-**What is left**, in the order it is worth doing:
-
-- **`ambiguous_team`, 40 questions.** Same-club-versus-same-club games where
-  neither side could be identified, so **5,262 stat lines belong to no team** and
-  are missing from team totals. The only open category that costs data.
-- The other 129 questions are correct as auto-applied: genuine second children
-  sharing a name, and call-ups playing two age groups. Two are `new_league`,
-  which is the one category worth reading rather than dismissing.
-- `caha_players_s27-s31.json` is a v1 artifact nothing has written since v1, and
-  the legacy exports are switched off. Both can go once nothing points at them.
-- 4,535 orphan player rows — the leftovers of splits that were later undone.
-  Excluded from the export, still in the database. `purge_leagues` deliberately
-  does not sweep them up: they are a separate question from any one purge.
 
 ---
 
@@ -98,31 +47,13 @@ These are collected:
 
 | id | League | id | League |
 |---|---|---|---|
-| 3 | **Norcal** — travel A / B / BB | 16 | CAHA Preseason ↴ |
-| 5 | **CAHA** — tier 1 / tier 2, AA & AAA | 17 | CAHA Weekends ↴ |
-| 4 | **SCAHA** — Southern California | 24 | CAHA Playoffs ↴ |
-| 34 | **PGHL** — Pacific Girls, 12/14/16/19 AA & AAA | | |
-
-The three marked ↴ are rounds of the CAHA tier competition, not leagues in
-their own right. They are still crawled separately, because the site publishes
-them separately — but they **roll up to CAHA (5)** everywhere a reader picks a
-league, and the round each game belonged to is kept as a label on the game.
-That is the only place the distinction still lives, and it has to be a label
-rather than a league because the two do not agree: the id named "CAHA
-Preseason" holds 819 games the schedule types as *Regular*. `leagues.parent_id`
-records the roll-up and `leagues.stage` names the round.
+| 3 | **Norcal** — travel A / B / BB | 16 | **CAHA Preseason** |
+| 5 | **CAHA** — tier 1 / tier 2, AA & AAA | 17 | **CAHA Weekends** |
+| 4 | **SCAHA** — Southern California | 24 | **CAHA Playoffs** |
+| 34 | **PGHL** — Pacific Girls, 12/14/16/19 AA & AAA | 37 | **Pacific District** — tier 1 playoffs |
 
 These are not, because they carry no season-long record:
 
-- **Pacific District (37) and USAH Nationals (38)** — end-of-season
-  championships. They *are* the playoff progression for tier teams, which is
-  why they were collected at first, but the field is drawn from the whole
-  country: 47 of the clubs in them are Alaska, Boston, Buffalo, Chicago,
-  Cleveland, Colorado and the like, and a California team reaching one is
-  incidental. Removed in v6 — and *removed*, not merely stopped: since they
-  will not be collected again, the rows are not history worth carrying. 350
-  games, the 97 teams that existed here for no other reason, and the 1,258
-  players who came with them. See [Purging a league](#purging-a-league).
 - **High school** — SHSHL, ADHSHL, LA Kings High School
 - **College** — ACHA and ACHA MD2 (Stanford, Grand Canyon, Berkeley)
 - **Weekend tournaments** — Silver Stick, Wine Country Face Off, One Hockey,
@@ -140,17 +71,10 @@ current season is re-probed every run — that is what catches a league switchin
 on mid-season. A league nobody has classified yet is **not** collected; it is
 measured and raised for review instead. The classifier uses, in order:
 
-1. a name naming a championship *above* the league — district, regional,
-   national → **skip and ask**. This is the rule that was missing: Pacific
-   District and USAH Nationals both read as playoffs, which is exactly how they
-   were collected in the first place. Such a league is measured and filed as a
-   `new_league` question at low confidence, and stays uncollected until somebody
-   answers with `--include` or `--exclude`;
-2. a name that looks like the end of a league's own season — playoff, final →
-   collect. That is what CAHA Playoffs is, and it is wanted;
-3. games labelled `Tournament` on the schedule → skip, however long the league
+1. a name that looks like a playoff or championship round → collect;
+2. games labelled `Tournament` on the schedule → skip, however long the league
    runs (league 19 spans 105 days but is entirely one-off events);
-4. games spanning 30+ days → collect; otherwise skip.
+3. games spanning 30+ days → collect; otherwise skip.
 
 Several teams are sampled, not one: the Pacific Girls league looked like a
 two-day tournament judged on its first team alone, which would have quietly
@@ -169,38 +93,6 @@ global**: one team appears in several leagues at once, and the highest-priority
 league owns its name and division. Season-long leagues rank above preseason and
 playoff ids, so a team is labelled by the league it actually plays in. Every
 appearance is still recorded in `team_leagues`.
-
-### Purging a league
-
-Excluding a league stops it being collected; it does not remove what is already
-there. `db.purge_leagues()` does, and the v6 migration runs it for the two
-championships. Deleting the games is the easy half — rosters, goals, penalties,
-period scores, goalie stints, shot marks and per-game stats all cascade from
-`games`. Four things do not:
-
-- **`teams`** — a team that also plays a real season keeps its row and is
-  re-pointed at the best league it has left; only a team whose whole record here
-  was the purged competition goes, taking its `standings` and `team_stat_rows`
-  with it. Neither of those cascades.
-- **`player_team_seasons`** — keyed on team rather than on game, so it survives
-  the cascade untouched.
-- **`players`** — nothing else in this codebase has ever deleted a player, which
-  is why the database still carries orphans from undone splits. The players who
-  were only ever here for the purged competition go too. They are identified
-  three ways before the delete — a stat line, a roster row, or *only* a team
-  membership, which is the one that matters for a team whose games were never
-  scoresheeted — and each is then confirmed to have nothing left anywhere. A
-  player named in a hand-made override or split is kept regardless: that
-  decision is not the purge's to discard. Pre-existing orphans are not swept up
-  either; they are a separate question.
-- **`review_items`** — left alone. They are keyed by an opaque fingerprint and
-  record questions that were genuinely asked; a stale one can be answered, a
-  deleted one cannot.
-
-The archived pages under `data/raw` are not touched, and do not need to be: the
-crawl only walks leagues marked `season`, and a purged game leaves no scoresheet
-pending, so `reparse` cannot bring one back. They are a re-fetchable cache. To
-reclaim the space anyway, delete the ones no game points at.
 
 ### How far back
 
@@ -224,7 +116,7 @@ game-level data covers the rest.
 
 Every stat line is therefore tagged with the class of game it came from. In
 the app dataset each season split carries its own `class`, which is what the
-viewer's **Game Type** boxes switch on; the legacy export folds the
+viewer's **Games counted** filter switches on; the legacy export folds the
 same thing into a `byClass` breakdown:
 
 ```json
@@ -305,9 +197,9 @@ or recent enough that a scorekeeper might still correct them.
 |---|---|
 | `update` | Incremental run — this is what the timer calls |
 | `backfill` | One-time historical crawl (`--from-season`, `--to-season`) |
+| `probe-orphans` | Ingest scoresheet-only games that have no schedule row (CAHA girls) — see *How it works* |
 | `reparse` | Re-parse the archived pages offline, no network at all |
 | `derive` | Rebuild player identities and stat lines from stored rows |
-| `scorecards` | Fetch the PDF scorecards (per-goalie shots/saves) for a season |
 | `export` | Write the app dataset, and the legacy exports if enabled |
 | `publish` | Push the app dataset, and commit the legacy exports if enabled |
 | `status` | What is in the database |
@@ -315,7 +207,6 @@ or recent enough that a scorekeeper might still correct them.
 | `leagues` | Leagues carrying games, per season (`--discover` to probe) |
 | `audit` | Data-quality findings |
 | `review` | Questions about names and teams needing your decision |
-| `reassign-game` | Re-home a game the source filed under the wrong team (`<game> <from_team> <to_team>`) |
 
 Useful flags: `--season N`, `--league N` and `--team ID` (all repeatable), `--limit N`
 to cap scoresheets per run, `--delay` to change the request spacing, and
@@ -338,11 +229,37 @@ cross-checking).
 
 **3 — Fetch scoresheets.** Only for games that need one. This is what makes a
 nightly run cheap: a typical night fetches the handful of games played that day
-rather than the whole season. For the current season it also fetches each
-played game's **PDF scorecard** — see [Goalie stats](#goalie-stats-come-from-the-pdf-scorecard).
+rather than the whole season.
 
 **4 — Derive.** Resolve player identities and materialize per-game stat lines
 from the stored events. No network access, so it can be re-run any time.
+
+### Games with no schedule row (the orphan probe)
+
+The scan above finds games *through the schedule* — each team's
+`display-schedule` page lists its fixtures, and a scoresheet is fetched per
+listed game. But a few games never appear on any schedule page. CAHA's
+inter-regional girls games (e.g. Girls 12AAA, where NorCal and SoCal teams
+meet) are run through Time to Score's **live** scoring system
+(`live.caha.timetoscore.com`): it assigns a `game_id` and posts a scoresheet,
+but writes no schedule row anywhere on the stats site. The per-team crawl
+cannot see them — a permanent hole the normal collection can't close.
+
+`probe-orphans` closes it. It sweeps a bounded, deduped range of recent
+`game_id`s and, for each not-yet-known CAHA girls game, reads the scoresheet
+header (date, teams, score, division) straight from the sheet, creates the game
+row, and stores its detail with the same `store_scoresheet` the normal path
+uses. Because `game_id` is the primary key, a game that *later* turns up on a
+schedule is simply enriched in place (real team ids, exact league/division) —
+no duplicate, no conflict. A placeholder-matchup guard skips sheets whose teams
+are still unnamed ("Away"), and the league/level filter keeps it to CAHA girls.
+
+It is collection-only: the nightly `update` that follows derives, exports and
+publishes, exactly like the scorecard backfill. On the Pi it runs from its own
+timer at 03:00, before the 03:30 collector. With no range given it probes the
+recent id frontier (guarding against the handful of bogus outlier `game_id`s
+≥ 1e6 in the data); `--from`/`--to` set an explicit range and `--cap` bounds the
+fetches.
 
 ### The page archive
 
@@ -380,8 +297,8 @@ pair is raised for review and left separate, because a wrong merge is far harder
 to notice later than a missing one.
 
 **Two children sharing a name are detected from division history.** Each age
-division implies a [birth window](#how-wide-a-birth-window-is), so a `Ryan
-Smith` who appears in both 10U and 16U in one season is two boys, not one. They become separate players
+division implies a two-year birth window, so a `Ryan Smith` who appears in both
+10U and 16U in one season is two boys, not one. They become separate players
 with separate birth years and separate stats.
 
 The obvious trap here is a **call-up** — a 10U child playing a game or two up in
@@ -417,61 +334,8 @@ Both boundaries are pinned by tests, so the tuning cannot drift silently. If the
 real backfill shows it erring either way, the dials are `PLAY_UP_TOLERANCE` and
 `TERMINAL_PLAY_UP_TOLERANCE` in `identity.py`.
 
-#### How wide a birth window is
-
-Birth years are inferred by intersecting a player's seasons, so how many years
-each division admits is the whole of the arithmetic. It is not always two.
-
-| Divisions | Birth years | |
-|---|---|---|
-| 11U–16U **AAA** | **1** | Tier I boys run a single-year ladder |
-| 18U AAA | 2 | the top of the boys ladder carries 17s and 18s |
-| Girls 12AAA, 14AAA, 16AAA | 2 | the girls ladder is two years at every rung |
-| **Girls 19U**, any tier | **3** | the top of the girls ladder carries 17s, 18s and 19s |
-| everything else | 2 | |
-
-The single-year rungs are why a career resolves at all. A player who spends six
-seasons in two-year bands can still finish with two candidate years and nothing
-to choose between them; one season of 14U AAA fixes the year outright. It is
-visible in the data too — 11U, 12U, 13U, 14U, 15U and 16U AAA all ice in the
-same league in the same season, which is only possible if each is one year.
-
-Both ends of the ladder are exceptions, in opposite directions, and the girls
-one matters more. **A window that is too narrow is worse than one that is too
-wide**: too wide merely fails to narrow the answer, while too narrow
-contradicts the player's other seasons and can lose the birth year entirely.
-Reading a girls 19U team as two years does exactly that to a third of its
-roster.
-
-A combined band is read from both ends. `Girls 16/19AA` tops out at the 19U
-ceiling and reaches down to the 16U floor, so it spans 15- to 19-year-olds
-rather than the top classification alone. Only a slash marks one — reading
-every number in a name as an age would let a team number widen the window,
-turning `Girls 16AA 5` into a band reaching down to five-year-olds.
-
-#### What counts as a season
-
-The windows are intersected over the divisions a player *mainly* played, not
-over every division they were ever seen in. One guest game in an older division
-implies a birth year two years off from the rest of a career, and counted
-equally it empties the intersection — so a player whose every real season
-agrees ends up with two candidate years because of a single afternoon. A
-division carries a season when it saw at least half as many appearances as the
-busiest one that season, which is the same rule the [same-name
-split](#player-identity) uses, so a full second roster survives and a call-up
-does not.
-
-A call-up's **lower** bound is kept even so. Age rules run one way, so nobody in
-a 12U game is older than 12U admits, however few games it was — what a call-up
-never justified is its *upper* bound, which is the half that was breaking the
-intersection. A player with twenty games at 14U and one at 12U is a 12U-aged
-player spending the season up, and the single game is what says so.
-
-Where two windows tie on their earliest year, the **narrower** one wins. That
-is not only precision: the divisions are held in a set, so picking arbitrarily
-between a single-year division and the two-year band starting alongside it
-would answer differently between runs, and a player's badge would move for no
-reason.
+Birth years are inferred as before: each division implies a two-year window, and
+intersecting a player's seasons often narrows it to one year.
 
 ### Double-rostered players
 
@@ -558,24 +422,6 @@ one name and they play each other, neither side can be identified from the
 schedule. The item names the candidate teams and tells you which side is
 already known.
 
-**Oversized rosters** land there too. A USA Hockey roster tops out at 22, so a
-team-season carrying more is almost always two squads the source filed under one
-team id — as CAHA did with Golden State Elite's two 14U AA teams in 2022-23,
-whose games landed on one team. The flag counts each team's distinct players
-(high schools exempt, since theirs are allowed to be larger) and, for anything
-over the cap, clusters its games by roster overlap: one squad plus a stray
-mis-filed game comes back as a big cluster and a small one, and the item names
-the odd games and where their players otherwise skate. Fix the stray game with:
-
-```bash
-python3 -m norcalstats.cli reassign-game 37799 435 549
-```
-
-which re-homes it from one team to the other. The re-homing is recorded in
-`game_team_overrides` and re-applied on every derive, so — like the player
-decisions — it survives a re-fetch and a full rebuild; the roster then drops
-back under the cap and the flag clears itself.
-
 ### Data quality
 
 The collector records what it cannot verify rather than hiding it. `audit`
@@ -589,11 +435,9 @@ Two things worth knowing about the source data:
   individually (`Regular 1` … `Regular 15`), and its published totals and
   standings exclude preseason, exhibition and playoff games. The database stores
   a `game_class` for exactly this reason.
-- **The shot-grid on the HTML sheet is unreliable.** Scorekeepers routinely
-  leave it half-filled — one 19-goal game in the fixtures has two goals marked.
-  It is recorded and flagged `reliable = 0`, and is never used as a stats
-  source. Real shots and saves come from the [PDF scorecard](#goalie-stats-come-from-the-pdf-scorecard)
-  instead, which is checked against the score before it is trusted.
+- **The shot grid is unreliable.** Scorekeepers routinely leave it half-filled —
+  one 19-goal game in the fixtures has two goals marked. It is recorded and
+  flagged `reliable = 0`, and is never used as a stats source.
 - **A scoresheet is checked against the fixture it was fetched for.** Game ids
   come from the link, never from the printed label, but an earlier parser
   invented one when it could not read it — and asking the site for game 1
@@ -614,53 +458,6 @@ Reconciliation was verified against the league's own numbers: for two fully
 parsed teams, all 28 players matched the published GP, goals and assists
 exactly, derived purely from scoresheets.
 
-### Goalie stats come from the PDF scorecard
-
-The HTML scoresheet names the goalies and when they were changed, but says how
-many shots each faced **only for the team as a whole** — not per goalie. So a
-side that used two goalies could not be split from the scoresheet, and the old
-derivation gave *every* rostered goalie the side's entire goals-against: right
-when one played, doubled when two split the game, and a phantom line for a
-backup who never left the bench.
-
-Every game also has a second link on the site, in the **Scoresheet** column
-rather than the **Game** one: `generate-scorecard.php`, a printable **PDF**.
-That PDF carries a *Goaltender Records* table the HTML does not — per goalie,
-per period, shots and saves. It is the one true source for a goalie's
-goals-against, and for real save percentage and shots faced.
-
-The collector fetches that PDF for the current season's played games, reads the
-table (a small dependency-free PDF reader in [`norcalstats/pdf.py`](norcalstats/pdf.py)),
-and stores per-goalie shots and saves. Three things make it trustworthy rather
-than merely present:
-
-- **It is checked against the score.** A side's goalie goals-against must sum to
-  the goals the other side scored. The table is scorekeeper-entered and
-  sometimes a saves column is left blank; a side that does not reconcile is
-  **rejected**, and that game keeps the derived fallback rather than storing a
-  wrong number. A reason is recorded in `games.scorecard_error`.
-- **The home/away column order is read, not assumed.** The two blocks are
-  labelled `On Home`/`On Away`, and which team is on the left varies game to
-  game — reading position instead of label silently swaps the two goalies'
-  lines.
-- **Where there is no scorecard, nothing changes.** Older seasons keep the
-  derived goals-against untouched until their scorecards are backfilled, so this
-  is additive: `scorecards --season N` collects any season on demand.
-
-The count that flows from this: a goalie who split a game now shows their own
-goals-against, a backup who did not play shows zero rather than the other
-goalie's total, and a real save percentage appears wherever a scorecard was
-read. Reading it was validated against every played game of the 2026-27 season:
-15 of 17 reconciled on the first pass, and the two that did not were a blank
-saves column (correctly rejected) and — before a fix — the one home/away
-ordering the label row exists to settle.
-
-**Cost, and why it is scoped.** A scorecard is a second request per game and
-about 70 KB gzipped, so all ~14,000 games would be ~1 GB of archive and hours
-of polite crawling. It runs for the current season in the nightly (a handful of
-games) and is a deliberate, season-at-a-time backfill for the rest. Turned off
-with `collect_scorecards: false`.
-
 ---
 
 ## Database
@@ -670,8 +467,7 @@ SQLite, at `data/norcal.sqlite3`. The schema is in
 
 Scraped as recorded: `seasons`, `divisions`, `teams`, `standings`, `games`,
 `game_rosters`, `goals`, `penalties`, `goalie_stints`, `period_scores`,
-`shot_marks`, `goalie_records` (the PDF scorecard's per-goalie shots/saves),
-`team_stat_rows`.
+`shot_marks`, `team_stat_rows`.
 
 Derived and rebuildable: `players`, `player_names`, `player_team_seasons`,
 `player_game_stats`, `clubs`.
@@ -719,21 +515,8 @@ flow, and a club's teams across the years.
 
 **`core.json`** — everything cross-season and aggregate: players with their
 per-season splits, teams, divisions, clubs, leagues, standings. Loaded once,
-and enough on its own for every list and table in the app. 8.6 MB, about 821 KB
+and enough on its own for every list and table in the app. 8.8 MB, about 900 KB
 gzipped.
-
-**`schedule.json`** — every game there has ever been, header only: when,
-where, who, and the score where there is one. One file rather than six because
-the date order the app opens on runs across seasons as well as across leagues,
-so no per-season file can answer it. Sorted by date and then time of day, which
-the app relies on — it shows a day as a block and never sorts. Rows are arrays
-rather than objects, since the same fifteen keys repeated 14,196 times cost
-more than the data does: as arrays it is 1.7 MB, 225 KB gzipped.
-
-Two of its columns are there for sides that matched no team row: `homeName` /
-`awayName` carry the name the site printed, and `homeDiv` / `awayDiv` carry the
-division that name states where it states one. See
-[Reading a division off a name](#reading-a-division-off-a-name).
 
 **`logs/pNN.json`** — per-game lines for a player, in 32 buckets chosen by
 `player_id % 32`. The app works out which file to fetch by arithmetic, so there
@@ -746,11 +529,11 @@ games are carried without a score, so a team page is a schedule as much as a
 record — 5,732 games are scheduled rather than final, including every one of
 the current season's.
 
-Six seasons come to 40 files and 71 MB, about 7.2 MB gzipped, which GitHub
+Six seasons come to 39 files and 68 MB, about 6.9 MB gzipped, which GitHub
 serves compressed. Transfer was never the constraint; parse time and memory on
 a phone at a rink is, and that is what loading detail on demand solves. In
-practice a cold load fetches `core.json` and `schedule.json` — 821 KB and
-225 KB gzipped, 1.05 MB between them — and nothing else until somebody clicks.
+practice a cold load fetches only `core.json` — 899 KB gzipped, about 230 ms —
+and nothing else until somebody clicks.
 
 Note that this is the **export** being split, not the database. The collector
 keeps one SQLite file (94 MB on the Pi) and shards only on the way out, because
@@ -778,8 +561,6 @@ longer written by anything.
 
 ## Running on the Raspberry Pi
 
-### Installing
-
 ```bash
 git clone https://github.com/lamfalus/norcal-hockey
 cd norcal-hockey
@@ -799,12 +580,6 @@ systemctl list-timers norcalstats@$USER.timer     # when it next runs
 journalctl -u norcalstats@$USER.service -f        # watch a run
 sudo systemctl start norcalstats@$USER.service    # run now
 ```
-
-**Nothing on the Pi updates itself.** The unit runs the collector out of its
-checkout and never touches git, so code changes reach it only by pulling, and
-they have to be pulled *before* the timer fires or the night's run uses the old
-code. A schema change needs nothing: `db.connect()` migrates on open, so the
-first command after a pull upgrades the database.
 
 Then seed the archive:
 
@@ -849,40 +624,24 @@ do. `--force` overrides the check when a drop really is intended.
 
 ### Publishing to GitHub
 
-Both switches are **off by default**. This installation runs with
-`"publish_app": true` and `"legacy_exports": false`, so the nightly run
-publishes the app dataset and writes nothing into the repository itself.
-
-Both need git authentication on the Pi. Here that is an ed25519 **deploy key**,
-scoped to this repository, with write access, and `IdentitiesOnly yes` so ssh
-offers nothing else. GitHub's host key is **pre-seeded in `known_hosts`**: the
-systemd unit runs with `ProtectHome=read-only`, so ssh cannot write one itself
-and the first unattended push would fail on an unknown host rather than on
-anything to do with the key.
+Both switches are **off by default**, and both need git authentication on the
+Pi — an SSH deploy key with write access is the usual choice. Pin GitHub's host
+key in `known_hosts` while you are there: the systemd unit runs with
+`ProtectHome=read-only`, so ssh cannot write one itself and an unattended push
+would fail on an unknown host.
 
 The collector never handles credentials. It shells out to `git`, which uses
 whatever authentication is already configured.
 
 **`"publish_app": true`** sends the app dataset to a branch of its own
 (`app_branch`, default `data`) as a single **parentless commit, force-pushed**,
-replacing what was there. 40 files rebuilt nightly would otherwise add
+replacing what was there. 38 files rebuilt nightly would otherwise add
 megabytes to the history every night and never give any of it back; a branch
 with no history has nothing to grow. It is written with git plumbing against a
 temporary index, so the working tree, the index and the checked-out branch are
 never touched — the nightly run can publish while you are midway through an
 edit — and it stages only the dataset directory, so nothing else can be swept
-in.
-
-It compares the tree it is about to push against the published one and skips
-the push when they match. **In practice they never match.** Every file carries
-a `metadata.generated` timestamp, so all 40 differ every night whatever the
-data did; `app dataset unchanged; nothing to publish` has never been logged.
-
-That is worth leaving alone rather than optimising. The viewer's footer reads
-`generated` as *when the collector last ran*, and that is what makes a Pi that
-has quietly stopped visible. Skipping unchanged publishes would freeze the date
-through a quiet week and make a healthy collector look dead — the failure this
-is meant to catch, reported backwards.
+in. Unchanged data publishes nothing.
 
 **`"publish": true`** commits the legacy exports to `git_branch` in the normal
 way. It stages **only the export files**, never `git add -A`, refuses to run
@@ -906,20 +665,11 @@ requests.
 
 ## Development
 
-After cloning, enable the commit hook that date-stamps the viewer's version (see
-[Where the numbers came from](#where-the-numbers-came-from)):
-
-```bash
-git config core.hooksPath .githooks
-```
-
-Then run the tests:
-
 ```bash
 python3 -m unittest discover -s tests -t .
 ```
 
-276 tests, no network access — they run against real pages saved in
+268 tests, no network access — they run against real pages saved in
 `tests/fixtures/` from both ends of the backfill range (2021 and 2025), so a
 format change in either direction is caught. The fixtures deliberately include
 the awkward cases: cells opened `<td>` and closed `</th>`, a game with a score
@@ -945,382 +695,50 @@ Whichever answers first is remembered, so that costs one request, not two.
 
 ### The views
 
-**Schedule** — the landing view, and the only one that reads across leagues,
-divisions and seasons at once; everything else in the app starts from a season,
-a club or a name, and this starts from a date. Two bands split at today: **Next
-up** reads forward from there, **Recent results** reads back. Each day is a
-block with its own heading and count, games within it in time order, and any
-row opens its box score.
+**Browse by Season** — every skater and goalie in a season, narrowed by club
+and division, sortable on any column.
 
-Three things about it are decisions rather than defaults:
+**Club View** — a club's teams season by season, with rosters. Teams are
+grouped by identity, never by name: in the older seasons the site gives every
+one of a club's teams the same name, and eighteen different squads are all
+called "Anaheim Jr Ducks" in 2021.
 
-- **Games with no result are listed and marked, not dropped.** 5,375 of 14,196
-  past games were scheduled and never given a score. They were real fixtures
-  with both teams named, so hiding them would make the day counts lie about
-  what was played. That includes the 92 `ambiguous_team` games — same club
-  against itself, neither side resolved to a team row, but named on both sides
-  and 32 of them carrying a full box score.
-- **Empty bracket slots are the one thing dropped.** 238 games where a side is
-  a seed placeholder rather than a team — "14AAA Seed 1" against "14AAA Seed
-  4", all of them CAHA playoff draws printed before the field was known. Not
-  one was ever given a result or a real opponent, so none can appear on
-  anybody's schedule. Excluded by the club's `kind`, not by a missing team id.
-  A seed slot is not a team — it is the shape of one the draw does not know
-  yet — but the collector still writes it a row, so its `team_id` is not null.
-  The games that genuinely have no `team_id` are the `ambiguous_team` ones
-  above, which are worth keeping, so filtering on the missing id would have
-  dropped exactly the wrong 92 games and kept all 238 of these.
-- **Both bands are cut from one season**, chosen with the global Season control
-  in the header. "Recent" has to mean recent, and reading back across every
-  season put an August day next to a game from 2021 and called both results — a
-  fixture archive rather than an answer to *what happened lately*. At the start of
-  a season that is thirty games against thirteen thousand older ones, and it is
-  the older ones a reader wades through.
+**Player Lookup** — a career, one section per season, each with a collapsible
+**game log**: date, opponent, home or away, result, goals, assists, points,
+penalty minutes, and power-play or short-handed marks. One fetch of the
+player's shard covers every season they played.
 
-  Season opens on **the newest game that has actually been played**, not the
-  highest season id in the file. It rolls over on its own that way: through the
-  summer it is the season just finished, and the first preseason weekend moves it
-  forward. Taking the highest id would empty the view the moment a league
-  published next year's fixtures.
+**Player Flow** — an alluvial diagram of movement between clubs across seasons.
 
-- **Pick a league and a division and it becomes a standings page.** Above the
-  games sits that division's table — rank, GP, W-L-T, points, goals for and
-  against and difference, each team linking to its page, with a Regular /
-  All-games toggle. It is computed from the results (see the [team
-  page](#the-views)), so it works for the current season the moment games are
-  played and for divisions the league never published a table for; when regular
-  games are scheduled but none played yet it says the table is coming. Narrow
-  further to one **club** and the games' heading also carries that team's
-  record — W-L-T and goals for/against — with a link out to its page.
-
-- **A finished season has results, not recent results.** Where nothing is left
-  to play there is no "next", so both the Next up band and the word *recent* go
-  and the heading reads plainly **Results**. Neither word survives sitting over
-  a band whose newest game is two years old.
-- **It has its own Game Type boxes.** A fixture list is not a stat total, so the
-  schedule's Game Type asks what kind of fixture to *list* while the stats, club
-  and player views ask what a total should *count* — a separate control, but in
-  the same words and the same box per class.
-
-- **Both bands page rather than render.** 8,130 played games is more than any
-  list wants to hold, and a phone least of all, so each band shows 60 and says
-  how many it is holding back.
-- **It works without the index.** `schedule.json` is a convenience, not a
-  precondition: where a published dataset has no index the view reads the newest
-  season's own file instead and says which season it is showing. That season is
-  50 KB against a `core.json` this page has already fetched at 8.6 MB, so
-  refusing to list fixtures the dataset plainly contains was never a good trade.
-  The index earns its keep on the results band, which spans six seasons and
-  15.8 MB of per-season files.
-
-**Stats** — every skater and goalie in a season, narrowed by division and club,
-sortable on any column. Picking a division cuts the club list to the clubs that
-actually field a team in it that season. Narrow to a single division and the
-leaderboards are followed by that division's **breakdown**: power-play and
-short-handed leaders, how top-heavy each team's scoring is (its top scorer's
-share of the goals), home-and-away records sorted by home-ice edge, and the
-pairs who most combine for a goal. The division picker qualifies a name by
-league — `14U AA · CAHA` — where it recurs across leagues, so a shared name is
-never merged into a single fake division; a chip above the roster jumps down to
-the breakdown.
-
-Stats is a tool for reading a whole division at once, not a second team page: the
-moment its filters resolve to **one team**, it opens that team's own page rather
-than draw a lesser copy of it. Multi-team browsing — a division, or a club with
-several squads — stays here. Where it does hold more than one team, the club name
-in the heading links to the club, and every division badge links to that
-division's schedule.
-
-**Club page** — reached from the search bar or by clicking a club, not from a
-tab. A club's teams season by season, with rosters grouped by identity, never by
-name: in the older seasons the site gives every one of a club's teams the same
-name, and eighteen different squads are all called "Anaheim Jr Ducks" in 2021.
-Below the teams sit **retention** — how many of each season's players return the
-next, and how many are new — and a club-focused **player-flow** chart: where its
-players arrived from and left for, centred on its latest active season with the
-rest on a picker. Click a season for that season's team records; the club name
-at the top links back to the all-seasons overview, where a search for the club
-also lands.
-
-Each team card carries its **record** beside the player count, counted under
-whatever the filters above are set to — off the games themselves, not any
-published table, so it answers a question asked with preseason ticked, or only
-playoffs, or with one league picked out of a club that plays in two. Only games
-that were given a result count: 5,375 past fixtures never were, and a team is not
-owed a loss for them.
-
-Set **Game Type** to Regular alone and it agrees with the league's own published
-regular-season row, which is the check that says the arithmetic is right — seven
-of Cupertino's eight teams in `'24-'25` match exactly. The eighth is the
-interesting one, and the games are the ones telling the truth: `Cupertino Cougars
-14A` played ten regular CAHA games with results, while its published row covers
-three. That is [the CAHA rounds rolling up](#one-source-the-leagues-that-matter)
-— the row belongs to one round, the games span several.
-
-**Player page** — a career, **newest season first**, reached from the search bar
-or by clicking a name, not from a tab. Each section has a collapsible **game
-log**: date, opponent, home or away, result, goals, assists, points, penalty
-minutes, and power-play or short-handed marks; one fetch of the player's shard
-covers every season they played. Above the seasons is a **development curve** —
-points per game season by season (goals-against per game for a keeper) — each
-point naming the team the player was on that year.
-
-Above the seasons is a box per **team**, all ticked. The same team across two
-seasons is one box, not two — a player who stayed put for two years played for
-one team and should be able to say so with one tick. Club plus the team's own
-name identifies it: the division can move underneath a squad (`14U AA East` one
-year, `14U AA` the next) while the squad is unchanged, and two squads in one
-club are told apart by their names — `12-1`, `12-2` — rather than by anything
-else the site prints. The box carries the seasons it covers as its tooltip.
-
-Unticking a team takes it out of the season tables, the game logs and the
-linemates panel alike, at team-season grain rather than by season: a player
-with two teams in one year can drop the one-game call-up and keep the season.
-The boxes only appear where there is more than one team to choose between.
-
-**Player flow** — the alluvial diagram of movement between clubs season to
-season. No longer a tab of its own: it is drawn on a **club** page focused on
-that club, and on a **team** page focused on that exact roster — where its
-players came from the season before and left for the season after.
-
-**Team page** — the one place a single team is shown, reached by clicking a team
-anywhere (a schedule row, a stats table, a club's squads, the search bar), never
-from a tab. It carries the team's **record** with a Regular / All-games toggle,
-every game played or still to come, the **roster** as sortable skater and goalie
-tables, **scoring by period** as goal difference per period, the same **advanced
-breakdown** the stats view shows a division — special-teams leaders, scoring
-balance, home ice, and the pairs who score together — scoped to this team, and
-the roster's **player-flow** chart. On the schedule the **result** opens the box
-score and the **opponent** links to its team; the row itself is not a click
-target, and a scheduled game does not pretend to have a box score. The club name
-in the title links back to the club. A team whose games are all still to come has
-no roster yet, so the roster panel says so and the breakdown and flow are dropped
-rather than showing the whole club's by mistake.
-
-The **record** and the **division standings** on the schedule are computed from
-the game results, not the league's published table — nothing is published for the
-current season in preseason, SCAHA has no history here, and a club's CAHA-round
-games span several rows the published one covers only one of. Only regular-season
-games between two teams of the same division count, which makes a division's
-standings a closed round-robin whose wins, losses and goals balance across the
-table — the check that says the arithmetic is right. The toggle widens the
-record, and the standings, to every game type. Where a game had no result it is
-not counted: 5,375 past fixtures never got one, and a team is not owed a loss for
-them.
+**Team page** — reached by clicking a team anywhere, not from the tab bar,
+since it only means anything once you have picked one. The league's standings
+row, every game played or still to come, the roster, and **scoring by period**
+as goal difference per period. The standings are labelled regular season on
+purpose: the league's table counts that alone while the schedule counts every
+class, so the two game totals differ and one of them has to say which it is.
 
 **Box score** — opens over whatever you were reading, because you always arrive
 from a schedule or a game log and want to go back to it. Line score by period,
-each goal with its time, scorer and assists (each labelled) and strength, and the
-penalties. A played game also links its **Scoresheet PDF** — Time to Score's
-`generate-scorecard.php`, the same sheet a scorekeeper files. It downloads named
-for the game (`Away vs Home YYYY-MM-DD.pdf`) rather than opening a tab: the site
-allows the cross-origin fetch, so the file is pulled as a blob and saved under
-that name, falling back to opening it if the fetch is ever blocked.
+each goal with its time, scorer, assists and strength, and the penalties.
 
 **Linemates** — on a player page, in both directions: goals somebody set up for
 them, and goals they set up for somebody else. Assists are recorded on about
 71% of goals, so the counts are a floor and the panel says so.
 
-Tallied **a season at a time**, defaulting to the most recent, because a
-linemate is a property of a roster and a roster lasts one season. A career
-total ranks the boy somebody fed twenty times in one year level with the one
-they shared a bench with twice a year for five, and reads as though both were
-linemates. The season chips carry an *All seasons* option, since who a player
-keeps ending up with across teams is worth seeing — it is just a different
-question, and one worth asking on purpose. The chips are hidden altogether
-where a player has only one season, which is its own career total.
-
 Two-way players are shown with both stat lines, and birth years appear as
 badges — which is not decoration: a quarter of players share a display name
 with somebody else, so the year is how you tell two children apart.
 
-### Reading a division off a name
-
-503 schedule sides never matched a team row, so they have no division to filter
-on. A third of the time the printed name states one outright — "San Jose Jr
-Sharks Girls 16AAA" is a Girls 16AAA side whether or not anybody matched it —
-and `names.division_from_team_name` reads it off, 207 of the 554 named sides,
-every label naming a division the dataset actually has.
-
-It requires **both** an age and a tier. "San Jose Jr Sharks 10-5" gives an age
-and a club's own numbering, and answering `10U` would file the side somewhere it
-does not belong; saying nothing is the honest answer. A bare "Anaheim Jr Ducks",
-which is most of the remainder, was never recoverable this way.
-
-The viewer therefore answers "what division is this side in" three ways, in
-order of what each is worth: the team's own division where there is a team; else
-the division the name states; else the division the game itself was filed in —
-last, because that describes the fixture rather than the side, and in cross-tier
-play it is nobody's division. For the 92 games where a club plays itself and the
-site prints one name twice it is right 91 times. Between them, every game in the
-schedule is reachable by some division filter; before, 92 were reachable by
-none.
-
 ### Filters
 
-**Season lives in the header, on every view; everything else is one row under
-the tabs.** The filters had grown into two tiers and three shapes — season,
-league and game type above the tabs; each view's own below, in a collapsible
-panel on two views, a bare row on a third and nowhere at all on the fourth; and
-no two views agreeing on what order to ask in. A reader who learns where a
-filter lives on one page should not have to learn it again on the next.
+Two pickers sit above the tabs, because both change what counts as a game in
+every view below.
 
-**Season is one global control in the header**, present on every view including
-a team or a player page, and it drives whatever is on screen — the schedule, the
-stats, a club's season, or the *same team a season earlier or later*. A player
-page, which spans every season, scrolls to the one picked; arriving at a team or
-a club season points the control at that season so it always reads right.
+**League** — one of the nine, or all of them.
 
-The rest sit in the one row under the tabs, in a fixed order, each naming the
-views it belongs to:
-
-| View | Row under the tabs |
-|---|---|
-| **Schedule** | League · Division · Club · Game Type |
-| **Stats** | League · Division · Club · Position · Min GP · Game Type |
-| **Club** | League · Club · Game Type — its season is navigated on the page (the season badges and a "back to all seasons" link), since a club is inherently multi-season |
-| **Player** | Game Type |
-| **Team** | none — a team page is one fixed team, so the shared filters would only mislead |
-
-Division sits before Club so both views ask in the same order, and Game Type
-sits last, in the one slot every view shares. League and Game Type are one
-control each, shown wherever they apply.
-
-**The schedule's League, Division and Club cascade.** Pick Norcal and the
-Division list drops to Norcal's (no AAA) and the Club list to Norcal clubs (no
-Jr. Kings); pick a division and the clubs narrow to the ones with a team in it. A
-selection that still fits is kept; one that no longer does resets. The stats view
-cascades the same way for free, since its lists are built from a player set that
-is already league-filtered.
-
-`Position` was called `Type`, one slot away from a `Game Type` meaning
-something else entirely. It selects skaters or goalies.
-
-The row collapses behind a summary of what is set on a narrow screen — one
-panel now rather than two, which takes the schedule's chrome from 28% of a
-375px screen to 17%.
-
-**League** — one of the four, or all of them. Absent on a player page, which
-asks about one child where "which league" is a question about everybody else —
-and the page ignores the filter there rather than letting it drop a team the
-box list is still showing. Its own team boxes narrow that page instead. Four rather than nine: the CAHA
-rounds roll up into CAHA, and the two out-of-state championships are gone. A
-game that came from a round carries its name as a label instead, shown in the
-Type column beside the game's own class — "Regular · Weekends" — and collapsed
-to one word where the two would say the same thing.
-
-**Game Type** — one box per game class, **all of them ticked**, behind a
-control that says what is ticked and opens onto the list. The classes are read
-off the dataset itself, so one the collector starts producing appears as a box
-rather than as games that quietly belong to no filter.
-
-Closed by default because the answer is usually "all of them": five boxes laid
-out flat were three lines of a phone's filter bar spent saying nothing had been
-narrowed. The closed control names one or two classes where that is what is
-ticked and counts them past that — `Regular`, `Regular, Playoff`, `3 of 5
-types` — and an **All types** row at the foot of the list turns the whole set
-on or off, showing indeterminate while some are on. It shuts on a click
-elsewhere or on Escape.
-
-It was a dropdown of six pre-combined presets defaulting to regular plus
-playoffs, and both halves of that were wrong. Boxes compose: every combination
-is reachable, where a preset list only offers the ones somebody thought of in
-advance, and `Regular + Playoffs` stops needing to exist as an entry at all.
-And a default that hides a third of the data is one the reader has to already
-know about to escape — a season whose games are all exhibition was simply not
-there, on a page giving no sign anything had been left out. Preseason and
-exhibition genuinely do inflate a season total, but that is a caveat to state
-rather than a default to impose silently, and the league's own regular-season
-totals are on the team page, labelled as such.
-
-The boxes are hidden on the Schedule view, along with the note beside them that
-counts player seasons: neither means anything above a fixture list, and a
-control that visibly does nothing is worse than no control. The Schedule has
-its own set, named and shaped the same, asking the neighbouring question — what
-kind of fixture this is, rather than what a total should count. League still
-applies there.
-
-**A player page names the seasons it is holding back.** The same default that
-would have shown three fixtures on opening day removes a whole season from a
-career, section and stats together, whenever every game in it is preseason or
-exhibition — which in August is every season that has started. An absent
-section is indistinguishable from a collection failure, and the reader looking
-for the game they watched on the weekend has no way to tell which they are
-looking at. So the page says which seasons are missing, what class their games
-are, and offers the switch:
-
-```
-'23-'24 and '26-'27 are not shown. Every game in them is exhibition,
-and that is unticked under Game Type.           [Count every game]
-```
-
-The classes it names are, by definition, the unticked ones, so the note points
-straight at the boxes to tick. Only the class filter is explained there: a
-season the **League** picker removed is left out rather than blamed on the
-wrong control.
-
-The Schedule's row adds **Division** and **Club**, and its **Game Type** asks the
-neighbouring question — what kind of fixture to list rather than what a total
-should count.
-
-**Division** filters on the divisions the two *teams* are in, not on the game's
-own level. Those are different questions and the answer differs for 2,868 of
-27,097 team appearances — 24% in preseason. A 13U AAA team can play a 14U AA
-team in a game the league files under 14U AAA, and that game should be findable
-from either side, so it appears under `13U AAA` and under `14U AA` and not under
-`14U AAA`. The table column still shows the game's **Level**; two different
-words for two different things is the point.
-
-Divisions are listed by name, because an id means nothing outside its own season
-and the list spans six of them, and they are listed **granularly** — `10U B
-East` and `10U B West` are separate entries, not folded into one `10U B`. That is
-so the schedule's standings match Time to Score's own tables, which are one per
-flight; East and West are different round-robins and a merged table would mix
-teams that never played. The sub-section folding still exists — `coreDivision`,
-with the `DIVISION_SUBSECTION` regex `tests/test_viewer.py` reads back out of the
-shipped file — but its one remaining use is matching *the same team across
-seasons* (a squad can be `14U AA East` one year and `14U AA` the next), where the
-merge is what keeps them the same team; a tier is never stripped, so `10U BB` is
-not `10U B`.
-
-**A division in the stats view is a link to its schedule.** Each division badge
-in the player tables, and the division in a leaderboard heading, opens the
-schedule filtered to that division — carrying the league and season — so a
-division's standings and games are one click from its players.
-
-### Where the numbers came from
-
-A footer on every page carries the two dates that are easy to confuse, because
-a stale dataset behind a fresh viewer looks exactly like a working one:
-
-```
-Data collected Aug 23, 2026 (today)  ·  Viewer 2026.08.23
-```
-
-**Data collected** is `core.json`'s `metadata.generated` — when the collector
-last ran and published. The collector runs unattended, so the way it fails is
-by going quiet; two days without a publish is not a slow night, and past that
-the line turns amber and says so. Nothing else on the page would show it.
-
-**Viewer** is this file's own version, and it is a calendar date on purpose:
-the version *is* the release date, so there is one fact to keep true rather
-than two that can disagree. A `git` pre-commit hook stamps it —
-`.githooks/pre-commit` writes today's date into `VIEWER_VERSION` whenever the
-viewer file is part of a commit, so the release date is always the day it was
-last updated without anyone remembering to bump it. Enable it once per clone
-(it is a repo file, but `core.hooksPath` is a local setting git does not carry):
-
-```bash
-git config core.hooksPath .githooks
-```
-
-A runtime file date was rejected: served from a CDN it reports the cache time,
-not the update, so a stamped-at-commit date is the reliable one.
-`tests/test_viewer.py` still checks the version against the file's last commit
-date — a backstop for a commit made without the hook enabled.
-
-The viewer version still shows when the dataset cannot be loaded at all, which
-is exactly the moment somebody needs to quote it.
+**Games counted** — regular plus playoffs by default. Preseason and exhibition
+games are a third of all stat lines, so folding them into a season total
+quietly inflates it. The filter makes that a decision rather than an accident.
 
 ### What it deliberately does not do
 
@@ -1330,33 +748,6 @@ id is only unique within its season. Clubs arrive already canonicalised, each
 with a short name to show and a kind, so only real clubs reach the pickers
 while bracket slots, high schools and visiting teams keep their names for
 schedules.
-
-### On a phone
-
-Most of the reading happens at a rink, so this was measured rather than
-guessed. Three quarters of a 375px screen was chrome before a single row of
-data: header, filter bar, and five dropdowns stacked one per line. It is 28%
-now, and thirteen rows of data are visible where two were.
-
-- The browse filters collapse behind a line naming what is set —
-  `'25-'26 · TV Blue Devils · goalies · 5+ GP` — and open on a tap. Open in the
-  markup, so it works with no script; closed at boot only where the screen is
-  small enough to want it.
-- Columns a phone does not need at a glance are dropped: number, division, PIM,
-  PPG, SHG, points per game, type, rink. All of them details the player's or the
-  game's own page carries. They are named rather than numbered, because the
-  tables here have six shapes and index 3 means something different in each.
-- **The table is made to fit rather than made to scroll**, and that is not a
-  style choice. Any scrolling ancestor becomes the anchor for a `position:
-  sticky` header inside it, so wrapping a table in a scroll box unpins its
-  header from the title bar and strands it among the rows. Setting `overflow-x`
-  alone is enough to do it: the browser computes the other axis to `auto` as
-  soon as one of them is not `visible`. Whatever still will not fit gets a
-  scroll box and gives up its header, which is measured per table rather than
-  assumed — today two short ones.
-
-Everything above `600px` is unaffected: thirteen columns, nothing dropped,
-nothing scrolling.
 
 To serve it locally:
 
@@ -1389,7 +780,6 @@ norcalstats/            the collector
   sources/timetoscore.py  page parsers
 deploy/                 systemd units and installer
 tests/                  test suite and HTML fixtures
-.githooks/pre-commit    date-stamps VIEWER_VERSION on commit
 norcal_hockey_viewer.html
 ```
 
