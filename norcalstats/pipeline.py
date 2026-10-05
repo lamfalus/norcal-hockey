@@ -1145,6 +1145,100 @@ class Pipeline:
         self.stats.scoresheets += 1
         return True
 
+    def probe_orphan_scoresheets(
+        self,
+        season_id: int,
+        *,
+        start_id: int,
+        end_id: int,
+        cap: int = 300,
+        league_id: int = 5,
+        league_name: str = "CAHA",
+        level_contains: str = "girls",
+    ) -> dict:
+        """Ingest games that exist only as a scoresheet, with no schedule row.
+
+        Inter-regional / live-scored games get a scorecard by id but never
+        appear on a ``display-schedule`` page, so the per-team crawl can't find
+        them -- a hole the normal collection cannot close. This sweeps a bounded
+        id range and, for each not-yet-known game whose league and level match
+        the filter (CAHA girls by default), creates the game row from the
+        scoresheet header and stores its detail. ``game_id`` is the primary key,
+        so if the game later does turn up on a schedule the normal scan simply
+        enriches the same row (real team ids, exact league/division).
+
+        Returns ``{"fetched", "found"}``. Stops at ``cap`` fetches or the first
+        rate-limit, so it never hammers the site.
+        """
+        found = 0
+        fetched = 0
+        for gid in range(start_id, end_id + 1):
+            if fetched >= cap:
+                break
+            if self.conn.execute(
+                "SELECT 1 FROM games WHERE game_id = ?", (gid,)
+            ).fetchone():
+                continue  # already known: scheduled, or probed on an earlier run
+            fetched += 1
+            try:
+                page = self.fetcher.get(
+                    tts.scoresheet_path(gid),
+                    key=f"s{season_id}/game/{gid}",
+                    use_cache=False,
+                )
+            except (RequestCeilingReached, RateLimited) as exc:
+                log.warning("probe-orphans: %s -- stopping", exc)
+                self.stats.stopped_early = True
+                break
+            except FetchError as exc:
+                log.error("probe-orphans: game %s: %s", gid, exc)
+                self.stats.errors += 1
+                continue
+
+            sheet = tts.parse_scoresheet(page.html, gid)
+            if not sheet.is_usable or sheet.home.final is None or sheet.away.final is None:
+                continue  # empty id, or a real game not scored yet
+            if league_name and (sheet.league or "").strip().upper() != league_name.upper():
+                continue
+            if level_contains and level_contains.lower() not in (sheet.level or "").lower():
+                continue
+            away_nm = (sheet.away.team_name or "").strip()
+            home_nm = (sheet.home.team_name or "").strip()
+            if away_nm.lower() in ("", "away", "home", "visitor") or \
+               home_nm.lower() in ("", "away", "home", "visitor"):
+                continue  # placeholder matchup -- not a real, named fixture yet
+
+            div = self.conn.execute(
+                "SELECT division_id FROM divisions "
+                " WHERE season_id = ? AND league_id = ? AND name = ?",
+                (season_id, league_id, sheet.level),
+            ).fetchone()
+            division_id = div["division_id"] if div else None
+
+            # Create the header, then store_scoresheet fills the detail and sets
+            # scoresheet_at / level / date_iso. date_text is left "" so that
+            # store_scoresheet's date-vs-schedule guard is skipped -- there is no
+            # schedule row here for the sheet to disagree with.
+            self.conn.execute(
+                "INSERT OR IGNORE INTO games "
+                "(game_id, season_id, league_id, division_id, date_text, date_iso, "
+                " league, level, away_name, home_name, away_goals, home_goals, "
+                " game_class, status, has_scoresheet, needs_review, updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, 'final', 1, 1, ?)",
+                (gid, season_id, league_id, division_id, "", sheet.date_iso,
+                 sheet.league, sheet.level, away_nm, home_nm,
+                 sheet.away.final, sheet.home.final, "regular", now()),
+            )
+            self.store_scoresheet(gid, page.html, page.sha256)
+            self.stats.scoresheets += 1
+            found += 1
+            log.info("orphan #%d  %s  %s %s @ %s %s  [%s]",
+                     gid, sheet.date_iso or "?", sheet.away.team_name, sheet.away.final,
+                     sheet.home.team_name, sheet.home.final, sheet.level)
+            self.conn.commit()
+
+        return {"fetched": fetched, "found": found}
+
     def sweep(self, now_local: datetime) -> dict:
         """One targeted results pass. Returns a summary dict.
 
