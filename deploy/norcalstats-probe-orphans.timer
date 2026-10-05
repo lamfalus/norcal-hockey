@@ -1,0 +1,15 @@
+[Unit]
+Description=Nightly probe for scoresheet-only games (CAHA girls, no schedule row)
+Documentation=https://github.com/lamfalus/norcal-hockey
+
+[Timer]
+# Just before the 03:30 collector, so the games ingested here go live when that
+# update derives, exports and publishes. Short run, so it finishes well in time.
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=5m
+
+# If the Pi was off at 03:00, run once it is back.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

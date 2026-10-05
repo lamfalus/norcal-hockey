@@ -82,6 +82,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="targeted same-day result check: only games due to have finished")
     add_crawl_args(p_sweep)
 
+    p_orphans = sub.add_parser(
+        "probe-orphans",
+        help="ingest scoresheet-only games with no schedule row (CAHA girls)")
+    p_orphans.add_argument("--season", type=int, help="season id (default: current)")
+    p_orphans.add_argument("--from", dest="from_id", type=int,
+                           help="first game id (default: recent frontier)")
+    p_orphans.add_argument("--to", dest="to_id", type=int,
+                           help="last game id (default: frontier + headroom)")
+    p_orphans.add_argument("--cap", type=int, default=300,
+                           help="max scoresheet fetches this run (default 300)")
+
     p_backfill = sub.add_parser("backfill", help="one-time historical crawl")
     add_crawl_args(p_backfill)
     p_backfill.add_argument("--from-season", type=int, help="lowest season to crawl")
@@ -222,6 +233,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return _cmd_crawl(conn, config, args, mode=command)
         if command == "sweep":
             return _cmd_sweep(conn, config, args)
+        if command == "probe-orphans":
+            return _cmd_probe_orphans(conn, config, args)
         if command == "reparse":
             return _cmd_reparse(conn, config, args)
         if command == "derive":
@@ -453,6 +466,36 @@ def _cmd_sweep(conn, config: Config, args) -> int:
                 db.now(), encoding="utf-8")
         except OSError as exc:
             log.warning("could not write Drive-pending marker: %s", exc)
+    return 0
+
+
+def _cmd_probe_orphans(conn, config: Config, args) -> int:
+    """Ingest games that exist only as a scoresheet, with no schedule row.
+
+    Collection only; the nightly ``update`` that follows derives, exports and
+    publishes -- the same arrangement as the scorecard backfill. Defaults to the
+    recent id frontier so a timer can run it cheaply every night.
+    """
+    season = args.season
+    if season is None:
+        season = conn.execute("SELECT MAX(season_id) FROM seasons").fetchone()[0]
+    if season is None:
+        print("no seasons known yet; run 'update' first", file=sys.stderr)
+        return 1
+    max_id = conn.execute("SELECT MAX(game_id) FROM games").fetchone()[0] or 0
+    start_id = args.from_id if args.from_id is not None else max(1, max_id - 150)
+    end_id = args.to_id if args.to_id is not None else max_id + 200
+
+    pipe = pipeline.Pipeline(conn, config, _fetcher(config))
+    with db.Run(conn, "probe-orphans") as record:
+        res = pipe.probe_orphan_scoresheets(
+            season, start_id=start_id, end_id=end_id, cap=args.cap)
+        record.pages = pipe.fetcher.requests_made
+        record.games_parsed = res["found"]
+        record.errors = pipe.stats.errors
+        record.note = f"probed {res['fetched']}, ingested {res['found']}"
+    print(f"probe-orphans: S{season} ids [{start_id},{end_id}] -- "
+          f"probed {res['fetched']}, ingested {res['found']} orphan game(s)")
     return 0
 
 
