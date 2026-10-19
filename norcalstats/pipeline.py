@@ -657,6 +657,7 @@ class Pipeline:
 
         home_id = existing["home_team_id"] if existing else None
         away_id = existing["away_team_id"] if existing else None
+        matched = None
         if game.home_name == game.away_name:
             # A club can enter two teams in one division, and the schedule row
             # then names both sides identically -- this page cannot say which
@@ -665,8 +666,10 @@ class Pipeline:
             pass
         elif team.name == game.home_name:
             home_id = team.team_id
+            matched = "home"
         elif team.name == game.away_name:
             away_id = team.team_id
+            matched = "away"
         else:
             # Neither side's printed name equals the team we are reading. Time
             # to Score sometimes spells a team differently from row to row --
@@ -676,11 +679,22 @@ class Pipeline:
             # team is certainly one of the two sides; assign it to whichever
             # side is unmistakably its club (both sides being its club is the
             # same-name case above, left to the roster resolver).
-            side = self._own_side_by_club(team, game)
-            if side == "home":
+            matched = self._own_side_by_club(team, game)
+            if matched == "home":
                 home_id = team.team_id
-            elif side == "away":
+            elif matched == "away":
                 away_id = team.team_id
+
+        # A team cannot be both sides. When a tournament re-seeds, the home and
+        # away of a game flip, and its opponent is often a bare "Home"/"Away"
+        # placeholder that never resolves -- so the side we match this crawl is
+        # authoritative, and the same id left on the other side from an earlier
+        # crawl is stale. Clear it, rather than leave the team playing itself
+        # (which reads the opponent's score as the team's own, flipping W/L).
+        if matched == "home" and away_id == team.team_id:
+            away_id = None
+        elif matched == "away" and home_id == team.team_id:
+            home_id = None
         needs_review = int(home_id is None or away_id is None)
 
         division_id = division_ids.get(game.level, team_division_id)
@@ -1645,6 +1659,9 @@ class Pipeline:
         staff = reclassify_staff_as_coach(self.conn)
         if staff:
             log.info("reclassified %d coach appearance(s) mis-recorded as players", staff)
+        unselfed = clear_self_games(self.conn)
+        if unselfed:
+            log.info("cleared %d game(s) a team was recorded as playing itself", unselfed)
         resolved = resolve_ambiguous_sides(self.conn)
         if resolved:
             log.info("resolved %d ambiguous team side(s)", resolved)
@@ -2027,6 +2044,48 @@ def _norm_team_name(name: str) -> str:
     genuinely different names.
     """
     return re.sub(r"\s+", " ", (name or "").strip())
+
+
+def clear_self_games(conn: sqlite3.Connection) -> int:
+    """No game is a team playing itself.
+
+    A tournament re-seed flips a game's home and away, and its out-of-area
+    opponent is often a bare "Home"/"Away" placeholder that never resolves, so
+    two crawls can leave the same team id on both sides -- which then reads the
+    opponent's score as the team's own and flips the result. ``_store_game`` now
+    clears the stale side as it crawls, but this heals games already stored that
+    way (and anything that slips past, e.g. a game no longer on the team's page):
+    keep the side whose printed name is still the team, drop the other. Where
+    neither name is the team's, the game is left for review rather than guessed.
+    """
+    rows = conn.execute("""
+        SELECT g.game_id, g.home_name, g.away_name, t.name AS tname, t.club AS tclub
+          FROM games g
+          JOIN teams t ON t.team_id = g.home_team_id AND t.season_id = g.season_id
+         WHERE g.home_team_id IS NOT NULL AND g.home_team_id = g.away_team_id
+    """).fetchall()
+    cleared = 0
+    for r in rows:
+        def is_team(name):
+            if not name:
+                return False
+            if _norm_team_name(name) == _norm_team_name(r["tname"]):
+                return True
+            return bool(r["tclub"]) and clubs_mod.canonical_name(name) == r["tclub"]
+        home_is, away_is = is_team(r["home_name"]), is_team(r["away_name"])
+        if away_is and not home_is:
+            drop = "home_team_id"
+        elif home_is and not away_is:
+            drop = "away_team_id"
+        else:
+            continue  # cannot tell which side is really the team -- leave it
+        conn.execute(
+            f"UPDATE games SET {drop} = NULL, needs_review = 1, updated_at = ? "
+            "WHERE game_id = ?", (now(), r["game_id"]))
+        cleared += 1
+    if cleared:
+        conn.commit()
+    return cleared
 
 
 def raise_team_questions(conn: sqlite3.Connection) -> None:

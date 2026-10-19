@@ -176,6 +176,87 @@ class TestOwnSideByClub(PipelineTestCase):
             away="Foo Bar 16AA", home="San Jose Jr Sharks 16AA"))
         self.assertEqual(row["home_team_id"], 58)
 
+    def test_a_flipped_matchup_clears_the_stale_side(self):
+        # A tournament game first listed with the team at home, then re-seeded
+        # with it as the away side against a "Home" placeholder. The second
+        # crawl must not leave the team recorded on both sides.
+        team = self._team(48, "San Jose Jr Sharks 14AAA")
+        self._store(team, self._game(away="Away", home="San Jose Jr Sharks 14AAA"))
+        row = self._store(team, self._game(away="San Jose Jr Sharks 14AAA", home="Home"))
+        self.assertEqual(row["away_team_id"], 48)
+        self.assertIsNone(row["home_team_id"], "the stale home id is cleared")
+
+
+class TestSelfGames(PipelineTestCase):
+    """No game is a team playing itself -- the stale-side artefact healed in
+    derive. A tournament placeholder opponent ("Home"/"Away") plus a flipped
+    matchup could leave one team id on both sides, reading the opponent's score
+    as the team's own and flipping the result.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.conn.execute(
+            "INSERT OR IGNORE INTO leagues(league_id, name, priority, kind) "
+            "VALUES (5, 'CAHA', 1, 'season')")
+        self.conn.execute(
+            "INSERT INTO teams(team_id, season_id, name, club, league_id) "
+            "VALUES (48, 31, 'San Jose Jr Sharks 14AAA', 'San Jose Jr Sharks', 5)")
+        self.conn.commit()
+
+    def _game(self, home_name, away_name, home=48, away=48, game_id=700):
+        self.conn.execute(
+            "INSERT INTO games(game_id, season_id, league_id, home_team_id, "
+            "away_team_id, home_name, away_name, home_goals, away_goals, status, "
+            "needs_review) VALUES (?, 31, 5, ?, ?, ?, ?, 3, 0, 'final', 0)",
+            (game_id, home, away, home_name, away_name))
+        self.conn.commit()
+
+    def _row(self, game_id=700):
+        return self.conn.execute(
+            "SELECT home_team_id h, away_team_id a, needs_review nr FROM games "
+            "WHERE game_id = ?", (game_id,)).fetchone()
+
+    def test_the_placeholder_home_side_is_cleared(self):
+        self._game(home_name="Home", away_name="San Jose Jr Sharks 14AAA")
+        self.assertEqual(pipeline.clear_self_games(self.conn), 1)
+        r = self._row()
+        self.assertEqual(r["a"], 48)
+        self.assertIsNone(r["h"])
+        self.assertEqual(r["nr"], 1)
+
+    def test_the_team_at_home_keeps_home(self):
+        self._game(home_name="San Jose Jr Sharks 14AAA", away_name="Away")
+        self.assertEqual(pipeline.clear_self_games(self.conn), 1)
+        r = self._row()
+        self.assertEqual(r["h"], 48)
+        self.assertIsNone(r["a"])
+
+    def test_a_club_spelling_drift_still_matches(self):
+        # The surviving side is spelled as the bare club, not the registered name.
+        self._game(home_name="Home", away_name="San Jose Jr Sharks")
+        self.assertEqual(pipeline.clear_self_games(self.conn), 1)
+        self.assertIsNone(self._row()["h"])
+
+    def test_both_sides_the_team_is_left_for_review(self):
+        # A same-club meeting mis-stored under one id: cannot tell the squads
+        # apart by name, so leave it rather than drop a real side.
+        self._game(home_name="San Jose Jr Sharks 14AAA",
+                   away_name="San Jose Jr Sharks 14AAA")
+        self.assertEqual(pipeline.clear_self_games(self.conn), 0)
+        r = self._row()
+        self.assertEqual((r["h"], r["a"]), (48, 48))
+
+    def test_a_real_two_team_game_is_untouched(self):
+        self.conn.execute(
+            "INSERT INTO teams(team_id, season_id, name, club, league_id) "
+            "VALUES (49, 31, 'Oakland Jr Grizzlies 14AAA', 'Oakland Jr Grizzlies', 5)")
+        self._game(home_name="San Jose Jr Sharks 14AAA",
+                   away_name="Oakland Jr Grizzlies 14AAA", home=48, away=49, game_id=701)
+        self.assertEqual(pipeline.clear_self_games(self.conn), 0)
+        r = self._row(701)
+        self.assertEqual((r["h"], r["a"]), (48, 49))
+
 
 class TestSeasonTargeting(unittest.TestCase):
     """An offline rebuild starts from an empty database and must still work."""
